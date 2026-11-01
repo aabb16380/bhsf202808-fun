@@ -86,6 +86,114 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101b7' + w
      登录门（auth.js 接管；这里的 DOM 结构与 BUILD-SPEC §6 一致）
      ============================================================ -->
 
+<main id="main">
+
+  <!-- ============ 首屏 ============ -->
+  <section class="hero" id="top">
+    <div class="wrap hero-inner">
+      <div class="hero-body">
+        <p class="eyebrow">bhsf202808.fun · 下课十分钟</p>
+        <h1>八班游乐场</h1>
+        <span class="hero-en">Playground</span>
+
+        <p class="lead">
+          三个小游戏，一面合影墙。都是八班自己的东西。<br>
+          上课铃还没响，先把这一局打完。
+        </p>
+
+        <div class="hero-actions">
+          <a class="btn" href="#games">玩一局</a>
+          <a class="btn ghost" href="#photos">看合影</a>
+        </div>
+
+        <dl class="stat-strip">
+          <div class="stat"><dt>小游戏</dt><dd>3 个</dd></div>
+          <div class="stat"><dt>合影墙</dt><dd id="stat-photos">—</dd></div>
+          <div class="stat"><dt>今日上传</dt><dd id="stat-today">—</dd></div>
+          <div class="stat"><dt>本站</dt><dd>公开 · 无需登录</dd></div>
+        </dl>
+
+        <div class="hero-tickets" aria-hidden="true">
+          <span class="ticket"><b>2048</b><span>KEYS</span></span>
+          <span class="ticket"><b>记忆翻牌</b><span>PAIRS</span></span>
+          <span class="ticket"><b>专注方格</b><span>ORDER</span></span>
+        </div>
+      </div>
+
+      <div class="hero-play" aria-hidden="true">
+        <span class="play-ring"></span>
+        <img class="play-logo" src="assets/logo.png?v=20261101b7" alt="" width="200" height="160">
+        <span class="play-note">下课<br>十分钟</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 01 小游戏 ============ -->
+  <section class="section" id="games">
+    <div class="wrap">
+      <header class="sec-head reveal">
+        <span class="sec-idx">01 / GAMES</span>
+        <h2>下课十分钟</h2>
+        <p class="sec-sub">三个都能重开。最高分只记在这台设备上；数据库接好以后，成绩还会进排行榜。</p>
+      </header>
+
+      <div class="game-card card">
+        <div class="game-head">
+          <div class="game-tabs chip-row" role="group" aria-label="选择游戏">
+            <button class="chip game-tab" type="button" data-game="2048"
+                    aria-pressed="true" aria-controls="game-panel-2048">2048</button>
+            <button class="chip game-tab" type="button" data-game="memory"
+                    aria-pressed="false" aria-controls="game-panel-memory">记忆翻牌</button>
+            <button class="chip game-tab" type="button" data-game="schulte"
+                    aria-pressed="false" aria-controls="game-panel-schulte">专注方格</button>
+          </div>
+          <p class="game-head-note">三个都能重开 · 本机记录</p>
+        </div>
+
+        <div class="game-body">
+
+          <!-- ---------- 2048 ---------- -->
+          <section class="game-panel" id="game-panel-2048" data-game="2048" aria-label="2048">
+            <div class="game-hud">
+              <div class="game-stat">
+                <span class="gs-label">分数</span>
+                <span class="gs-val" id="g2048-score">0</span>
+              </div>
+              <div class="game-stat">
+                <span class="gs-label">本机最高</span>
+                <span class="gs-val" id="g2048-best">0</span>
+              </div>
+              <div class="game-stat">
+                <span class="gs-label">最大方块</span>
+                <span class="gs-val" id="g2048-max">2</span>
+              </div>
+              <button class="btn ghost sm" id="g2048-restart" type="button">重开</button>
+              <button class="btn ghost sm" id="g2048-cheat-toggle" type="button" aria-pressed="false">作弊模式</button>
+              <div class="gs-state" id="g2048-state" role="status" aria-live="polite">新的一局。点一下棋盘，用方向键或 WASD 开始。</div>
+            </div>
+
+            <div class="b2048-cheat" id="g2048-cheat" hidden>
+              <p class="cheat-tip">
+                作弊模式：<b>点格子选中</b>，可以改数字或交换两格。开了作弊的这一局
+                <b>不计入排行榜</b>。
+              </p>
+              <div class="cheat-row">
+                <input class="input cheat-num" id="g2048-cheat-num" type="number" min="2" step="2"
+                       inputmode="numeric" placeholder="改成几" aria-label="改成几">
+                <button class="btn ghost sm" id="g2048-cheat-set" type="button" disabled>改数字</button>
+                <button class="btn ghost sm" id="g2048-cheat-swap" type="button" disabled>交换两格</button>
+                <button class="btn ghost sm" id="g2048-cheat-clear" type="button" disabled>清空这格</button>
+              </div>
+            </div>
+
+            <div class="game-stage">
+              <div class="game-board">
+                <div class="b2048" id="g2048-board" tabindex="0" role="group"
+                     aria-label="2048 棋盘 4 乘 4。点一下棋盘，用方向键或 WASD 移动；手机直接在棋盘上滑动。">
+                  <div class="b2048-grid" id="g2048-grid" aria-hidden="true"></div>
+                  <div class="b2048-tiles" id="g2048-tiles-layer"></div>
+                </div>
+              </div>
 
               <aside class="game-side">
                 <h3>2048 <span class="tag">KEYS</span></h3>
@@ -295,7 +403,6 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101b7' + w
     ['assets/main.js', 1],
     ['assets/sb.js', 1],
     ['assets/auth.js', 1],
-    ['assets/console.js', 1],
     ['assets/games/2048.js', 1],
     ['assets/games/memory.js', 1],
     ['assets/games/reaction.js', 1],
