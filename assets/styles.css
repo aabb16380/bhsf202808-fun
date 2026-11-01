@@ -2468,3 +2468,55 @@ body.menu-merged .nav-toggle { display: none !important; }
 
 .cheat-step .btn { padding: 4px 10px; font-size: 12.5px; }
 .cheat-step .btn[disabled] { opacity: 0.4; }
+/* ---------- 照片墙：分类 / 排序 / 星级 ---------- */
+.photo-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 18px;
+}
+
+.photo-filter .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.photo-cat-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.photo-rate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.photo-stars { display: inline-flex; gap: 2px; }
+
+.photo-stars .star {
+  padding: 0 1px;
+  font-size: 17px;
+  line-height: 1;
+  color: color-mix(in srgb, var(--ink-3) 45%, transparent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.photo-stars .star.is-on { color: #d9a441; }
+.photo-stars .star:hover:not(:disabled) { transform: scale(1.15); }
+.photo-stars .star:disabled { cursor: default; opacity: 0.6; }
+
+.photo-rate-info {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.photo-more {
+  display: block;
+  margin: 20px auto 0;
+}

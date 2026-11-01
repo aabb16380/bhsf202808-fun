@@ -18,6 +18,10 @@
   var DB_NOTE = '数据库还没接：先跑 supabase/schema.sql，再把 URL 和 anon key 填进 assets/site-config.js';
   var EMPTY_TEXT = '还没有合影。传第一张，把今天留下来。';
   var PHOTO_LIMIT = 60;
+  var PREVIEW_COUNT = 3;      // 默认只露三张
+  var showAllPhotos = false;
+  var curCat = '';            // '' = 全部
+  var curSort = 'best';       // best | stars | likes | new
   var MAX_BYTES = 10 * 1024 * 1024;   // 与 storage 桶的 10MB 上限一致
   var MAX_EDGE = 1600;
   var ALLOWED = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1, 'image/gif': 1 };
@@ -248,6 +252,11 @@
         likes: Number(r.likes || 0),
         created_at: r.created_at || '',
         mine: !!r.mine,
+        category: r.category || '合影',
+        avg: Number(r.avg_stars || 0),
+        ratingCount: Number(r.rating_count || 0),
+        myStars: Number(r.my_stars || 0),
+        score: Number(r.score || 0),
         sample: false
       };
     }).filter(function (p) { return !!p.url; });
@@ -264,8 +273,13 @@
       return;
     }
 
-    setStatus('正在读合影…');
-    B8.sb.rpc('b8_photos_list', { p_token: B8.auth.token(), p_limit: PHOTO_LIMIT })
+    setStatus('正在读照片…');
+    B8.sb.rpc('b8_photos_list', {
+      p_token: B8.auth.token(),
+      p_limit: PHOTO_LIMIT,
+      p_cat: curCat,
+      p_sort: curSort
+    })
       .then(function (rows) {
         if (g !== renderGen) return;
         photos = normalize(rows);
@@ -319,6 +333,82 @@
     timer = setTimeout(finish, 10000);
   }
 
+  /* ---------- 评分 ---------- */
+  function ratePhoto(p, stars, starsWrap, infoEl) {
+    if (!writable || !B8.auth || !B8.auth.token()) return;
+    var btns = starsWrap.querySelectorAll('.star');
+    for (var i = 0; i < btns.length; i++) btns[i].disabled = true;
+
+    B8.sb.rpc('b8_photo_rate', { p_token: B8.auth.token(), p_id: p.id, p_stars: stars })
+      .then(function (res) {
+        p.avg = Number(res.avg || 0);
+        p.ratingCount = Number(res.count || 0);
+        p.myStars = stars;
+        for (var i = 0; i < btns.length; i++) {
+          btns[i].classList.toggle('is-on', i < stars);
+          btns[i].disabled = false;
+        }
+        if (infoEl) {
+          infoEl.textContent = (p.avg * 2).toFixed(1) + ' 分 · ' + p.ratingCount + ' 人';
+        }
+        B8.toast('给了 ' + stars + ' 颗星（' + (stars * 2) + ' 分）');
+      })
+      .catch(function (err) {
+        for (var i = 0; i < btns.length; i++) btns[i].disabled = false;
+        B8.toast('评分没成功：' + (err && err.message ? err.message : '网络异常'));
+      });
+  }
+
+  /* ---------- 分类 / 排序 / 展开 ---------- */
+  function catSelect() {
+    var sel = B8.qs('#photo-cat');
+    return sel ? sel.value : '合影';
+  }
+  function bindPhotoFilters() {
+    var cats = B8.qs('#photo-cats');
+    var sorts = B8.qs('#photo-sorts');
+    var more = B8.qs('#photo-more');
+
+    if (cats) {
+      B8.on(cats, 'click', function (ev) {
+        var b = closest(ev.target, '[data-cat]');
+        if (!b) return;
+        curCat = b.getAttribute('data-cat') || '';
+        showAllPhotos = false;
+        B8.qsa('[data-cat]', cats).forEach(function (x) {
+          x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+        });
+        loadPhotos();
+      });
+    }
+
+    if (sorts) {
+      B8.on(sorts, 'click', function (ev) {
+        var b = closest(ev.target, '[data-sort]');
+        if (!b) return;
+        curSort = b.getAttribute('data-sort') || 'best';
+        B8.qsa('[data-sort]', sorts).forEach(function (x) {
+          x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+        });
+        loadPhotos();
+      });
+    }
+
+    if (more) {
+      B8.on(more, 'click', function () {
+        showAllPhotos = !showAllPhotos;
+        paintPhotos(renderGen);
+      });
+    }
+  }
+
+  function closest(node, sel) {
+    while (node && node !== document) {
+      if (node.matches && node.matches(sel)) return node;
+      node = node.parentNode;
+    }
+    return null;
+  }
   function photoCard(p) {
     var card = el('article', 'photo-card');
     card.setAttribute('data-id', String(p.id));
@@ -352,15 +442,56 @@
     body.appendChild(cap);
 
     var meta = el('div', 'photo-meta');
-    var who = el('span');
-    who.textContent = p.uploader || '同学';
-    meta.appendChild(who);
-    var dot = el('span', 'dot');
-    meta.appendChild(dot);
+
+    // 分类标签
+    var catTag = el('span', 'tag plain photo-cat-tag');
+    catTag.textContent = p.category || '合影';
+    meta.appendChild(catTag);
+
+    // 上传者：只有管理员和超管看得到名字
+    var isBoss = B8.auth && B8.auth.isAdmin && B8.auth.isAdmin();
+    if (isBoss) {
+      var who = el('span', 'photo-who');
+      who.textContent = p.uploader || '同学';
+      meta.appendChild(who);
+    }
+
     var when = el('span');
     when.textContent = B8.date(p.taken_on || p.created_at) || '某一天';
     meta.appendChild(when);
     body.appendChild(meta);
+
+    // 星级评分：1-5 颗，每颗两分，满分 10
+    var rateRow = el('div', 'photo-rate');
+    var stars = el('div', 'photo-stars');
+    stars.setAttribute('role', 'group');
+    stars.setAttribute('aria-label', '给这张照片打分，1 到 5 星');
+    var score10 = Math.round((p.avg || 0) * 2 * 10) / 10;
+    for (var s = 1; s <= 5; s++) {
+      var star = el('button', 'star' + (p.myStars >= s ? ' is-on' : ''));
+      star.type = 'button';
+      star.textContent = '★';
+      star.setAttribute('data-stars', String(s));
+      star.setAttribute('aria-label', s + ' 星');
+      if (!writable || p.sample) star.disabled = true;
+      stars.appendChild(star);
+    }
+    rateRow.appendChild(stars);
+
+    var rateInfo = el('span', 'photo-rate-info');
+    rateInfo.textContent = (p.ratingCount
+      ? (score10.toFixed(1) + ' 分 · ' + p.ratingCount + ' 人')
+      : '还没人评分');
+    rateRow.appendChild(rateInfo);
+    body.appendChild(rateRow);
+
+    if (writable && !p.sample) {
+      B8.on(stars, 'click', function (ev) {
+        var b = ev.target;
+        if (!b || !b.getAttribute || !b.getAttribute('data-stars')) return;
+        ratePhoto(p, Number(b.getAttribute('data-stars')), stars, rateInfo);
+      });
+    }
 
     var actions = el('div', 'photo-actions');
 
@@ -401,8 +532,12 @@
       shown = [];
       var broken = 0;
 
+      // 默认只露三张，剩下的点「展开全部」
+      var limit = showAllPhotos ? photos.length : Math.min(PREVIEW_COUNT, photos.length);
+
       photos.forEach(function (p, i) {
         if (!ok[i]) { broken++; return; }
+        if (shown.length >= limit) return;
         var card = photoCard(p);
         var open = card.firstChild;
         // 大图浏览的索引按「真正显示出来的」这一份来，别用 photos 的下标
@@ -412,6 +547,13 @@
         shown.push(p);
         grid.appendChild(card);
       });
+
+      var more = B8.qs('#photo-more');
+      if (more) {
+        var extra = photos.length - limit;
+        more.hidden = extra <= 0 && !showAllPhotos;
+        more.textContent = showAllPhotos ? '收起' : ('展开全部（还有 ' + Math.max(extra, 0) + ' 张）');
+      }
 
       emptyEl.hidden = shown.length > 0;
       if (!shown.length && photos.length) {
@@ -650,7 +792,8 @@
             p_path: path,
             p_url: url,
             p_caption: caption,
-            p_taken_on: null
+            p_taken_on: null,
+            p_category: catSelect()
           });
         })
         .then(function () { done += 1; })
@@ -919,6 +1062,7 @@
 
     bindGameTabs();
     bindRankTabs();
+    bindPhotoFilters();
 
     if (fileEl) B8.on(fileEl, 'change', onPick);
 
