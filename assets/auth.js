@@ -26,6 +26,7 @@
   var state = {
     member: null,                 // {no, name, token, exp}
     elev: null,                   // {token, kind, label, exp}
+    preview: false,               // 没接数据库时点「先看看界面」
     stage: 'idle',                // gate 流程：idle | name | pass | setpass
     pendingNo: '',
     pendingName: '',
@@ -72,14 +73,33 @@
   };
 
   function broadcast() {
+    var s = snapshot();
     document.dispatchEvent(new CustomEvent('b8:auth', {
       detail: {
-        kind: auth.kind(), nick: auth.nick(), no: auth.no(),
-        isAdmin: auth.isAdmin(), isSuper: auth.isSuper()
+        kind: s.kind, nick: s.nick, no: s.memberNo,
+        isAdmin: s.isAdmin, isSuper: s.isSuper
       }
     }));
     var btn = document.getElementById('acct-btn');
     if (btn) btn.textContent = btnLabel();
+  }
+
+  /**
+   * 给页面模块用的快照。
+   * 注意：形状必须和 v1 的 {kind, nick} 保持一致——
+   * photos.js / whispers.js 这些模块里写的都是 `if (st.kind === 'none') return;`，
+   * 形状一变，它们会以为已经登录，然后拿着空令牌去打接口。
+   */
+  function snapshot() {
+    var st = auth.state();
+    return {
+      kind: st.preview ? 'preview' : auth.kind(),   // none | member | admin | super | preview
+      nick: auth.nick(),
+      token: auth.token(),
+      isAdmin: auth.isAdmin(),
+      isSuper: auth.isSuper(),
+      memberNo: auth.no()
+    };
   }
 
   function settle() {
@@ -87,12 +107,12 @@
     resolved = true;
     broadcast();
     listeners.splice(0).forEach(function (fn) {
-      try { fn(auth.state()); } catch (e) {}
+      try { fn(snapshot()); } catch (e) {}
     });
   }
 
   auth.ready = function (fn) {
-    if (resolved) { try { fn(auth.state()); } catch (e) {} return; }
+    if (resolved) { try { fn(snapshot()); } catch (e) {} return; }
     listeners.push(fn);
   };
 
@@ -301,6 +321,7 @@
       if (gateEls.preview) {
         gateEls.preview.hidden = false;
         B8.on(gateEls.preview, 'click', function () {
+          state.preview = true;
           state.member = { no: 'preview', name: '预览', token: 'preview', exp: Date.now() + 3600e3 };
           state.elev = null;
           hideGate();

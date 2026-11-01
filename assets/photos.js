@@ -104,13 +104,14 @@
         tag.className = 'mode-tag tag plain';
         tag.textContent = '预览';
         tag.title = '示例数据，所有写入都已禁用';
-      } else if (st.kind === 'admin') {
+      } else if (st.kind === 'admin' || st.kind === 'super') {
         tag.className = 'mode-tag tag';
-        tag.textContent = '管理员';
+        tag.textContent = st.isSuper ? '超级管理员' : '管理员';
         tag.title = '管理员可以删除任何一张合影';
       } else {
-        tag.className = 'mode-tag tag jade';
-        tag.textContent = st.nick || '同学';
+        // 名字已经在右上角的账号按钮上，这里不重复显示
+        tag.hidden = true;
+        tag.textContent = '';
       }
     }
 
