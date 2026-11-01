@@ -531,7 +531,7 @@
   /* ---------- 启动 ---------- */
   function init() {
     board = B8.qs('#g2048-board');
-    if (!board) return;
+    if (!board) { return; }
     layerEl = B8.qs('#g2048-tiles-layer');
     scoreEl = B8.qs('#g2048-score');
     bestEl = B8.qs('#g2048-best');
@@ -546,11 +546,21 @@
     bindInput();
     initCheat();
 
-    if (!B8.auth) return;
+    if (!B8.auth) { report('没有 auth 模块'); return; }
     B8.auth.ready(function (st) {
-      writable = !!B8.sb.ready && st.kind !== 'preview';
-      reset();
+      try {
+        writable = !!B8.sb.ready && st.kind !== 'preview';
+        reset();
+      } catch (err) {
+        report('开局失败：' + (err && err.message ? err.message : err));
+      }
     });
+  }
+
+  // 出错时把原因写在棋盘下面，别让人对着空板子猜
+  function report(msg) {
+    var s = document.getElementById('g2048-state');
+    if (s) s.textContent = msg;
   }
 
   whenReady(init);
