@@ -409,6 +409,73 @@
     }
     return null;
   }
+  /* ---------- 改说明 / 改分类 ---------- */
+  function openPhotoEditor(p, card) {
+    var old = document.getElementById('ph-edit');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var wrap = document.createElement('div');
+    wrap.id = 'ph-edit';
+    wrap.className = 'modal';
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+
+    var opts = '';
+    ['大合照', '合影', '辉辉', 'meme'].forEach(function (c) {
+      opts += '<option value="' + c + '"' + (p.category === c ? ' selected' : '') + '>' + c + '</option>';
+    });
+
+    wrap.innerHTML =
+      '<div class="modal-inner ph-edit-inner">' +
+        '<h3 class="modal-title">编辑这张照片</h3>' +
+        '<div class="field"><label for="ph-cap">说明（可留空）</label>' +
+          '<input class="input" id="ph-cap" maxlength="60"></div>' +
+        '<div class="field" style="margin-top:12px"><label for="ph-cat2">分类</label>' +
+          '<select class="input" id="ph-cat2">' + opts + '</select></div>' +
+        '<div class="modal-actions">' +
+          '<button class="btn ghost sm" type="button" id="ph-cancel">取消</button>' +
+          '<button class="btn sm" type="button" id="ph-save">保存</button>' +
+        '</div>' +
+        '<p class="form-status" id="ph-status"></p>' +
+      '</div>';
+
+    document.body.appendChild(wrap);
+
+    var capEl2 = document.getElementById('ph-cap');
+    var catEl2 = document.getElementById('ph-cat2');
+    var st = document.getElementById('ph-status');
+    var saveBtn = document.getElementById('ph-save');
+    capEl2.value = p.caption || '';
+
+    function close() { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); }
+    B8.on(document.getElementById('ph-cancel'), 'click', close);
+    B8.on(wrap, 'click', function (e) { if (e.target === wrap) close(); });
+
+    B8.on(saveBtn, 'click', function () {
+      saveBtn.disabled = true;
+      saveBtn.textContent = '保存中…';
+      st.className = 'form-status';
+      st.textContent = '';
+
+      B8.sb.rpc('b8_photo_update', {
+        p_token: B8.auth.token(),
+        p_id: p.id,
+        p_caption: capEl2.value,
+        p_category: catEl2.value
+      }).then(function () {
+        close();
+        B8.toast('改好了');
+        loadPhotos();
+      }).catch(function (err) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '保存';
+        st.className = 'form-status err';
+        st.textContent = (err && err.message) ? err.message : '保存失败';
+      });
+    });
+
+    setTimeout(function () { capEl2.focus(); }, 80);
+  }
   function photoCard(p) {
     var card = el('article', 'photo-card');
     card.setAttribute('data-id', String(p.id));
@@ -512,6 +579,13 @@
     actions.appendChild(like);
 
     if (writable && (p.mine || (B8.auth && B8.auth.isAdmin()))) {
+      var edit = el('button', 'photo-act photo-edit');
+      edit.type = 'button';
+      edit.textContent = '编辑';
+      edit.setAttribute('aria-label', '改说明和分类');
+      B8.on(edit, 'click', function () { openPhotoEditor(p, card); });
+      actions.appendChild(edit);
+
       var del = el('button', 'photo-act photo-del');
       del.type = 'button';
       del.textContent = '删除';

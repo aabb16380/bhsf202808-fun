@@ -1121,3 +1121,9 @@
   display: block;
   margin: 20px auto 0;
 }
+/* ---------- 照片编辑弹窗 ---------- */
+.ph-edit-inner { width: min(460px, 100%); text-align: left; }
+.ph-edit-inner .field label { display: block; margin-bottom: 5px; }
+
+.photo-edit { color: var(--ink-2); }
+.photo-edit:hover { color: var(--seal); }
