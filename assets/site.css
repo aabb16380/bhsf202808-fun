@@ -429,9 +429,13 @@
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.01em;
-  color: var(--ink);
-  background: #f3ecdb;
-  box-shadow: inset 0 0 0 1px rgba(25, 23, 19, 0.06);
+  color: #fffdf7;
+  background-color: #c9b48f;
+  background-size: cover;
+  background-position: center 28%;
+  background-repeat: no-repeat;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.66), 0 0 12px rgba(0, 0, 0, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(25, 23, 19, 0.10);
   transition: background 0.12s ease, color 0.12s ease;
 }
 
@@ -452,50 +456,83 @@
   100% { transform: scale(1); }
 }
 
-/* 色阶：纸白 → 麦黄 → 赭石 → 朱砂 → 金 → 赤印 → 玄金
-   一路暖上去，1024 开始发亮，2048 之后是"印章"质感 */
-.b2048-in.v2   { background: #f4eee0; }
-.b2048-in.v4   { background: #efe4cb; }
-.b2048-in.v8   { background: #ecd9ac; }
-.b2048-in.v16  { background: #e7c886; }
-.b2048-in.v32  { background: #dcae62; color: #3a2c18; }
-.b2048-in.v64  { background: #d0913f; color: #fffdf7; }
-.b2048-in.v128 { background: #c2732c; color: #fffdf7; }
-.b2048-in.v256 { background: #ad5623; color: #fffdf7; }
+/* 图片版：每个数字一张脸，上面压一层暗角，白字才压得住照片。
+   512 之后各自换一层色（红 / 金 / 朱印），一眼能看出是大牌 */
+.b2048-in.v2 {
+  background-image: linear-gradient(180deg, rgba(20, 16, 10, 0.14) 0%, rgba(20, 16, 10, 0.40) 55%, rgba(20, 16, 10, 0.62) 100%),
+    url("games/hui/1.jpg");
+}
+
+.b2048-in.v4 {
+  background-image: linear-gradient(180deg, rgba(20, 16, 10, 0.14) 0%, rgba(20, 16, 10, 0.40) 55%, rgba(20, 16, 10, 0.62) 100%),
+    url("games/hui/2.jpg");
+}
+
+.b2048-in.v8 {
+  background-image: linear-gradient(180deg, rgba(20, 16, 10, 0.14) 0%, rgba(20, 16, 10, 0.40) 55%, rgba(20, 16, 10, 0.62) 100%),
+    url("games/hui/3.jpg");
+}
+
+.b2048-in.v16 {
+  background-image: linear-gradient(180deg, rgba(20, 16, 10, 0.14) 0%, rgba(20, 16, 10, 0.40) 55%, rgba(20, 16, 10, 0.62) 100%),
+    url("games/hui/4.jpg");
+}
+
+.b2048-in.v32 {
+  background-image: linear-gradient(180deg, rgba(20, 16, 10, 0.14) 0%, rgba(20, 16, 10, 0.40) 55%, rgba(20, 16, 10, 0.62) 100%),
+    url("games/hui/7.jpg");
+}
+
+.b2048-in.v64 {
+  background-image: linear-gradient(180deg, rgba(20, 16, 10, 0.14) 0%, rgba(20, 16, 10, 0.40) 55%, rgba(20, 16, 10, 0.62) 100%),
+    url("games/hui/8.jpg");
+}
+
+.b2048-in.v128 {
+  background-image: linear-gradient(180deg, rgba(20, 16, 10, 0.14) 0%, rgba(20, 16, 10, 0.40) 55%, rgba(20, 16, 10, 0.62) 100%),
+    url("games/hui/6.jpg");
+}
+
+.b2048-in.v256 {
+  background-image: linear-gradient(180deg, rgba(20, 16, 10, 0.14) 0%, rgba(20, 16, 10, 0.40) 55%, rgba(20, 16, 10, 0.62) 100%),
+    url("games/hui/5.jpg");
+}
+
+/* 512：暗红 */
 .b2048-in.v512 {
-  background: linear-gradient(152deg, #9c3a1e 0%, #7d2a13 100%);
-  color: #ffeacd;
-  box-shadow: inset 0 0 0 1px rgba(255, 214, 160, 0.28),
-              0 2px 10px -4px rgba(124, 42, 19, 0.45);
-  text-shadow: 0 1px 2px rgba(60, 18, 6, 0.35);
+  background-image: linear-gradient(160deg, rgba(120, 40, 20, 0.28) 0%, rgba(90, 25, 12, 0.62) 100%),
+    url("games/hui/8.jpg");
+  box-shadow: inset 0 0 0 2px rgba(255, 214, 160, 0.35),
+              0 2px 12px -4px rgba(124, 42, 19, 0.45);
 }
 
 /* 1024：金 */
 .b2048-in.v1024 {
-  background: linear-gradient(152deg, #e3b44b 0%, #b8860b 55%, #96690a 100%);
-  color: #2b2011;
-  box-shadow: inset 0 0 0 2px rgba(255, 240, 200, 0.55),
+  background-image: linear-gradient(160deg, rgba(232, 184, 80, 0.42) 0%, rgba(120, 84, 12, 0.62) 100%),
+    url("games/hui/2.jpg");
+  box-shadow: inset 0 0 0 2px rgba(255, 240, 200, 0.6),
               0 4px 18px -6px rgba(184, 134, 11, 0.6);
-  text-shadow: 0 1px 0 rgba(255, 244, 214, 0.45);
 }
 
 /* 2048：朱印，带金边和一层暖光 */
 .b2048-in.v2048 {
-  background: linear-gradient(152deg, #c0392b 0%, #9c2318 55%, #7a1a12 100%);
+  background-image: linear-gradient(160deg, rgba(192, 57, 43, 0.42) 0%, rgba(90, 18, 12, 0.72) 100%),
+    url("games/hui/6.jpg");
   color: #ffedc9;
-  box-shadow: inset 0 0 0 2px rgba(255, 214, 150, 0.55),
+  box-shadow: inset 0 0 0 2px rgba(255, 214, 150, 0.6),
               0 4px 22px -6px rgba(192, 57, 43, 0.65);
-  text-shadow: 0 1px 3px rgba(60, 12, 6, 0.45);
+  text-shadow: 0 1px 3px rgba(60, 12, 6, 0.6), 0 0 14px rgba(255, 220, 170, 0.35);
 }
 
-/* 4096 以上：玄底 + 金边，分数越高越"压手" */
+/* 4096 以上：压一层玄色 + 金边，分数越高越"压手" */
 .b2048-in.vbig {
-  background: linear-gradient(152deg, #2a1f2e 0%, #1a1220 55%, #120c18 100%);
+  background-image: linear-gradient(160deg, rgba(42, 31, 46, 0.72) 0%, rgba(18, 12, 24, 0.88) 100%),
+    url("games/hui/1.jpg");
   color: #f2d79a;
   box-shadow: inset 0 0 0 2px rgba(242, 215, 154, 0.5),
               0 0 24px -6px rgba(242, 215, 154, 0.35),
               0 4px 20px -8px rgba(0, 0, 0, 0.6);
-  text-shadow: 0 0 12px rgba(242, 215, 154, 0.45);
+  text-shadow: 0 0 12px rgba(242, 215, 154, 0.45), 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
 /* 大数字再瘦一点，四位数在格子里更稳 */
