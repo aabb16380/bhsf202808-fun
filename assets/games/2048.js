@@ -149,12 +149,6 @@
       });
   }
 
-  function scheduleSubmit() {
-    if (!writable) return;
-    clearTimeout(submitTimer);
-    // 连着合方块时不必每一下都写库，停手 1.4 秒再传当前最高分
-    submitTimer = setTimeout(function () { submitScore(score); }, 1400);
-  }
 
   /* ---------- 规则 ---------- */
   function lineIndexes(dir) {
@@ -460,10 +454,8 @@
       slots[idx].v = v;
       paint(slots[idx]);
     } else {
-      var t = makeTile(idx, v);
-      place(t, idx);
-      slots[idx] = t;
-      if (!t.el.parentNode) layerEl.appendChild(t.el);
+      // makeTile 自己会 place + append
+      slots[idx] = makeTile(idx, v);
     }
     updateMax();
     markPicked();
