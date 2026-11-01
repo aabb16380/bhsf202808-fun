@@ -24,6 +24,7 @@
   var over = false;
   var won = false;
   var submitted = 0;      // 已经上传过的最高分，避免重复写库
+  var gameSubmitted = false;  // 这一局是否已经记进排行榜（一局只记一次）
   var submitTimer = 0;
   var writable = false;
   var started = false;
