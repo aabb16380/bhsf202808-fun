@@ -1138,6 +1138,12 @@
     bindRankTabs();
     bindPhotoFilters();
 
+    // 开关管理员模式后要重画：上传者名字只有管理员看得见，
+    // 不重画的话关掉管理员模式名字还挂在那儿。
+    document.addEventListener('b8:auth', function () {
+      loadPhotos();
+    });
+
     if (fileEl) B8.on(fileEl, 'change', onPick);
 
     // 上传入口是个 label，键盘用户按 Enter / 空格也能打开文件框

@@ -62,12 +62,23 @@
       { key: 'scores', name: '排行' }
     ];
 
+    // 永久管理员没有提权会话（auth.state().elev 是 null），
+    // 以前这里直接读 .exp 会抛错，整块面板就只剩一条空边框。
+    var st0 = null;
+    try { st0 = B8.auth.state ? B8.auth.state() : null; } catch (e) { st0 = null; }
+    var elev = st0 && st0.elev;
+    var sub = esc(B8.auth.nick()) + ' · ' + esc(B8.auth.elevLabel() || '超级管理员');
+    if (elev && elev.exp) {
+      sub += '　权限到 ' + new Date(elev.exp).toLocaleString('zh-CN', { hour12: false }) + ' 失效';
+    } else {
+      sub += '　永久管理员';
+    }
+
     var html = '<div class="console-head">' +
       '<h3 class="modal-title">控制台</h3>' +
       '<button class="btn ghost sm" type="button" id="console-close">关闭</button>' +
       '</div>' +
-      '<p class="modal-note">' + esc(B8.auth.nick()) + ' · ' + esc(B8.auth.elevLabel() || '超级管理员') +
-      '　权限到 ' + new Date(B8.auth.state().elev.exp).toLocaleString('zh-CN', { hour12: false }) + ' 失效</p>' +
+      '<p class="modal-note">' + sub + '</p>' +
       '<div class="chip-row console-tabs">';
     tabs.forEach(function (t) {
       html += '<button class="chip' + (tab === t.key ? ' on' : '') + '" type="button" data-tab="' +
