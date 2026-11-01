@@ -463,7 +463,7 @@
       html +=
         '<div class="field" style="margin-top:18px">' +
           '<label for="acct-key">管理员密钥（班委/超管才有）</label>' +
-          '<input class="input" id="acct-key" placeholder="B8-XXXX-XXXX-XXXX" autocomplete="off">' +
+          '<input class="input" id="acct-key" type="text" placeholder="B8-XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text">' +
           '<p class="modal-note" style="margin-top:6px">' +
             '一人一钥：第一次用哪把，以后就固定是你。权限 2 小时，关掉标签页就没了，下次进来要重新输。' +
           '</p>' +

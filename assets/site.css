@@ -1019,3 +1019,35 @@ html.js body:not(.authed) #main {
   height: auto;
   filter: drop-shadow(0 14px 28px rgba(60, 90, 140, 0.22));
 }
+/* ---------- 2048 作弊模式 ---------- */
+.b2048-cheat {
+  margin: 14px 0 2px;
+  padding: 12px 14px;
+  background: var(--jade-soft);
+  border: 1px dashed color-mix(in srgb, var(--jade) 45%, transparent);
+  border-radius: var(--radius);
+}
+
+.cheat-tip {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--ink-2);
+}
+
+.cheat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.cheat-num { width: 112px; }
+
+.b2048-tile.is-picked {
+  outline: 2px solid var(--seal);
+  outline-offset: 2px;
+  z-index: 3;
+}
+
+.b2048.is-cheat .b2048-tile { cursor: pointer; }
