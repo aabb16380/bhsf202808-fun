@@ -717,13 +717,72 @@
 
   function readType(file) {
     var type = (file.type || '').toLowerCase();
-    if (type) return type;
     var name = file.name || '';
+    // 有些安卓机 / 微信里 type 是空的，按扩展名兜底
+    if (type) return type;
     if (/\.jpe?g$/i.test(name)) return 'image/jpeg';
     if (/\.png$/i.test(name)) return 'image/png';
     if (/\.webp$/i.test(name)) return 'image/webp';
     if (/\.gif$/i.test(name)) return 'image/gif';
+    if (/\.heic$/i.test(name)) return 'image/heic';
+    if (/\.heif$/i.test(name)) return 'image/heif';
     return '';
+  }
+
+  function isHeic(file) {
+    var type = (file.type || '').toLowerCase();
+    var name = (file.name || '').toLowerCase();
+    return /heic|heif/.test(type) || /\.heic$|\.heif$/.test(name);
+  }
+
+  /**
+   * HEIC → JPEG。
+   * 浏览器能不能解 HEIC 完全看内核：Safari / iOS 能，Chrome / Edge / 微信安卓不能。
+   * 所以不直接拒，先丢给 <img> 试一下，能解就画到 canvas 上导成 JPEG，
+   * 解不了再明确告诉用户去设置里改格式。
+   */
+  function convertHeic(file) {
+    return new Promise(function (resolve, reject) {
+      var url = '';
+      try { url = URL.createObjectURL(file); } catch (e) { reject(new Error('读不到文件')); return; }
+
+      var img = new Image();
+      var done = false;
+
+      function fail() {
+        if (done) return;
+        done = true;
+        try { URL.revokeObjectURL(url); } catch (e) {}
+        reject(new Error('这个浏览器解不了 HEIC'));
+      }
+
+      img.onload = function () {
+        if (done) return;
+        try {
+          var w = img.naturalWidth || img.width;
+          var h = img.naturalHeight || img.height;
+          if (!w || !h) { fail(); return; }
+          var scale = Math.min(1, MAX_EDGE / Math.max(w, h));
+          var c = document.createElement('canvas');
+          c.width = Math.round(w * scale);
+          c.height = Math.round(h * scale);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          c.toBlob(function (blob) {
+            if (done) return;
+            done = true;
+            try { URL.revokeObjectURL(url); } catch (e) {}
+            if (blob && blob.size) resolve(blob);
+            else reject(new Error('HEIC 转换失败'));
+          }, 'image/jpeg', 0.9);
+        } catch (e) {
+          fail();
+        }
+      };
+
+      img.onerror = fail;
+      img.src = url;
+      setTimeout(fail, 8000);   // 有些内核既不 load 也不 error
+    });
   }
 
   function dataUrlToBlob(dataUrl) {
@@ -821,17 +880,18 @@
     var queue = [];
     var skipped = 0;
 
+    var heicCount = 0;
+
     picked.forEach(function (f) {
-      var name = f.name || '';
       var type = readType(f);
-      if (/heic|heif/.test(type) || /\.heic$|\.heif$/i.test(name)) { skipped++; return; }
+      if (isHeic(f)) { heicCount++; queue.push(f); return; }   // 先收下，传的时候试转
       if (!ALLOWED[type]) { skipped++; return; }
       queue.push(f);
     });
 
     if (!queue.length) {
       failUpload(skipped
-        ? '这几张都不支持：只收 JPG / PNG / WebP / GIF（iPhone 的 HEIC 请先导出成 JPG）。'
+        ? '这几张都不支持：只收 JPG / PNG / WebP / GIF。iPhone 的 HEIC 可以在「设置 → 相机 → 格式」里改成「兼容性最佳」再拍。'
         : '没有可上传的图片。');
       return;
     }
@@ -840,15 +900,19 @@
     var total = queue.length;
     var done = 0;
     var failed = 0;
+    var heicFailed = 0;
     var caption = B8.trim(captionEl ? captionEl.value : '', 60);
 
     function next() {
       if (!queue.length) {
         if (captionEl) captionEl.value = '';
-        setStatus('传完 ' + done + ' 张' + (failed ? '，失败 ' + failed + ' 张' : '') +
-                  (skipped ? '，跳过 ' + skipped + ' 张不支持的格式' : '') + '。', failed > 0);
+        var msg = '传完 ' + done + ' 张';
+        if (failed) msg += '，失败 ' + failed + ' 张';
+        if (heicFailed) msg += '（其中 ' + heicFailed + ' 张是 HEIC，这个浏览器解不了）';
+        if (skipped) msg += '，跳过 ' + skipped + ' 张不支持的格式';
+        setStatus(msg + '。', failed > 0);
         loadPhotos();
-        B8.toast('合影已上传 ' + done + ' 张');
+        if (done) B8.toast('照片已上传 ' + done + ' 张');
         uploading = false;
         return;
       }
@@ -858,7 +922,17 @@
 
       var path = 'photos/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
 
-      (file.size > MAX_BYTES ? compress(file) : Promise.resolve(file))
+      var prep;
+      if (isHeic(file)) {
+        setStatus('正在转换 HEIC（' + (done + failed + 1) + ' / ' + total + '）…');
+        prep = convertHeic(file).then(function (blob) {
+          return blob.size > MAX_BYTES ? compress(blob) : blob;
+        });
+      } else {
+        prep = file.size > MAX_BYTES ? compress(file) : Promise.resolve(file);
+      }
+
+      prep
         .then(function (blob) {
           return uploadFile('b8-photos', path, blob);
         })
@@ -875,6 +949,8 @@
         .then(function () { done += 1; })
         .catch(function (err) {
           failed += 1;
+          // HEIC 单独计数：这个浏览器解不了，换台设备可能就成了
+          if (isHeic(file)) heicFailed += 1;
           if (window.console) console.warn('[photos] 这张没传上去：', err && err.message);
         })
         .then(next);
