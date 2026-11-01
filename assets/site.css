@@ -212,6 +212,16 @@
   margin-bottom: 18px;
 }
 
+/* 记分条右边挂两个按钮（重开 / 图片版）时用，别让它们各占一格把网格撑乱 */
+.game-hud-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .game-stat {
   min-width: 0;
   padding: 8px 12px 9px;
@@ -577,6 +587,30 @@
   background: var(--jade-soft);
   border-color: color-mix(in srgb, var(--jade) 42%, var(--line));
 }
+
+/* 图片版牌面：整张牌就是一张辉辉 */
+.mem-front.has-img {
+  padding: 0;
+  overflow: hidden;
+  background: #fff;
+}
+
+.mem-front.has-img img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 2px;
+}
+
+.mem-card.is-matched .mem-front.has-img {
+  color: inherit;
+  background: #fff;
+  border-color: var(--jade);
+  box-shadow: inset 0 0 0 3px var(--jade);
+}
+
+.mem-card.is-matched .mem-front.has-img img { opacity: 0.62; }
 
 .mem-card.is-matched { cursor: default; }
 

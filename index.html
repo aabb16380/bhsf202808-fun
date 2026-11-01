@@ -17,17 +17,17 @@
 <meta property="og:locale" content="zh_CN">
 <meta name="twitter:card" content="summary">
 
-<link rel="icon" href="assets/favicon.png?v=20261101g4" type="image/png">
-<link rel="apple-touch-icon" href="assets/icon.png?v=20261101g4">
+<link rel="icon" href="assets/favicon.png?v=20261101g5" type="image/png">
+<link rel="apple-touch-icon" href="assets/icon.png?v=20261101g5">
 <script>
-window.B8_BUILD = '20261101g4';
+window.B8_BUILD = '20261101g5';
 // ?t=<时间戳> 透传到每个资源，配合 /test/ 入口绕开缓存
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
-document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g4' + window.B8_T + '">');
+document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g5' + window.B8_T + '">');
 </script>
 <script>document.documentElement.classList.add('js');</script>
 </head>
@@ -43,7 +43,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g4' + w
 <header class="site-header" id="site-header">
   <div class="wrap header-inner">
     <a class="brand" href="#top" aria-label="回到顶部">
-      <img class="brand-mark" src="assets/icon.png?v=20261101g4" alt="" width="30" height="30">
+      <img class="brand-mark" src="assets/icon.png?v=20261101g5" alt="" width="30" height="30">
       <span class="brand-text">
         <span class="brand-name">八班游乐场</span>
         <span class="brand-ver" id="brand-ver">v1.0</span>
@@ -124,7 +124,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g4' + w
 
       <div class="hero-play" aria-hidden="true">
         <span class="play-ring"></span>
-        <img class="play-logo" src="assets/logo.png?v=20261101g4" alt="" width="200" height="160">
+        <img class="play-logo" src="assets/logo.png?v=20261101g5" alt="" width="200" height="160">
         <span class="play-note">下课<br>十分钟</span>
       </div>
     </div>
@@ -236,8 +236,12 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g4' + w
                 <span class="gs-label">最少步数</span>
                 <span class="gs-val" id="gmemory-best">—</span>
               </div>
-              <button class="btn ghost sm" id="gmemory-restart" type="button">重开</button>
-              <div class="gs-state" id="gmemory-state" role="status" aria-live="polite">翻开两张牌，找一样的字。</div>
+              <div class="game-hud-actions">
+                <button class="btn ghost sm" id="gmemory-mode" type="button"
+                        aria-pressed="true" title="切换成文字版">图片版</button>
+                <button class="btn ghost sm" id="gmemory-restart" type="button">重开</button>
+              </div>
+              <div class="gs-state" id="gmemory-state" role="status" aria-live="polite">翻开两张牌，找同一个人。</div>
             </div>
 
             <div class="game-stage">
@@ -248,9 +252,10 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g4' + w
               <aside class="game-side">
                 <h3>记忆翻牌 <span class="tag jade">PAIRS</span></h3>
                 <p class="game-desc">
-                  八对八班的字：八、四、届、班、课、考、球、歌。一次翻两张，记住位置，把八对都配出来。
+                  默认是八张辉辉：一次翻两张，找同一个人。切到文字版就是八班的字——八、四、届、班、课、考、球、歌。
                 </p>
                 <ul class="game-facts">
+                  <li>图片版 / 文字版随时切换，切换会重开一局</li>
                   <li>步数按「翻一对」算，越少越好</li>
                   <li>计时从翻第一张牌开始</li>
                   <li>上榜分数 = 1000 − 步数</li>
@@ -259,8 +264,8 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g4' + w
             </div>
 
             <p class="game-hint">
-              玩法：点一张牌翻开，再点一张。一样就留在桌上，不一样会翻回去。
-              <b>步数越少越好</b>；用时只用来参考，不进排行榜。
+              玩法：点一张牌翻开，再点一张。一样的就留在桌上，不一样会翻回去。
+              右上角可以在<b>图片版 / 文字版</b>之间切；<b>步数越少越好</b>，用时只用来参考，不进排行榜。
             </p>
             <p class="game-note" id="gmemory-note"></p>
           </section>
@@ -433,7 +438,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g4' + w
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g4' + T;
+  var V = '?v=20261101g5' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

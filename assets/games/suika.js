@@ -40,15 +40,16 @@
   var KEY_BEST = 'b8.suika.best';
 
   /* 果子表：level 0 空着，方便用 level 直接取。
-     r 是逻辑半径（画布宽 600），points 是合成出来的得分。 */
+     r 是逻辑半径（画布宽 600），points 是合成出来的得分。
+     img 一填，就把数字换成人像（圆形裁切），label 只在结算/下一颗里当编号用。 */
   var FRUITS = [
     null,
-    { label: '1', r: 30, color: '#e9b949', dark: '#bf8f2a', points: 10 },
-    { label: '2', r: 42, color: '#e2794b', dark: '#b8562e', points: 30 },
-    { label: '3', r: 56, color: '#8fbf5f', dark: '#699840', points: 70 },
-    { label: '4', r: 72, color: '#d9534f', dark: '#a93936', points: 130 },
-    { label: '5', r: 90, color: '#7b6bb5', dark: '#5a4c92', points: 220 },
-    { label: '辉', r: 116, color: '#f0d9a8', dark: '#c9a45c', points: 500, img: 'assets/games/hui.jpg' }
+    { label: '1', r: 30, color: '#e9b949', dark: '#bf8f2a', points: 10, img: 'assets/games/hui/7.jpg' },
+    { label: '2', r: 42, color: '#e2794b', dark: '#b8562e', points: 30, img: 'assets/games/hui/5.jpg' },
+    { label: '3', r: 56, color: '#8fbf5f', dark: '#699840', points: 70, img: 'assets/games/hui/2.jpg' },
+    { label: '4', r: 72, color: '#d9534f', dark: '#a93936', points: 130, img: 'assets/games/hui/1.jpg' },
+    { label: '5', r: 90, color: '#7b6bb5', dark: '#5a4c92', points: 220, img: 'assets/games/hui/8.jpg' },
+    { label: '辉', r: 116, color: '#f0d9a8', dark: '#c9a45c', points: 500, img: 'assets/games/hui/6.jpg' }
   ];
 
   var SPAWN = [
@@ -927,8 +928,7 @@
   function showPause() {
     panel.innerHTML =
       '<h1>歇一下</h1>' +
-      '<p class="sub">现在 ' + score + ' 分，合了 ' + merges + ' 次，最高到 ' +
-        FRUITS[maxLevel].label + '。</p>' +
+      '<p class="sub">现在 ' + score + ' 分，合了 ' + merges + ' 次，最高到第 ' + maxLevel + ' 级。</p>' +
       '<button class="btn-main" type="button" data-act="resume">继续</button>' +
       '<button class="btn-2nd" type="button" data-act="again">重开一局</button>' +
       '<p class="tip"><a href="index.html">← 回游乐场</a></p>';
@@ -942,12 +942,12 @@
       '<p class="sub">' + (isNew ? '本机新纪录。' : '再来一局，堆得再高一点。') + '</p>' +
       '<div class="result">' +
         '<div><span class="big">' + score + '</span><span class="big-unit">分</span></div>' +
-        '<p class="rank-line">最高合成 <b>' + (made ? '小辉辉' : FRUITS[maxLevel].label) + '</b>' +
+        '<p class="rank-line">' + (made ? '最高合成 <b>小辉辉</b>' : '最高合到 <b>第 ' + maxLevel + ' 级</b>') +
           ' · 合成 ' + merges + ' 次</p>' +
         '<dl>' +
           '<div><dt>本机最高</dt><dd>' + best + '</dd></div>' +
           '<div><dt>合成次数</dt><dd>' + merges + '</dd></div>' +
-          '<div><dt>最高等级</dt><dd>' + FRUITS[maxLevel].label + '</dd></div>' +
+          '<div><dt>最高等级</dt><dd>' + maxLevel + ' / ' + MAX_LEVEL + '</dd></div>' +
         '</dl>' +
       '</div>' +
       '<p class="note-line" id="suika-note"></p>' +
@@ -1085,7 +1085,7 @@
     if (!ctx) return;
 
     best = readNum(KEY_BEST);
-    loadArt(MAX_LEVEL);
+    for (var lv = 1; lv <= MAX_LEVEL; lv++) loadArt(lv);
 
     fit();
     paintHud();

@@ -1,7 +1,10 @@
 /* ============================================================
    记忆翻牌 · 八班游乐场版
    ------------------------------------------------------------
-   八对牌 = 八班元素单字：八、四、届、班、课、考、球、歌。
+   八对牌，两种牌面：
+     · 图片版（默认）：八张辉辉，找同一个人
+     · 文字版：八班元素单字：八、四、届、班、课、考、球、歌
+
    3D 翻转交给 CSS（.mem-inner 的 rotateY），JS 只切 class，
    这样翻牌不占主线程，也不会出现两张牌动画不同步。
 
@@ -13,10 +16,22 @@
 
   var B8 = window.B8 = window.B8 || {};
   var KEY_BEST = 'b8.memory.best';
+  var KEY_MODE = 'b8.memory.mode';
   var CHARS = ['八', '四', '届', '班', '课', '考', '球', '歌'];
+  var IMAGES = [
+    'assets/games/hui/1.jpg',
+    'assets/games/hui/2.jpg',
+    'assets/games/hui/3.jpg',
+    'assets/games/hui/4.jpg',
+    'assets/games/hui/5.jpg',
+    'assets/games/hui/6.jpg',
+    'assets/games/hui/7.jpg',
+    'assets/games/hui/8.jpg'
+  ];
 
-  var grid, stepsEl, timeEl, bestEl, stateEl, noteEl, restartBtn;
-  var deck = [];        // [{v, matched}]
+  var grid, stepsEl, timeEl, bestEl, stateEl, noteEl, restartBtn, modeBtn;
+  var mode = 'img';     // img | char
+  var deck = [];        // [{v, matched}]，v 是 0–7 的牌号
   var cards = [];       // 与 deck 同序的按钮
   var first = -1;
   var second = -1;
@@ -69,8 +84,8 @@
     var list = [];
     var i;
     for (i = 0; i < CHARS.length; i++) {
-      list.push({ v: CHARS[i], matched: false });
-      list.push({ v: CHARS[i], matched: false });
+      list.push({ v: i, matched: false });
+      list.push({ v: i, matched: false });
     }
     // Fisher–Yates
     for (i = list.length - 1; i > 0; i--) {
@@ -80,6 +95,11 @@
       list[j] = tmp;
     }
     return list;
+  }
+
+  /** 一张牌叫什么，给读屏和 aria-label 用 */
+  function nameOf(v) {
+    return mode === 'img' ? ('辉辉第 ' + (v + 1) + ' 张') : CHARS[v];
   }
 
   function render() {
@@ -101,7 +121,18 @@
 
       var front = document.createElement('span');
       front.className = 'mem-face mem-front';
-      front.textContent = deck[i].v;
+
+      if (mode === 'img') {
+        front.className += ' has-img';
+        var im = document.createElement('img');
+        im.src = IMAGES[deck[i].v];
+        im.alt = '';
+        im.draggable = false;
+        im.setAttribute('aria-hidden', 'true');
+        front.appendChild(im);
+      } else {
+        front.textContent = CHARS[deck[i].v];
+      }
       front.setAttribute('aria-hidden', 'true');
 
       inner.appendChild(back);
@@ -119,7 +150,7 @@
 
   function reveal(i) {
     cards[i].classList.add('is-flip');
-    cards[i].setAttribute('aria-label', '第 ' + (i + 1) + ' 张牌：' + deck[i].v);
+    cards[i].setAttribute('aria-label', '第 ' + (i + 1) + ' 张牌：' + nameOf(deck[i].v));
   }
 
   function hide(i) {
@@ -152,7 +183,9 @@
     if (first < 0) {
       first = i;
       reveal(i);
-      if (!steps && matched === 0) setState('再翻一张，看看是不是同一个字。');
+      if (!steps && matched === 0) {
+        setState(mode === 'img' ? '再翻一张，看看是不是同一个人。' : '再翻一张，看看是不是同一个字。');
+      }
       return;
     }
 
@@ -177,8 +210,8 @@
         cards[b].classList.add('is-matched');
         cards[a].disabled = true;
         cards[b].disabled = true;
-        cards[a].setAttribute('aria-label', '已配对：' + deck[a].v);
-        cards[b].setAttribute('aria-label', '已配对：' + deck[b].v);
+        cards[a].setAttribute('aria-label', '已配对：' + nameOf(deck[a].v));
+        cards[b].setAttribute('aria-label', '已配对：' + nameOf(deck[b].v));
         first = -1;
         second = -1;
         locked = false;
@@ -236,6 +269,21 @@
     submitScore();
   }
 
+  /* ---------- 牌面模式 ---------- */
+  function paintMode() {
+    if (!modeBtn) return;
+    modeBtn.textContent = mode === 'img' ? '图片版' : '文字版';
+    modeBtn.setAttribute('aria-pressed', mode === 'img' ? 'true' : 'false');
+    modeBtn.title = mode === 'img' ? '切换成文字版（八、四、届…）' : '切换成图片版（八张辉辉）';
+  }
+
+  function setMode(m) {
+    mode = m === 'char' ? 'char' : 'img';
+    try { localStorage.setItem(KEY_MODE, mode); } catch (e) {}
+    paintMode();
+    reset();
+  }
+
   /* ---------- 重开 ---------- */
   function reset() {
     gen++;
@@ -253,7 +301,7 @@
     if (stepsEl) stepsEl.textContent = '0';
     if (timeEl) timeEl.textContent = '0:00';
     if (bestEl) bestEl.textContent = best ? best + ' 步' : '—';
-    setState('翻开两张牌，找一样的字。', false);
+    setState(mode === 'img' ? '翻开两张牌，找同一个人。' : '翻开两张牌，找一样的字。', false);
     setNote(writable
       ? '完成后自动上传：上榜分 = 1000 − 步数（步数越少越靠前）。'
       : '成绩只存在这台设备：数据库还没接，暂时不上传排行榜。');
@@ -269,9 +317,19 @@
     stateEl = B8.qs('#gmemory-state');
     noteEl = B8.qs('#gmemory-note');
     restartBtn = B8.qs('#gmemory-restart');
+    modeBtn = B8.qs('#gmemory-mode');
+
+    try {
+      var saved = localStorage.getItem(KEY_MODE);
+      if (saved === 'char' || saved === 'img') mode = saved;
+    } catch (e) {}
 
     best = readBest();
     B8.on(restartBtn, 'click', reset);
+    B8.on(modeBtn, 'click', function () {
+      setMode(mode === 'img' ? 'char' : 'img');
+    });
+    paintMode();
 
     if (!B8.auth) return;
     B8.auth.ready(function (st) {

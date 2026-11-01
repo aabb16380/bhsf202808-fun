@@ -550,18 +550,14 @@
     el.className = 'tile';
     el.style.height = tileH(note) + 'px';
 
+    var shade = document.createElement('span');
+    shade.className = 'shade';
+    el.appendChild(shade);
+
     var num = document.createElement('span');
     num.className = 'num';
     num.textContent = note.num;
     el.appendChild(num);
-
-    var glow = document.createElement('span');
-    glow.className = 'glow';
-    el.appendChild(glow);
-
-    var face = document.createElement('span');
-    face.className = 'face';
-    el.appendChild(face);
 
     laneEls[note.lane].appendChild(el);
     return el;

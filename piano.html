@@ -7,9 +7,9 @@
 <meta name="description" content="钢琴辉：辉辉踩着拍子往下掉，落在判定线的一瞬点中它。四道琴键 D F J K，四首曲子，三个难度。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light">
-<link rel="icon" href="assets/favicon.png?v=20261101g4" type="image/png">
+<link rel="icon" href="assets/favicon.png?v=20261101g5" type="image/png">
 <script>
-window.B8_BUILD = '20261101g4';
+window.B8_BUILD = '20261101g5';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
@@ -223,47 +223,49 @@ window.B8_TEST = !!window.B8_T;
     pointer-events: none;
   }
 
-  /* ---------- 琴块 ---------- */
+  /* ---------- 琴块：整块就是一张照片 ---------- */
   .tile {
     position: absolute;
     left: 7%;
     right: 7%;
     top: 0;
     border-radius: 5px;
-    border: 1px solid rgba(35, 33, 28, 0.14);
+    border: 1px solid rgba(35, 33, 28, 0.18);
     box-shadow: 0 6px 16px -12px rgba(35, 33, 28, 0.7);
-    display: grid;
-    place-items: center;
     overflow: hidden;
+    background-color: #e8ddc6;
+    background-size: cover;
+    background-position: center 26%;
+    background-repeat: no-repeat;
+  }
+
+  /* 压一层暗角，保证左下角的简谱数字在浅色照片上也看得清 */
+  .tile .shade {
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    background: linear-gradient(180deg,
+      rgba(20, 16, 10, 0.06) 0%,
+      rgba(20, 16, 10, 0.16) 45%,
+      rgba(20, 16, 10, 0.58) 100%);
+    pointer-events: none;
   }
 
   .tile .num {
-    font-family: var(--mono);
-    font-size: 21px;
-    font-weight: 700;
-    line-height: 1;
-    color: #fff;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
-  }
-
-  .tile .face {
     position: absolute;
-    right: 3px;
+    left: 4px;
     bottom: 3px;
-    width: 17px;
-    height: 17px;
-    border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.9);
-    background: #fff url("assets/games/hui.jpg") center 22% / cover no-repeat;
-    opacity: 0.92;
-  }
-
-  .tile .glow {
-    position: absolute;
-    left: 0; right: 0; top: 0;
-    height: 45%;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0));
-    pointer-events: none;
+    z-index: 1;
+    min-width: 16px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+    text-align: center;
+    color: #fff;
+    background: rgba(20, 16, 10, 0.42);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   }
 
   .tile.is-hit { animation: tile-hit 0.2s ease-out forwards; }
@@ -273,11 +275,11 @@ window.B8_TEST = !!window.B8_T;
     to { opacity: 0; transform: translateY(var(--y, 0)) scale(1.14); }
   }
 
-  /* 每条道一个色系，眼睛先认颜色再认数字 */
-  .lane[data-lane="0"] .tile { background: linear-gradient(180deg, #cf5c39, #a83f22); }
-  .lane[data-lane="1"] .tile { background: linear-gradient(180deg, #d3a03c, #b07f20); }
-  .lane[data-lane="2"] .tile { background: linear-gradient(180deg, #3d8571, #2a5f50); }
-  .lane[data-lane="3"] .tile { background: linear-gradient(180deg, #4e6a8c, #38506e); }
+  /* 每条道一张脸，眼睛先认人再认数字 */
+  .lane[data-lane="0"] .tile { background-image: url("assets/games/hui/1.jpg"); }
+  .lane[data-lane="1"] .tile { background-image: url("assets/games/hui/2.jpg"); }
+  .lane[data-lane="2"] .tile { background-image: url("assets/games/hui/5.jpg"); }
+  .lane[data-lane="3"] .tile { background-image: url("assets/games/hui/8.jpg"); }
 
   /* ---------- 判定字 ---------- */
   .judge {
@@ -688,7 +690,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g4' + T;
+  var V = '?v=20261101g5' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
