@@ -1012,3 +1012,10 @@ html.js body:not(.authed) #main {
   .mem-grid { gap: 6px; }
   .photo-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------- 班徽替掉原来的「玩」字印章 ---------- */
+.play-logo {
+  width: 152px;
+  height: auto;
+  filter: drop-shadow(0 14px 28px rgba(60, 90, 140, 0.22));
+}

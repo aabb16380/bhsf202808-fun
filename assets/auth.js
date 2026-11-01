@@ -35,6 +35,7 @@
 
   var resolved = false;
   var listeners = [];
+  var autoGate = false;   // 登录门是不是为公开站现造的（.homes）
 
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
@@ -299,7 +300,64 @@
     document.body.classList.add('authed');
   }
 
+  /**
+   * .homes 这类「公开站」页面上没有登录门（它不该一进来就挡住内容），
+   * 但管理员还是得能登录。所以页面里没有 #gate 时，这里现造一个。
+   * 造出来的门上多一个「先不登录」，点它可以回到页面。
+   */
+  function ensureGate() {
+    if ($('gate')) return $('gate');
+
+    var el = document.createElement('div');
+    el.className = 'gate';
+    el.id = 'gate';
+    el.hidden = true;
+    el.innerHTML =
+      '<div class="gate-card">' +
+        '<img class="gate-logo" src="assets/logo.png" alt="" aria-hidden="true" width="84" height="68">' +
+        '<h2>登录八班</h2>' +
+        '<p class="gate-sub">用学号登录。第一次进来核对姓名后给自己设个密码。</p>' +
+        '<form id="gate-form" novalidate>' +
+          '<div class="field">' +
+            '<label for="gate-no">学号（8 位）</label>' +
+            '<input class="input" id="gate-no" inputmode="numeric" maxlength="8" ' +
+              'autocomplete="username" placeholder="20282307">' +
+          '</div>' +
+          '<div class="field" id="gate-name-wrap" style="margin-top:12px" hidden>' +
+            '<label for="gate-name">姓名</label>' +
+            '<input class="input" id="gate-name" autocomplete="name" placeholder="第一次登录用来核对身份">' +
+          '</div>' +
+          '<div class="field" id="gate-pass-wrap" style="margin-top:12px" hidden>' +
+            '<label for="gate-pass">密码</label>' +
+            '<input class="input" id="gate-pass" type="password" autocomplete="current-password">' +
+          '</div>' +
+          '<div class="field" id="gate-pass2-wrap" style="margin-top:12px" hidden>' +
+            '<label for="gate-pass2">再输一次密码</label>' +
+            '<input class="input" id="gate-pass2" type="password" autocomplete="new-password">' +
+          '</div>' +
+          '<p class="gate-hint" id="gate-hint"></p>' +
+          '<button class="btn seal" id="gate-submit" type="submit">下一步</button>' +
+          '<p class="gate-err" id="gate-err" role="alert"></p>' +
+        '</form>' +
+        '<div class="gate-hintbox" id="gate-hintbox" hidden></div>' +
+        '<button class="btn ghost sm" id="gate-cancel" type="button" style="margin-top:14px">先不登录</button>' +
+        '<p class="gate-foot">密码只存 sha256，登录状态保存在你自己的浏览器里，30 天有效。</p>' +
+      '</div>';
+
+    document.body.appendChild(el);
+
+    B8.on($('gate-cancel'), 'click', function () {
+      el.hidden = true;
+      el.classList.remove('is-done');
+    });
+
+    return el;
+  }
+
   function initGate() {
+    // 公开站没有登录门：先造一个，逻辑跟真门完全一样
+    if (!$('gate')) { autoGate = true; ensureGate(); }
+
     var gate = $('gate');
     if (!gate) { settle(); return; }
 
@@ -339,7 +397,14 @@
     });
 
     showFields('idle');
-    showGate();
+
+    if (autoGate) {
+      // 公开站（.homes）：门备着但不主动弹，同时立刻把「现在是游客」告诉页面，
+      // 否则 B8.auth.ready() 的回调会一直等着，管理入口就不会出现。
+      settle();
+    } else {
+      showGate();
+    }
   }
 
   /* ---------- 账号面板（三站共用，点击右上角姓名） ---------- */
@@ -477,9 +542,85 @@
 
   /* ---------- 启动 ---------- */
 
+  function getQuery(key) {
+    var m = (location.search || '').match(new RegExp('[?&]' + key + '=([^&]+)'));
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function stripQuery(key) {
+    try {
+      var q = location.search.replace(new RegExp('[?&]' + key + '=[^&]+'), '').replace(/^&/, '?');
+      if (q === '?') q = '';
+      history.replaceState(null, '', location.pathname + q + location.hash);
+    } catch (e) {}
+  }
+
+  /**
+   * 三个站是三个域名，localStorage 天然不互通。
+   * 所以在跨站链接上：先换一张 90 秒、一次性的手牌，带着它跳过去，
+   * 对面用 b8_handoff_claim 换成本站的会话——用户只需要登录一次。
+   * 权限（管理员）不在手牌里带：那是独立的一次 2 小时提权，换站要重新输密钥。
+   */
+  function initCrossSite() {
+    B8.on(document, 'click', function (e) {
+      var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+      if (!a) return;
+
+      var href = a.getAttribute('href') || '';
+      if (!/^\/\/bhsf202808\.(homes|fun|site)\b/.test(href)) return;
+
+      // 跳到本站自己就不折腾了
+      var host = href.replace(/^\/\//, '').split(/[\/?#]/)[0];
+      if (host === location.host) return;
+
+      if (!auth.isLogged() || state.preview || state.claiming) return;
+      if (!B8.sb || !B8.sb.ready) return;
+
+      e.preventDefault();
+      state.claiming = true;
+
+      B8.sb.rpc('b8_handoff_create', { p_token: auth.memberToken() })
+        .then(function (res) {
+          if (!res || !res.code) throw new Error('no code');
+          location.href = href + (href.indexOf('?') >= 0 ? '&' : '?') + 'login=' + encodeURIComponent(res.code);
+        })
+        .catch(function () {
+          // 手牌换不到也别拦着人走，对面最多让他再登一次
+          location.href = href;
+        });
+    });
+  }
+
   function boot() {
     initAccountButton();
+    initCrossSite();
 
+    // 从别的站带手牌过来的：先把手牌换成这个站的会话，再走正常启动
+    var code = getQuery('login');
+    if (code && B8.sb && B8.sb.ready) {
+      B8.sb.rpc('b8_handoff_claim', { p_code: code })
+        .then(function (res) {
+          state.member = {
+            no: res.member_no,
+            name: res.name || res.nick || '',
+            token: res.token,
+            exp: new Date(res.expires_at || Date.now() + 2592000000).getTime()
+          };
+          writeJson('local', K_MEMBER, state.member);
+          stripQuery('login');
+          B8.toast('已同步登录：' + state.member.name);
+        })
+        .catch(function (err) {
+          stripQuery('login');
+          B8.toast(err && err.message ? err.message : '登录同步失败');
+        })
+        .then(start);
+      return;
+    }
+    start();
+  }
+
+  function start() {
     var m = readJson('local', K_MEMBER);
     var e = readJson('session', K_ELEV);
     var ready = B8.sb && B8.sb.ready;

@@ -229,11 +229,11 @@ svg { display: block; }
 }
 
 .brand-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 3px;
-  object-fit: cover;
-  box-shadow: 0 0 0 1px rgba(25, 23, 19, 0.08);
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  object-fit: contain;
+  box-shadow: 0 1px 3px rgba(25, 23, 19, 0.12);
 }
 
 /* 没有图标时的印章兜底 */
@@ -1149,6 +1149,13 @@ body[data-site="site"][data-mode="night"] .gate-seal {
   .gate-card { padding: 28px 20px 24px; }
 }
 
+.gate-logo {
+  display: block;
+  width: 84px;
+  height: auto;
+  margin: 0 auto 16px;
+  filter: drop-shadow(0 10px 22px rgba(40, 70, 120, 0.18));
+}
 
 /* ============================================================
    .fun 专用样式（在 _shared/base.css 基础上叠加）
@@ -2163,4 +2170,11 @@ html.js body:not(.authed) #main {
   .schulte { gap: 4px; }
   .mem-grid { gap: 6px; }
   .photo-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- 班徽替掉原来的「玩」字印章 ---------- */
+.play-logo {
+  width: 152px;
+  height: auto;
+  filter: drop-shadow(0 14px 28px rgba(60, 90, 140, 0.22));
 }
