@@ -374,7 +374,7 @@
         var b = closest(ev.target, '[data-cat]');
         if (!b) return;
         curCat = b.getAttribute('data-cat') || '';
-        showAllPhotos = false;
+        // 展开状态下切分类不收起，保持在展开视图里换一类看
         B8.qsa('[data-cat]', cats).forEach(function (x) {
           x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
         });
