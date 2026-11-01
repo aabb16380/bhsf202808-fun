@@ -39,6 +39,9 @@ window.B8_TEST = !!window.B8_T;
     --sans: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
     --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
     --keys-h: 84px;
+    /* 大屏上不要把四道琴键拉成一整条横幅：整块键盘限宽居中，
+       和合成小辉辉的画布一个思路，两侧留出纸色 */
+    --board-max: 560px;
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -49,7 +52,7 @@ window.B8_TEST = !!window.B8_T;
     margin: 0;
     height: 100%;
     overflow: hidden;
-    background: var(--paper);
+    background: #efe7d5;
     color: var(--ink);
     font-family: var(--sans);
     -webkit-user-select: none;
@@ -63,11 +66,26 @@ window.B8_TEST = !!window.B8_T;
     top: 0; right: 0; bottom: 0; left: 0;
     display: flex;
     flex-direction: column;
+    align-items: center;
+  }
+
+  /* 限宽的三块（记分条 / 进度条 / 舞台）——宽度一致才对得齐 */
+  .hud,
+  .progress,
+  .stage {
+    width: 100%;
+    max-width: var(--board-max);
+    flex: 0 0 auto;
+  }
+
+  .stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    box-shadow: 0 0 0 1px var(--line), 0 24px 60px -48px rgba(35, 33, 28, 0.55);
   }
 
   /* ---------- 顶部记分条 ---------- */
   .hud {
-    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 12px;

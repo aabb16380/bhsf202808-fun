@@ -315,6 +315,8 @@
       r: f.r,
       vx: 0,
       vy: 0,
+      ang: 0,
+      w: 0,
       age: 0,
       dead: false
     };
@@ -355,32 +357,54 @@
     b.vx += nx * jimp / mb;
     b.vy += ny * jimp / mb;
 
-    // 摩擦：切向速度衰减，堆起来才不会一直滑
-    var tx = -ny;
-    var ty = nx;
-    var vt = (b.vx - a.vx) * tx + (b.vy - a.vy) * ty;
-    var jt = -vt / (1 / ma + 1 / mb);
+    // 切向冲量：带上角速度，果子才会"滚"起来，而不是贴着地面滑
+    // t = n 转 90°，接触点速度 = 线速度 + ω × r；圆盘 I = ½mr²，所以 1/m + r²/I = 3/m
+    var tx = ny;
+    var ty = -nx;
+    var vt = (b.vx - a.vx) * tx + (b.vy - a.vy) * ty + (b.w * b.r + a.w * a.r);
+    var kt = 3 / ma + 3 / mb;
+    var jt = -vt / kt;
     var lim = jimp * FRICTION;
     if (jt > lim) jt = lim;
     if (jt < -lim) jt = -lim;
+
     a.vx -= tx * jt / ma;
     a.vy -= ty * jt / ma;
     b.vx += tx * jt / mb;
     b.vy += ty * jt / mb;
+    a.w += 2 * jt / (ma * a.r);
+    b.w += 2 * jt / (mb * b.r);
   }
 
   function walls(b) {
+    var m = b.r * b.r;
+    var kt = 3 / m;          // 1/m + r²/I
+
     if (b.x - b.r < 0) {
       b.x = b.r;
       if (b.vx < 0) b.vx = -b.vx * 0.4;
+      // 侧墙的竖直摩擦（贴墙往下蹭的时候会转）
+      var vtl = b.vy - b.w * b.r;
+      var jtl = -vtl / kt;
+      b.vy += jtl / m;
+      b.w += -2 * jtl / (m * b.r);
     } else if (b.x + b.r > W) {
       b.x = W - b.r;
       if (b.vx > 0) b.vx = -b.vx * 0.4;
+      var vtr = b.vy + b.w * b.r;
+      var jtr = -vtr / kt;
+      b.vy += jtr / m;
+      b.w += 2 * jtr / (m * b.r);
     }
+
     if (b.y + b.r > H) {
       b.y = H - b.r;
       if (b.vy > 0) b.vy = -b.vy * 0.16;
-      b.vx *= 0.94;
+      // 地面：接触点的水平速度是 vx - ωr，把它抹平就是纯滚动
+      var vtf = b.vx - b.w * b.r;
+      var jtf = -vtf / kt;
+      b.vx += jtf / m;
+      b.w += -2 * jtf / (m * b.r);
     }
   }
 
@@ -392,10 +416,13 @@
       b.age += dt;
       b.vy += GRAVITY * dt;
       if (b.vy > MAX_SPEED) b.vy = MAX_SPEED;
-      b.vx *= (1 - 0.5 * dt);
-      b.vy *= (1 - 0.1 * dt);
+      // 空气阻力 + 一点点滚动阻力（不然会永远滚）
+      b.vx *= (1 - 0.12 * dt);
+      b.vy *= (1 - 0.05 * dt);
+      b.w *= (1 - 0.3 * dt);
       b.x += b.vx * dt;
       b.y += b.vy * dt;
+      b.ang += b.w * dt;
     }
 
     for (var it = 0; it < ITER; it++) {
@@ -405,18 +432,22 @@
       for (i = 0; i < balls.length; i++) walls(balls[i]);
     }
 
-    // 慢下来的直接按住：果堆不抖，合起来也更准
+    // 真的停住了才归零（别把"慢慢滚"也按住，那样看起来就不像玩球了）
     for (i = 0; i < balls.length; i++) {
       b = balls[i];
       var v2 = b.vx * b.vx + b.vy * b.vy;
-      if (v2 < 300) { b.vx *= 0.5; b.vy *= 0.5; }
-      if (v2 < 5) { b.vx = 0; b.vy = 0; }
+      if (v2 < 4 && Math.abs(b.w) < 0.12) { b.vx = 0; b.vy = 0; b.w = 0; }
     }
   }
 
   /* ---------- 合成 ---------- */
 
   function merge(a, b) {
+    // 辉辉是最后一颗，跟西瓜一样不再合——两个只会一起占地方
+    var lv = a.level;
+    var nl = lv + 1;
+    if (nl > MAX_LEVEL) return;
+
     a.dead = true;
     b.dead = true;
 
@@ -426,22 +457,7 @@
     var y = (a.y * ma + b.y * mb) / (ma + mb);
     var vx = (a.vx + b.vx) * 0.25;
     var vy = (a.vy + b.vy) * 0.25;
-    var lv = a.level;
 
-    // 两个辉辉撞在一起：一起消失，给一笔大的
-    if (lv >= MAX_LEVEL) {
-      score += 500;
-      merges++;
-      burst(x, y, '#f0d9a8', 26);
-      popup(x, y - 12, '双辉 +500');
-      banner.t = 1.6;
-      banner.text = '双辉！';
-      sfxWin();
-      paintHud();
-      return;
-    }
-
-    var nl = lv + 1;
     if (clock - comboAt < 1.1) combo++; else combo = 1;
     comboAt = clock;
     var mult = Math.min(combo, 5);
@@ -453,6 +469,8 @@
     var nb = makeBall(nl, x, y);
     nb.vx = vx;
     nb.vy = vy;
+    nb.w = (a.w + b.w) * 0.25;
+    nb.ang = a.ang;
     balls.push(nb);
 
     burst(x, y, FRUITS[nl].color, 8 + lv * 2);
@@ -475,7 +493,7 @@
       var t = null;
       for (var i = 0; i < balls.length && !a; i++) {
         var p = balls[i];
-        if (p.dead || p.age < 0.05) continue;
+        if (p.dead || p.age < 0.05 || p.level >= MAX_LEVEL) continue;
         for (var j = i + 1; j < balls.length; j++) {
           var q = balls[j];
           if (q.dead || q.age < 0.05 || q.level !== p.level) continue;
@@ -626,15 +644,12 @@
     // 被挤得厉害的时候稍微压一下，看起来有重量
     var squash = 1;
     if (b.vy > 900) squash = 1 - Math.min(0.08, (b.vy - 900) / 12000);
-    if (squash < 1) {
-      ctx.save();
-      ctx.translate(b.x, b.y + b.r * (1 - squash));
-      ctx.scale(1 + (1 - squash) * 0.6, squash);
-      ctx.drawImage(s.cvs, -half, -half, s.size, s.size);
-      ctx.restore();
-      return;
-    }
-    ctx.drawImage(s.cvs, b.x - half, b.y - half, s.size, s.size);
+    ctx.save();
+    ctx.translate(b.x, b.y + (squash < 1 ? b.r * (1 - squash) : 0));
+    if (squash < 1) ctx.scale(1 + (1 - squash) * 0.6, squash);
+    if (b.ang) ctx.rotate(b.ang);
+    ctx.drawImage(s.cvs, -half, -half, s.size, s.size);
+    ctx.restore();
   }
 
   function drawParticles(dt) {
@@ -895,7 +910,8 @@
       '<div class="ladder">' + ladderHtml() + '</div>' +
       '<ul class="rules">' +
         '<li>拖动（或按 <b>← →</b>）选位置，松手落果；电脑上也可以直接点。</li>' +
-        '<li>同级的碰在一起就合成，连着合会加成分。</li>' +
+        '<li>果子会滚，堆歪了会自己滑下来；同级的碰在一起就合成，连着合有加成。</li>' +
+        '<li>辉辉是最后一颗，跟西瓜一样不会再合，两个只会一起占地方。</li>' +
         '<li>水果堆过<b>红线 2 秒</b>就结束——红线不是装饰。</li>' +
       '</ul>' +
       '<button class="btn-main" type="button" data-act="go">开始</button>' +
@@ -1164,7 +1180,9 @@
           lv: balls[i].level,
           x: Math.round(balls[i].x),
           y: Math.round(balls[i].y),
-          r: balls[i].r
+          r: balls[i].r,
+          w: Math.round(balls[i].w * 100) / 100,
+          ang: Math.round(balls[i].ang * 100) / 100
         });
       }
       return out;

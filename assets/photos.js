@@ -22,8 +22,12 @@
   var showAllPhotos = false;
   var curCat = '';            // '' = 全部
   var curSort = 'best';       // best | stars | likes | new
-  var MAX_BYTES = 10 * 1024 * 1024;   // 与 storage 桶的 10MB 上限一致
+  var MAX_BYTES = 10 * 1024 * 1024;   // storage 桶硬上限
   var MAX_EDGE = 1600;
+  // 原来只有 >10MB 才压，结果照片墙上是 1.6MB 一张的大图，整面墙 128MB。
+  // 现在超过 800KB 就压到 1600px，目标 300KB 以内。
+  var COMPRESS_OVER = 800 * 1024;
+  var TARGET_BYTES  = 300 * 1024;
   var ALLOWED = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1, 'image/gif': 1 };
 
   var writable = false;      // 数据库可用且不是预览态，才允许写
@@ -897,7 +901,14 @@
         ctx.fillRect(0, 0, cw, ch);
         ctx.drawImage(img, 0, 0, cw, ch);
         try {
-          resolve(dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.82)));
+          // 先 0.82 出图；还超过目标体积就一轮轮降质量，最低到 0.55
+          var q = 0.82;
+          var blob = dataUrlToBlob(canvas.toDataURL('image/jpeg', q));
+          while (blob.size > TARGET_BYTES && q > 0.56) {
+            q -= 0.09;
+            blob = dataUrlToBlob(canvas.toDataURL('image/jpeg', q));
+          }
+          resolve(blob);
         } catch (e) {
           reject(new Error('压缩失败，换一张试试'));
         }
@@ -997,7 +1008,9 @@
       }
 
       var file = queue.shift();
-      setStatus('正在上传 ' + (done + failed + 1) + ' / ' + total + '…');
+      var willCompress = file.size > COMPRESS_OVER || isHeic(file);
+      setStatus((willCompress ? '正在压缩 ' : '正在上传 ') +
+                (done + failed + 1) + ' / ' + total + '…');
 
       var path = 'photos/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
 
@@ -1005,10 +1018,10 @@
       if (isHeic(file)) {
         setStatus('正在转换 HEIC（' + (done + failed + 1) + ' / ' + total + '）…');
         prep = convertHeic(file).then(function (blob) {
-          return blob.size > MAX_BYTES ? compress(blob) : blob;
+          return blob.size > COMPRESS_OVER ? compress(blob) : blob;
         });
       } else {
-        prep = file.size > MAX_BYTES ? compress(file) : Promise.resolve(file);
+        prep = file.size > COMPRESS_OVER ? compress(file) : Promise.resolve(file);
       }
 
       prep
