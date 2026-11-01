@@ -26,6 +26,7 @@
   var submitted = false;
   var gen = 0;
   var wrongTimer = 0;
+  var wrongEl = null;     // 当前红着的那一格，保证同一时间只有一格红
 
   function whenReady(fn) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
@@ -119,13 +120,22 @@
     // 点错：红一下，并且计时 +1 秒
     penaltyMs += 1000;
     if (timeEl) timeEl.textContent = fmt(elapsed(), 3);
+
+    // 红色只闪一下：先把上一格的红撤掉，再让这一格闪
+    // （以前用一个共享 timer + 只清定时器，连点两个格子会把前一个红着不放）
+    if (wrongEl && wrongEl !== btn) wrongEl.classList.remove('is-wrong');
     if (wrongTimer) { clearTimeout(wrongTimer); wrongTimer = 0; }
+    btn.classList.remove('is-wrong');
+    void btn.offsetWidth;                // 同一格连点也要重放抖动动画
     btn.classList.add('is-wrong');
+    wrongEl = btn;
+
     var g = gen;
     wrongTimer = setTimeout(function () {
       if (g !== gen) return;
       btn.classList.remove('is-wrong');
-    }, 320);
+      if (wrongEl === btn) wrongEl = null;
+    }, 300);
     setState('点错了 +1 秒，现在要找 ' + next + '。', false);
   }
 
@@ -169,6 +179,7 @@
     gen++;
     if (ticker) { clearInterval(ticker); ticker = 0; }
     if (wrongTimer) { clearTimeout(wrongTimer); wrongTimer = 0; }
+    wrongEl = null;
     next = 1;
     started = false;
     finished = false;
