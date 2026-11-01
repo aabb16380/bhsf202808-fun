@@ -187,6 +187,25 @@
   }
 
 
+  /** 把新生成的密钥/密码显示在列表最上面，方便复制转告 */
+  function showSecret(title, value) {
+    var b = body();
+    if (!b) return;
+    var old = document.getElementById('console-temp');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var box = document.createElement('div');
+    box.id = 'console-temp';
+    box.className = 'console-temp';
+    box.innerHTML = esc(title) + '：<code>' + esc(value) + '</code>';
+    var cp = document.createElement('button');
+    cp.type = 'button';
+    cp.className = 'btn ghost sm';
+    cp.textContent = '复制';
+    B8.on(cp, 'click', function () { B8.copy(value); });
+    box.appendChild(cp);
+    b.insertBefore(box, b.firstChild);
+  }
   /** 把重置出来的临时密码显示在列表最上面，方便复制转告 */
   function showTemp(no, pwd) {
     var b = body();
@@ -243,6 +262,7 @@
           '<button class="btn ghost sm" type="button" data-key-toggle="' + k.id + '" data-active="' + (k.active ? '1' : '0') + '">' +
             (k.active ? '停用' : '启用') + '</button>' +
           (k.bound_no ? '<button class="btn ghost sm" type="button" data-unbind="' + k.id + '">解绑</button>' : '') +
+          '<button class="btn ghost sm" type="button" data-reissue="' + k.id + '">重发</button>' +
         '</div>' +
       '</div>';
     });
@@ -260,6 +280,19 @@
       });
     });
 
+    B8.qsa('[data-reissue]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        var id = Number(btn.getAttribute('data-reissue'));
+        if (!window.confirm('重发之后旧密钥立刻作废（正在用它的管理员会被踢下线），确定？')) return;
+        btn.disabled = true;
+        B8.sb.rpc('b8_super_key_reissue', { p_token: tok(), p_id: id })
+          .then(function (res) {
+            showSecret('新密钥（' + (res.label || '') + '）', res.plain);
+            loadKeys();
+          })
+          .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+      });
+    });
     B8.qsa('[data-unbind]', b).forEach(function (btn) {
       B8.on(btn, 'click', function () {
         var id = Number(btn.getAttribute('data-unbind'));
