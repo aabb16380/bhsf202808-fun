@@ -160,6 +160,8 @@ select id, kind, label, active, created_at, used_at
 
 2048 的牌面也换成了这八张脸：每块牌一张照片，上面压暗角、白字压在上面；
 512 / 1024 / 2048 / 4096+ 分别多一层红 / 金 / 朱印 / 玄色罩，数字越大越"压手"。
+右上角「**有图版 / 无图版**」一键切（默认有图，选择记在 `b8.2048.mode`）；
+无图版走 `.b2048.is-plain`，回到最早那套暖色阶，数字用深色。
 照片写在 `assets/site.css` 的 `.b2048-in.vN` 里——**注意 `url()` 要相对 `assets/` 写**（`url("games/hui/1.jpg")`），
 写成 `url("assets/games/hui/1.jpg")` 会 404 且不报错。
 

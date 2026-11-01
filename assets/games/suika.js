@@ -974,19 +974,73 @@
     n.classList[isErr ? 'add' : 'remove']('is-err');
   }
 
+  /* ============================================================
+     成绩：一局只传一次；传不上去就先存在本机，下次进来补
+     ------------------------------------------------------------
+     服务端 b8_score_add 是「一人一个游戏一行、取较大值」，
+     所以重复传、传低了都不会覆盖掉最高分。
+     ============================================================ */
+
+  var KEY_PENDING = 'b8.suika.pending';
+  var flushing = false;
+
+  function readPending() {
+    try {
+      var o = JSON.parse(localStorage.getItem(KEY_PENDING) || 'null');
+      if (!o || !o.score || !o.no) return null;
+      return o;
+    } catch (e) { return null; }
+  }
+
+  function writePending(o) {
+    try {
+      if (o) localStorage.setItem(KEY_PENDING, JSON.stringify(o));
+      else localStorage.removeItem(KEY_PENDING);
+    } catch (e) {}
+  }
+
+  /** 一局结束调一次：先写本机，再尝试上传 */
   function submitScore(v) {
-    if (!writable || !B8.auth || !B8.sb) return;
+    if (!B8.auth || !B8.sb) return;
+    v = Math.floor(v);
     if (!v || v <= submitted || v > 990000) return;
     submitted = v;
+
+    var no = B8.auth.no();
+    if (!writable || !no) return;          // 没登录就只存本机最高分，不排队
+
+    var old = readPending();
+    if (!old || old.no !== no || old.score < v) {
+      writePending({ no: no, score: v, at: Date.now() });
+    }
+    flushPending();
+  }
+
+  /** 有欠账就补传；网络不好就留着，不打扰玩 */
+  function flushPending() {
+    if (flushing || !writable || !B8.auth || !B8.sb) return;
+    var p = readPending();
+    if (!p) return;
+    if (B8.auth.no() !== p.no) return;
+
+    flushing = true;
     B8.sb.rpc('b8_score_add', {
       p_token: B8.auth.token(),
       p_game: 'suika',
-      p_score: Math.floor(v)
+      p_score: p.score
     }).then(function () {
-      setNote('成绩已记到排行榜：' + v + ' 分。');
+      flushing = false;
+      var now = readPending();
+      if (now && now.no === p.no && now.score <= p.score) writePending(null);
+      if (mode === 'over') setNote('成绩已记到排行榜：' + p.score + ' 分（同一个人只留最高分）。');
+      else B8.toast('上次那局 ' + p.score + ' 分补传到排行榜了');
     }).catch(function (err) {
-      submitted = 0;
-      setNote('成绩没传上去：' + (err && err.message ? err.message : '网络异常'), true);
+      flushing = false;
+      // 失败就把分数留在本机，下次进来再试；正在结算面板上才提示
+      if (mode === 'over') {
+        setNote('网络不太好：' + p.score + ' 分先存在本机，下次进来自动补传。', true);
+      }
+      if (window.console) console.warn('[suika] 成绩没传上去：', err && err.message);
     });
   }
 
@@ -1139,12 +1193,14 @@
     document.addEventListener('b8:auth', function () {
       writable = !!(B8.sb && B8.sb.ready) && B8.auth.isLogged() && B8.auth.kind() !== 'preview';
       if (mode === 'menu') showMenu();
+      flushPending();
     });
 
     if (B8.auth) {
       B8.auth.ready(function (st) {
         writable = !!(B8.sb && B8.sb.ready) && st.kind !== 'preview' && B8.auth.isLogged();
         if (mode === 'menu') showMenu();
+        flushPending();          // 上次没传上去的成绩，进来就补
       });
     }
 
