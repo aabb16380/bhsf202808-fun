@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>钢琴辉 · 八班游乐场</title>
+<meta name="theme-color" content="#fdfbf6">
+<style>
+  /* ---------- 全屏钢琴块：白底 ---------- */
+  :root {
+    --paper: #fdfbf6;
+    --line: #e6dfd0;
+    --ink: #23211c;
+    --ink-2: #5b574d;
+    --ink-3: #8d8779;
+    --seal: #a33228;
+    --gold: #c79a3c;
+    --lane: 4;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;
+  }
+
+  #game {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- 顶部记分条 ---------- */
+  .hud {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px calc(10px + env(safe-area-inset-top, 0px));
+    border-bottom: 1px solid var(--line);
+    background: rgba(253, 251, 246, 0.92);
+    backdrop-filter: blur(4px);
+  }
+
+  .hud-item { display: flex; flex-direction: column; gap: 1px; min-width: 44px; }
+
+  .hud-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--ink-3);
+  }
+
+  .hud-val {
+    font-size: 17px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+
+  .hud-spacer { flex: 1 1 auto; }
+
+  .hud-lives { color: var(--seal); font-size: 15px; letter-spacing: 0.12em; }
+
+  .hud-btn {
+    padding: 7px 14px;
+    font-size: 13px;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .hud-btn:active { transform: translateY(1px); }
+
+  .hud-btn.ghost { background: transparent; color: var(--ink-3); }
+
+  /* ---------- 琴键区 ---------- */
+  .stage {
+    position: relative;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .lanes {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--lane), 1fr);
+  }
+
+  .lane {
+    position: relative;
+    overflow: hidden;
+    border-right: 1px solid var(--line);
+    background: linear-gradient(180deg, #fffefb 0%, #faf7f0 100%);
+  }
+
+  .lane:last-child { border-right: 0; }
+
+  .lane.ishot { background: linear-gradient(180deg, #fffdf6 0%, #fdf3dd 100%); }
+
+  /* 判定带 */
+  .lane::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 20%;
+    background: linear-gradient(180deg, rgba(199,154,60,0) 0%, rgba(199,154,60,0.07) 60%, rgba(199,154,60,0.14) 100%);
+    border-top: 1px solid rgba(199,154,60,0.45);
+    pointer-events: none;
+  }
+
+  .hitline {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: 20%;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(199,154,60,0) 0%, var(--gold) 18%, var(--gold) 82%, rgba(199,154,60,0) 100%);
+    opacity: 0.75;
+    pointer-events: none;
+  }
+
+  .keyhint {
+    position: absolute;
+    left: 50%;
+    bottom: 5%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: rgba(35, 33, 28, 0.28);
+    pointer-events: none;
+  }
+
+  /* ---------- 琴块 ---------- */
+  .tile {
+    position: absolute;
+    left: 5%;
+    right: 5%;
+    top: 0;
+    border-radius: 5px;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid rgba(35, 33, 28, 0.10);
+    box-shadow: 0 4px 14px -8px rgba(35, 33, 28, 0.5);
+    will-change: transform;
+    pointer-events: none;
+  }
+
+  .tile .face {
+    position: absolute;
+    inset: 0;
+    background-image: url("assets/games/hui.jpg");
+    background-size: cover;
+    background-position: center 20%;
+  }
+
+  .tile .note {
+    position: absolute;
+    right: 6px;
+    bottom: 4px;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  }
+
+  .tile.near {
+    border-color: rgba(199, 154, 60, 0.85);
+    box-shadow: 0 0 0 2px rgba(199, 154, 60, 0.5), 0 6px 20px -8px rgba(199, 154, 60, 0.7);
+  }
+
+  .tile.hit { animation: pop 0.18s ease forwards; }
+
+  @keyframes pop {
+    from { opacity: 1; transform: translateY(var(--y, 0)) scale(1); }
+    to { opacity: 0; transform: translateY(var(--y, 0)) scale(1.06); }
+  }
+
+  .ripple {
+    position: absolute;
+    left: 50%;
+    bottom: 6%;
+    width: 10px;
+    height: 10px;
+    margin-left: -5px;
+    border-radius: 50%;
+    border: 2px solid rgba(199, 154, 60, 0.85);
+    animation: ripple 0.42s ease-out forwards;
+    pointer-events: none;
+  }
+
+  @keyframes ripple {
+    from { transform: scale(1); opacity: 0.9; }
+    to { transform: scale(9); opacity: 0; }
+  }
+
+  /* ---------- 遮罩 ---------- */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(253, 251, 246, 0.94);
+    backdrop-filter: blur(3px);
+    z-index: 20;
+  }
+
+  .overlay[hidden] { display: none; }
+
+  .panel {
+    width: min(420px, 100%);
+    text-align: center;
+  }
+
+  .panel h1 {
+    margin: 0 0 6px;
+    font-size: 26px;
+    letter-spacing: 0.04em;
+  }
+
+  .panel .sub {
+    margin: 0 0 22px;
+    font-size: 13.5px;
+    line-height: 1.9;
+    color: var(--ink-2);
+  }
+
+  .panel .btn {
+    display: inline-block;
+    padding: 12px 34px;
+    font-size: 15px;
+    color: #fff;
+    background: var(--seal);
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 8px 20px -12px rgba(163, 50, 40, 0.8);
+  }
+
+  .panel .btn:active { transform: translateY(1px); }
+
+  .panel .link {
+    display: block;
+    margin-top: 18px;
+    font-size: 12.5px;
+    color: var(--ink-3);
+    text-decoration: none;
+  }
+
+  .panel .result {
+    margin: 16px 0 22px;
+    font-size: 15px;
+    line-height: 2;
+  }
+
+  .panel .result b { font-size: 30px; }
+
+  .tip {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--ink-3);
+    line-height: 1.9;
+  }
+
+  .unsupported {
+    padding: 20px;
+    font-size: 14px;
+    line-height: 1.9;
+    color: var(--ink-2);
+  }
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div class="hud">
+    <div class="hud-item"><span class="hud-label">SCORE</span><span class="hud-val" id="score">0</span></div>
+    <div class="hud-item"><span class="hud-label">COMBO</span><span class="hud-val" id="combo">—</span></div>
+    <div class="hud-item"><span class="hud-label">BEST</span><span class="hud-val" id="best">0</span></div>
+    <div class="hud-spacer"></div>
+    <span class="hud-lives" id="lives">♥♥♥</span>
+    <button class="hud-btn" type="button" id="restart">重来</button>
+    <button class="hud-btn ghost" type="button" id="exit">退出</button>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="lanes" id="lanes"></div>
+    <div class="hitline"></div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="panel" id="panel"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var LANES = 4;
+  var LANE_KEYS = ['D', 'F', 'J', 'K'];
+  var KEY_BEST = 'b8.piano.best';
+
+  /* ---------- 曲子：小星星 ----------
+     每个音三个值：[拍位, 道, 频率]
+     拍位按 0.5 拍步进，读起来就是简谱 */
+  var BPM = 116;
+  var BEAT = 60000 / BPM;
+  var TRAVEL = 1500;          // 从顶到底多少毫秒
+
+  var C4 = 261.63, D4 = 293.66, E4 = 329.63, F4 = 349.23, G4 = 392.00, A4 = 440.00;
+
+  var SONG = [
+    // 一闪一闪亮晶晶
+    [0, 0, C4], [1, 0, C4], [2, 0, G4], [3, 0, G4], [4, 0, A4], [5, 0, A4], [6, 0, G4],
+    // 满天都是小星星
+    [8, 1, F4], [9, 1, F4], [10, 1, E4], [11, 1, E4], [12, 1, D4], [13, 1, D4], [14, 1, C4],
+    // 挂在天上放光明
+    [16, 2, G4], [17, 2, G4], [18, 2, F4], [19, 2, F4], [20, 2, E4], [21, 2, E4], [22, 2, D4],
+    // 好像许多小眼睛
+    [24, 3, G4], [25, 3, G4], [26, 3, F4], [27, 3, F4], [28, 3, E4], [29, 3, E4], [30, 3, D4],
+    // 一闪一闪亮晶晶
+    [32, 0, C4], [33, 0, C4], [34, 0, G4], [35, 0, G4], [36, 0, A4], [37, 0, A4], [38, 0, G4],
+    // 满天都是小星星
+    [40, 1, F4], [41, 1, F4], [42, 1, E4], [43, 1, E4], [44, 1, D4], [45, 1, D4], [46, 1, C4]
+  ];
+
+  var stage, lanesEl, overlay, panel;
+  var scoreEl, comboEl, bestEl, livesEl;
+
+  var laneEls = [];
+  var tiles = [];
+  var running = false;
+  var ended = false;
+
+  var score = 0, combo = 0, maxCombo = 0, lives = 3, hits = 0;
+  var startAt = 0;
+  var raf = 0;
+  var audio = null;
+  var activeTiles = [];     // 当前在场的块
+
+  function $(id) { return document.getElementById(id); }
+
+  function readBest() {
+    try { return Number(localStorage.getItem(KEY_BEST) || 0) || 0; } catch (e) { return 0; }
+  }
+  function saveBest(v) {
+    try { localStorage.setItem(KEY_BEST, String(v)); } catch (e) {}
+  }
+
+  function paintHud() {
+    if (scoreEl) scoreEl.textContent = String(score);
+    if (comboEl) comboEl.textContent = combo > 1 ? ('×' + combo) : '—';
+    if (bestEl) bestEl.textContent = String(readBest());
+    if (livesEl) livesEl.textContent = lives > 0 ? new Array(lives + 1).join('♥') : '—';
+  }
+
+  /* ---------- 声音 ---------- */
+  function ensureAudio() {
+    if (audio) return audio;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    audio = new AC();
+    return audio;
+  }
+
+  function playNote(freq) {
+    var ac = ensureAudio();
+    if (!ac) return;
+    if (ac.state === 'suspended') ac.resume();
+
+    var t = ac.currentTime;
+    var osc = ac.createOscillator();
+    var gain = ac.createGain();
+    var osc2 = ac.createOscillator();
+
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    osc2.type = 'sine';
+    osc2.frequency.value = freq * 2;
+
+    var g2 = ac.createGain();
+    g2.gain.value = 0.18;
+
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.28, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+
+    osc.connect(gain);
+    osc2.connect(g2);
+    g2.connect(gain);
+    gain.connect(ac.destination);
+
+    osc.start(t); osc2.start(t);
+    osc.stop(t + 0.6); osc2.stop(t + 0.6);
+  }
+
+  function playMiss() {
+    var ac = ensureAudio();
+    if (!ac) return;
+    if (ac.state === 'suspended') ac.resume();
+    var t = ac.currentTime;
+    var osc = ac.createOscillator();
+    var gain = ac.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.exponentialRampToValueAtTime(70, t + 0.22);
+    gain.gain.setValueAtTime(0.16, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(t); osc.stop(t + 0.28);
+  }
+
+  /* ---------- 棋盘 ---------- */
+  function buildLanes() {
+    lanesEl.innerHTML = '';
+    laneEls = [];
+    for (var i = 0; i < LANES; i++) {
+      var lane = document.createElement('div');
+      lane.className = 'lane';
+      lane.setAttribute('data-lane', String(i));
+      var hint = document.createElement('span');
+      hint.className = 'keyhint';
+      hint.textContent = LANE_KEYS[i];
+      lane.appendChild(hint);
+      lanesEl.appendChild(lane);
+      laneEls.push(lane);
+    }
+  }
+
+  function stageH() { return stage ? stage.clientHeight : 0; }
+
+  function tileH() {
+    return Math.max(64, Math.round(stageH() * 0.17));
+  }
+
+  function makeTile(note) {
+    var h = tileH();
+    var el = document.createElement('div');
+    el.className = 'tile';
+    el.style.height = h + 'px';
+
+    var face = document.createElement('span');
+    face.className = 'face';
+    el.appendChild(face);
+
+    var nm = document.createElement('span');
+    nm.className = 'note';
+    nm.textContent = '♪';
+    el.appendChild(nm);
+
+    laneEls[note.lane].appendChild(el);
+
+    return { el: el, note: note, lane: note.lane, h: h, y: -h, done: false };
+  }
+
+  function clearBoard() {
+    for (var i = 0; i < activeTiles.length; i++) {
+      var t = activeTiles[i];
+      if (t.el && t.el.parentNode) t.el.parentNode.removeChild(t.el);
+    }
+    activeTiles = [];
+    for (var j = 0; j < laneEls.length; j++) laneEls[j].classList.remove('ishot');
+  }
+
+  /* ---------- 主循环 ---------- */
+  var nextNote = 0;
+  var lastTime = 0;
+
+  function loop(now) {
+    if (!running) return;
+    if (!lastTime) lastTime = now;
+    var dt = Math.min(64, now - lastTime);
+    lastTime = now;
+
+    var elapsed = now - startAt;
+    var H = stageH();
+    var lineY = H * 0.8;          // 判定线位置（底部 20% 之上）
+
+    // 生成：按曲子时间倒推，让块正好在拍点到达判定线
+    while (nextNote < SONG.length) {
+      var n = SONG[nextNote];
+      var arriveAt = n[0] * BEAT + TRAVEL;
+      if (arriveAt - TRAVEL <= elapsed + 60) {
+        activeTiles.push(makeTile({ lane: n[1], freq: n[2], t: n[0] * BEAT, spawned: true }));
+        nextNote++;
+      } else break;
+    }
+
+    // 位移
+    for (var i = activeTiles.length - 1; i >= 0; i--) {
+      var t = activeTiles[i];
+      if (t.done) { activeTiles.splice(i, 1); continue; }
+
+      var at = t.note.t;                     // 该到线的时刻
+      var y = (elapsed - (at - TRAVEL)) / TRAVEL * (lineY) - t.h;
+      t.y = y;
+      t.el.style.transform = 'translateY(' + y + 'px)';
+
+      var bottom = y + t.h;
+      if (bottom > lineY - t.h * 0.9) t.el.classList.add('near');
+      else t.el.classList.remove('near');
+
+      // 完全越线 → 漏
+      if (y > lineY + t.h * 0.6) {
+        t.done = true;
+        if (t.el && t.el.parentNode) t.el.parentNode.removeChild(t.el);
+        combo = 0;
+        lives -= 1;
+        paintHud();
+        playMiss();
+        if (lives <= 0) { finish(); return; }
+      }
+    }
+
+    // 曲子弹完了就结束
+    if (nextNote >= SONG.length && activeTiles.length === 0) {
+      finish();
+      return;
+    }
+
+    raf = requestAnimationFrame(loop);
+  }
+
+  /* ---------- 敲 ---------- */
+  function hitLane(lane) {
+    if (!running) return;
+
+    var H = stageH();
+    var lineY = H * 0.8;
+    var best = null;
+
+    for (var i = 0; i < activeTiles.length; i++) {
+      var t = activeTiles[i];
+      if (t.done || t.lane !== lane) continue;
+      var bottom = t.y + t.h;
+      // 判定窗口：块底已经接近判定线
+      if (bottom >= lineY - t.h * 0.55 && t.y <= lineY + t.h * 0.5) {
+        if (!best || t.y > best.y) best = t;
+      }
+    }
+
+    if (best) {
+      best.done = true;
+      best.el.classList.add('hit');
+      (function (el) {
+        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 200);
+      })(best.el);
+
+      combo += 1;
+      hits += 1;
+      maxCombo = Math.max(maxCombo, combo);
+      score += 10 + Math.min(combo, 25) * 2;
+      paintHud();
+      playNote(best.note.freq);
+
+      var lane_el = laneEls[lane];
+      lane_el.classList.add('ishot');
+      var rp = document.createElement('span');
+      rp.className = 'ripple';
+      lane_el.appendChild(rp);
+      setTimeout(function () {
+        if (rp.parentNode) rp.parentNode.removeChild(rp);
+        lane_el.classList.remove('ishot');
+      }, 420);
+    } else {
+      // 该道没块 → 点空
+      combo = 0;
+      score = Math.max(0, score - 5);
+      paintHud();
+      playMiss();
+      lives -= 1;
+      paintHud();
+      if (lives <= 0) finish();
+    }
+  }
+
+  function laneOfX(clientX) {
+    var r = stage.getBoundingClientRect();
+    if (!r.width) return -1;
+    var lane = Math.floor(((clientX - r.left) / r.width) * LANES);
+    if (lane < 0 || lane >= LANES) return -1;
+    return lane;
+  }
+
+  /* ---------- 开始 / 结束 ---------- */
+  function start() {
+    clearBoard();
+    ensureAudio();
+    if (audio && audio.state === 'suspended') audio.resume();
+
+    score = 0; combo = 0; maxCombo = 0; lives = 3; hits = 0;
+    nextNote = 0;
+    lastTime = 0;
+    ended = false;
+    running = true;
+    startAt = performance.now() + 700;   // 留一点准备时间
+
+    paintHud();
+    overlay.hidden = true;
+    raf = requestAnimationFrame(loop);
+  }
+
+  function finish() {
+    if (ended) return;
+    ended = true;
+    running = false;
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    clearBoard();
+
+    var best = readBest();
+    var isNew = score > best;
+    if (isNew) saveBest(score);
+    paintHud();
+
+    panel.innerHTML =
+      '<h1>' + (isNew ? '新纪录' : '这一局') + '</h1>' +
+      '<div class="result">' +
+        '<b>' + score + '</b> 分<br>' +
+        '接住 ' + hits + ' 个 · 最高连击 ×' + maxCombo + '<br>' +
+        '本机最高 ' + readBest() + ' 分' +
+      '</div>' +
+      '<button class="btn" type="button" id="again">再来一次</button>' +
+      '<a class="link" href="index.html">回游乐场</a>' +
+      '<p class="tip">键盘 D F J K，或者直接点四道琴键。漏掉或点空都会扣一颗 ♥。</p>';
+    overlay.hidden = false;
+    document.getElementById('again').onclick = start;
+  }
+
+  function showStart() {
+    panel.innerHTML =
+      '<h1>钢琴辉</h1>' +
+      '<p class="sub">辉辉踩着小星星的拍子往下掉。<br>' +
+        '落到判定线上时点中它，弹出那个音。</p>' +
+      '<button class="btn" type="button" id="go">开始</button>' +
+      '<a class="link" href="index.html">回游乐场</a>' +
+      '<p class="tip">键盘 <b>D F J K</b> · 手机直接点四道琴键<br>' +
+        '三颗 ♥，接住越多分越高</p>';
+    overlay.hidden = false;
+    document.getElementById('go').onclick = start;
+  }
+
+  function init() {
+    stage = $('stage');
+    lanesEl = $('lanes');
+    overlay = $('overlay');
+    panel = $('panel');
+    scoreEl = $('score');
+    comboEl = $('combo');
+    bestEl = $('best');
+    livesEl = $('lives');
+
+    buildLanes();
+    paintHud();
+
+    // 点击 / 触摸
+    stage.addEventListener('pointerdown', function (ev) {
+      if (!running) return;
+      ev.preventDefault();
+      var lane = laneOfX(ev.clientX);
+      if (lane >= 0) hitLane(lane);
+    }, { passive: false });
+
+    // 键盘
+    document.addEventListener('keydown', function (ev) {
+      var k = String(ev.key || '').toUpperCase();
+      if (!running) {
+        if (k === ' ' || k === 'ENTER') {
+          if (!overlay.hidden) { ev.preventDefault(); start(); }
+        }
+        return;
+      }
+      var idx = LANE_KEYS.indexOf(k);
+      if (idx >= 0) { ev.preventDefault(); hitLane(idx); }
+    });
+
+    $('restart').addEventListener('click', function () { if (running) finish(); else start(); });
+    $('exit').addEventListener('click', function () { location.href = 'index.html'; });
+
+    window.addEventListener('resize', function () {
+      // 判定线跟着变，块的位置在下一帧自动按新高度重算
+    });
+
+    showStart();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

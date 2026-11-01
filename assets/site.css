@@ -1287,3 +1287,9 @@
 @media (max-width: 560px) {
   .piano-board { max-width: 100%; aspect-ratio: 2 / 3; }
 }
+/* 第四个游戏是独立页面，标签用链接样式 */
+.game-tab-link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
