@@ -498,6 +498,56 @@
     url("games/hui/5.jpg");
 }
 
+/* ---------- 无图版：回到最早那套暖色阶 ----------
+   纸白 → 麦黄 → 赭石 → 朱砂 → 金 → 赤印 → 玄金 */
+.b2048.is-plain .b2048-in {
+  color: var(--ink);
+  background-color: #f3ecdb;
+  text-shadow: none;
+}
+
+.b2048.is-plain .b2048-in.v2   { background: #f4eee0; }
+.b2048.is-plain .b2048-in.v4   { background: #efe4cb; }
+.b2048.is-plain .b2048-in.v8   { background: #ecd9ac; }
+.b2048.is-plain .b2048-in.v16  { background: #e7c886; }
+.b2048.is-plain .b2048-in.v32  { background: #dcae62; color: #3a2c18; }
+.b2048.is-plain .b2048-in.v64  { background: #d0913f; color: #fffdf7; }
+.b2048.is-plain .b2048-in.v128 { background: #c2732c; color: #fffdf7; }
+.b2048.is-plain .b2048-in.v256 { background: #ad5623; color: #fffdf7; }
+
+.b2048.is-plain .b2048-in.v512 {
+  background: linear-gradient(152deg, #9c3a1e 0%, #7d2a13 100%);
+  color: #ffeacd;
+  box-shadow: inset 0 0 0 1px rgba(255, 214, 160, 0.28),
+              0 2px 10px -4px rgba(124, 42, 19, 0.45);
+  text-shadow: 0 1px 2px rgba(60, 18, 6, 0.35);
+}
+
+.b2048.is-plain .b2048-in.v1024 {
+  background: linear-gradient(152deg, #e3b44b 0%, #b8860b 55%, #96690a 100%);
+  color: #2b2011;
+  box-shadow: inset 0 0 0 2px rgba(255, 240, 200, 0.55),
+              0 4px 18px -6px rgba(184, 134, 11, 0.6);
+  text-shadow: 0 1px 0 rgba(255, 244, 214, 0.45);
+}
+
+.b2048.is-plain .b2048-in.v2048 {
+  background: linear-gradient(152deg, #c0392b 0%, #9c2318 55%, #7a1a12 100%);
+  color: #ffedc9;
+  box-shadow: inset 0 0 0 2px rgba(255, 214, 150, 0.55),
+              0 4px 22px -6px rgba(192, 57, 43, 0.65);
+  text-shadow: 0 1px 3px rgba(60, 12, 6, 0.45);
+}
+
+.b2048.is-plain .b2048-in.vbig {
+  background: linear-gradient(152deg, #2a1f2e 0%, #1a1220 55%, #120c18 100%);
+  color: #f2d79a;
+  box-shadow: inset 0 0 0 2px rgba(242, 215, 154, 0.5),
+              0 0 24px -6px rgba(242, 215, 154, 0.35),
+              0 4px 20px -8px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 0 12px rgba(242, 215, 154, 0.45);
+}
+
 /* 512：暗红 */
 .b2048-in.v512 {
   background-image: linear-gradient(160deg, rgba(120, 40, 20, 0.28) 0%, rgba(90, 25, 12, 0.62) 100%),

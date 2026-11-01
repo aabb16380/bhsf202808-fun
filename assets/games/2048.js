@@ -14,9 +14,11 @@
 
   var B8 = window.B8 = window.B8 || {};
   var KEY_BEST = 'b8.2048.best';
+  var KEY_MODE = 'b8.2048.mode';
   var N = 4;
 
-  var board, layerEl, scoreEl, bestEl, maxEl, restartBtn, stateEl, noteEl;
+  var board, layerEl, scoreEl, bestEl, maxEl, restartBtn, stateEl, noteEl, modeBtn;
+  var mode = 'img';       // img：牌面是照片；plain：原来的暖色阶
   var slots = [];
   var uid = 0;
   var score = 0;
@@ -571,6 +573,14 @@
     restartBtn = B8.qs('#g2048-restart');
     stateEl = B8.qs('#g2048-state');
     noteEl = B8.qs('#g2048-note');
+    modeBtn = B8.qs('#g2048-mode');
+
+    try {
+      var savedMode = localStorage.getItem(KEY_MODE);
+      if (savedMode === 'plain' || savedMode === 'img') mode = savedMode;
+    } catch (e) {}
+    applyMode();
+    B8.on(modeBtn, 'click', function () { setMode(mode === 'img' ? 'plain' : 'img'); });
 
     buildGrid();
     best = readBest();
@@ -593,6 +603,21 @@
   function report(msg) {
     var s = document.getElementById('g2048-state');
     if (s) s.textContent = msg;
+  }
+
+  /* ---------- 牌面：有图 / 无图 ---------- */
+  function applyMode() {
+    if (board) board.classList.toggle('is-plain', mode === 'plain');
+    if (!modeBtn) return;
+    modeBtn.textContent = mode === 'img' ? '有图版' : '无图版';
+    modeBtn.setAttribute('aria-pressed', mode === 'img' ? 'true' : 'false');
+    modeBtn.title = mode === 'img' ? '切换成无图版（纯色块，看得更清楚）' : '切换成有图版（辉辉照片）';
+  }
+
+  function setMode(m) {
+    mode = m === 'plain' ? 'plain' : 'img';
+    try { localStorage.setItem(KEY_MODE, mode); } catch (e) {}
+    applyMode();
   }
 
   whenReady(init);

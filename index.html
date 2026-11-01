@@ -17,17 +17,17 @@
 <meta property="og:locale" content="zh_CN">
 <meta name="twitter:card" content="summary">
 
-<link rel="icon" href="assets/favicon.png?v=20261101g7" type="image/png">
-<link rel="apple-touch-icon" href="assets/icon.png?v=20261101g7">
+<link rel="icon" href="assets/favicon.png?v=20261101g8" type="image/png">
+<link rel="apple-touch-icon" href="assets/icon.png?v=20261101g8">
 <script>
-window.B8_BUILD = '20261101g7';
+window.B8_BUILD = '20261101g8';
 // ?t=<时间戳> 透传到每个资源，配合 /test/ 入口绕开缓存
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
-document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g7' + window.B8_T + '">');
+document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g8' + window.B8_T + '">');
 </script>
 <script>document.documentElement.classList.add('js');</script>
 </head>
@@ -43,7 +43,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g7' + w
 <header class="site-header" id="site-header">
   <div class="wrap header-inner">
     <a class="brand" href="#top" aria-label="回到顶部">
-      <img class="brand-mark" src="assets/icon.png?v=20261101g7" alt="" width="30" height="30">
+      <img class="brand-mark" src="assets/icon.png?v=20261101g8" alt="" width="30" height="30">
       <span class="brand-text">
         <span class="brand-name">八班游乐场</span>
         <span class="brand-ver" id="brand-ver">v1.0</span>
@@ -124,7 +124,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g7' + w
 
       <div class="hero-play" aria-hidden="true">
         <span class="play-ring"></span>
-        <img class="play-logo" src="assets/logo.png?v=20261101g7" alt="" width="200" height="160">
+        <img class="play-logo" src="assets/logo.png?v=20261101g8" alt="" width="200" height="160">
         <span class="play-note">下课<br>十分钟</span>
       </div>
     </div>
@@ -173,6 +173,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g7' + w
               </div>
               <button class="btn ghost sm" id="g2048-restart" type="button">重开</button>
               <button class="btn ghost sm" id="g2048-cheat-toggle" type="button" aria-pressed="false">作弊模式</button>
+              <button class="btn ghost sm" id="g2048-mode" type="button" aria-pressed="true" title="切换成无图版">有图版</button>
               <div class="gs-state" id="g2048-state" role="status" aria-live="polite">新的一局。点一下棋盘，用方向键或 WASD 开始。</div>
             </div>
 
@@ -209,6 +210,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g7' + w
                 <ul class="game-facts">
                   <li>键盘：方向键或 <b>W A S D</b></li>
                   <li>手机：在棋盘上朝一个方向滑</li>
+                  <li>牌面可切 <b>有图版 / 无图版</b>（默认有图）</li>
                   <li>破纪录时成绩会自动上传排行榜</li>
                 </ul>
               </aside>
@@ -217,6 +219,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g7' + w
             <p class="game-hint">
               玩法：<b>方向键 / WASD</b> 上下左右移动，相同数字合并；手机上在棋盘里滑动，
               位移超过 24px 才算一次。合出 2048 会有祝贺，之后还能接着玩。
+              右上角可以在<b>有图版 / 无图版</b>之间切。
             </p>
             <p class="game-note" id="g2048-note"></p>
           </section>
@@ -438,7 +441,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g7' + w
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g7' + T;
+  var V = '?v=20261101g8' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
