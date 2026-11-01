@@ -68,8 +68,29 @@
     no: function () { return (state.member && state.member.no) || ''; },
     kind: function () { return state.elev ? state.elev.kind : (state.member ? 'member' : 'none'); },
     isLogged: function () { return !!(state.member && state.member.token); },
-    isAdmin: function () { return !!(state.elev && (state.elev.kind === 'admin' || state.elev.kind === 'super')); },
-    isSuper: function () { return !!(state.elev && state.elev.kind === 'super'); },
+    // v2.18：钥匙输过一次就永久绑在账号上，所以「是不是管理员」先看账号，
+    // 再看这次的提权会话（老逻辑保留，兼容还没绑定的情况）。
+    adminKind: function () {
+      if (state.member && state.member.adminKind) return state.member.adminKind;
+      if (state.elev && state.elev.kind) return state.elev.kind;
+      return '';
+    },
+    isAdmin: function () {
+      if (!auth.adminFlag()) return false;
+      var k = auth.adminKind();
+      return k === 'admin' || k === 'super';
+    },
+    isSuper: function () { return auth.adminFlag() && auth.adminKind() === 'super'; },
+    adminFlag: function () {
+      try { return localStorage.getItem('b8.adminUI') !== '0'; } catch (e) { return true; }
+    },
+    setAdminFlag: function (on) {
+      try { localStorage.setItem('b8.adminUI', on ? '1' : '0'); } catch (e) {}
+      broadcast();
+      syncAdminMenu();
+      var b = $('acct-btn');
+      if (b) b.textContent = btnLabel();
+    },
     elevLabel: function () { return (state.elev && state.elev.label) || ''; }
   };
 
@@ -541,7 +562,8 @@
           '<label for="acct-key">管理员密钥</label>' +
           '<input class="input" id="acct-key" type="text" placeholder="B8-XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text">' +
           '<p class="modal-note" style="margin-top:6px">' +
-            '一人一钥：第一次用哪把，以后就固定是你。权限 2 小时，关掉标签页就没了，下次进来要重新输。' +
+            '一人一钥：第一次用哪把，以后就永久固定是你。输一次之后，这个账号本身就是管理员，' +
+            '换设备登录也不用再输。' +
           '</p>' +
         '</div>' +
         '<div class="modal-actions">' +
@@ -556,7 +578,8 @@
           '<button class="btn ghost sm" type="button" id="acct-logout">退出登录</button>' +
         '</div>' +
         '<p class="modal-note" style="margin-top:14px">' +
-          '管理员权限到 ' + new Date(auth.state().elev.exp).toLocaleString('zh-CN', { hour12: false }) + ' 失效。' +
+          '管理员身份已经绑在这个账号上，不用再输密钥。想暂时收起管理员按钮，' +
+          '去右上角 ⋯ 菜单里把「管理员模式」关掉就行。' +
         '</p>';
     }
 
@@ -695,8 +718,49 @@
     document.body.classList.remove('is-signing');
   }
 
+  /* ---------- 菜单里的「管理员模式」：只有绑过钥匙的人才看得见 ---------- */
+  var adminMenuItem = null;
+
+  function syncAdminMenu() {
+    var menu = $('more-menu');
+    if (!menu) return;
+
+    var canAdmin = (auth.adminKind() === 'admin' || auth.adminKind() === 'super');
+    if (!canAdmin) {
+      if (adminMenuItem && adminMenuItem.parentNode) adminMenuItem.parentNode.removeChild(adminMenuItem);
+      adminMenuItem = null;
+      return;
+    }
+
+    if (!adminMenuItem) {
+      adminMenuItem = document.createElement('button');
+      adminMenuItem.type = 'button';
+      adminMenuItem.id = 'admin-mode-menu';
+      adminMenuItem.addEventListener('click', function () {
+        var on = !auth.adminFlag();
+        auth.setAdminFlag(on);
+        B8.toast(on ? '管理员模式已开启' : '管理员模式已关闭');
+        var m = $('more-menu');
+        if (m) m.hidden = true;
+      });
+      menu.insertBefore(adminMenuItem, menu.firstChild);
+    }
+
+    adminMenuItem.textContent = '管理员模式：' + (auth.adminFlag() ? '开' : '关');
+    adminMenuItem.setAttribute('aria-pressed', auth.adminFlag() ? 'true' : 'false');
+  }
+
+  function initAdminMenu() {
+    syncAdminMenu();
+    document.addEventListener('b8:auth', syncAdminMenu);
+    var menu = $('more-menu');
+    if (menu) {
+      B8.on(document, 'click', function () { setTimeout(syncAdminMenu, 0); });
+    }
+  }
   function boot() {
     initAccountButton();
+    initAdminMenu();
     initCrossSite();
 
     // 从别的站带手牌过来的：先把手牌换成这个站的会话，再走正常启动
@@ -739,6 +803,7 @@
       return B8.sb.rpc('b8_check', { p_token: obj.token })
         .then(function (res) {
           if (!res || !res.ok) return false;
+          if (!isElev && res.admin_kind) obj.adminKind = res.admin_kind;
           if (isElev) {
             if (res.kind !== 'admin' && res.kind !== 'super') return false;
             obj.kind = res.kind;
