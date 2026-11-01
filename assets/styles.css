@@ -1264,6 +1264,10 @@ body[data-site="site"][data-mode="night"] .gate-seal {
 @media (max-width: 560px) {
   .console-add { grid-template-columns: 1fr; }
 }
+/* 控制台临时密码条 */
+.console-temp { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:10px 0 14px; padding:10px 12px; font-size:13px; color:var(--ink-2); background:var(--jade-soft); border:1px dashed color-mix(in srgb, var(--jade) 45%, transparent); border-radius:var(--radius); }
+.console-temp code { padding:2px 8px; font-family:var(--mono); font-size:15px; letter-spacing:0.08em; color:var(--ink); background:var(--card); border-radius:3px; }
+
 
 /* ============================================================
    .fun 专用样式（在 _shared/base.css 基础上叠加）

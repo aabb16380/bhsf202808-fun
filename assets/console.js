@@ -162,12 +162,14 @@
     B8.qsa('[data-reset]', b).forEach(function (btn) {
       B8.on(btn, 'click', function () {
         var no = btn.getAttribute('data-reset');
-        var pwd = window.prompt('给 ' + no + ' 设一个新密码（至少 6 位）\n设完让他自己登录后改掉。', '');
-        if (!pwd) return;
-        if (pwd.length < 6) { B8.toast('至少 6 位'); return; }
+        // 原密码是 sha256，取不回来，只能重置成一个新的临时密码
+        if (!window.confirm('把 ' + no + ' 的密码重置成随机临时密码？\n原密码是哈希，取不回来，只能重置。')) return;
         btn.disabled = true;
-        B8.sb.rpc('b8_super_reset_pass', { p_token: tok(), p_no: no, p_new_pass: pwd })
-          .then(function () { B8.toast('密码已重置'); loadMembers(); })
+        B8.sb.rpc('b8_super_temp_pass', { p_token: tok(), p_no: no })
+          .then(function (res) {
+            showTemp(res.student_no, res.temp_pass);
+            loadMembers();
+          })
           .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
       });
     });
@@ -184,6 +186,26 @@
     });
   }
 
+
+  /** 把重置出来的临时密码显示在列表最上面，方便复制转告 */
+  function showTemp(no, pwd) {
+    var b = body();
+    if (!b) return;
+    var old = document.getElementById('console-temp');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var box = document.createElement('div');
+    box.id = 'console-temp';
+    box.className = 'console-temp';
+    box.innerHTML = '临时密码（' + esc(no) + '）：<code>' + esc(pwd) + '</code>';
+    var cp = document.createElement('button');
+    cp.type = 'button';
+    cp.className = 'btn ghost sm';
+    cp.textContent = '复制';
+    B8.on(cp, 'click', function () { B8.copy(pwd); });
+    box.appendChild(cp);
+    b.insertBefore(box, b.firstChild);
+  }
   /* ---------- 密钥 ---------- */
   function loadKeys() {
     B8.sb.rpc('b8_super_keys', { p_token: tok() }).then(function (rows) {
