@@ -888,7 +888,102 @@ svg { display: block; }
 
 .gate.is-done { display: none; }
 
-/* 夜色下卡片要和背景拉开一档，否则整块糊在一起 */
+.gate-hintbox {
+  margin-top: 14px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.85;
+  text-align: left;
+  color: var(--ink-2);
+  background: var(--jade-soft);
+  border: 1px dashed color-mix(in srgb, var(--jade) 40%, transparent);
+  border-radius: var(--radius);
+}
+
+.gate-hintbox code {
+  padding: 1px 5px;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  border-radius: 2px;
+}
+
+.gate-hint {
+  margin-top: 8px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+  text-align: left;
+}
+
+.gate-err.is-on { color: var(--seal); }
+
+/* ---------- 15b. 账号面板 ---------- */
+.acct-btn {
+  padding: 6px 12px;
+  max-width: 9em;
+  font-size: 13px;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.acct-btn:hover { color: var(--ink); border-color: var(--line-2); background: var(--card); }
+
+.modal {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 360;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(20, 18, 16, 0.55);
+  animation: lbIn 0.16s ease;
+}
+
+.modal-inner {
+  width: min(460px, 100%);
+  max-height: 86vh;
+  overflow: auto;
+  padding: 26px 26px 24px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+}
+
+.modal-title {
+  font-size: 1.22rem;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+.modal-note {
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--ink-3);
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+body[data-site="site"][data-mode="night"] .modal { background: rgba(0, 0, 0, 0.66); }
+body[data-site="site"][data-mode="night"] .modal-inner { background: #1f1f2a; border-color: #35343f; }
 body[data-site="site"][data-mode="night"] .gate-card {
   background: #1f1f2a;
   border-color: #35343f;

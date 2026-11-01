@@ -17,17 +17,17 @@
 <meta property="og:locale" content="zh_CN">
 <meta name="twitter:card" content="summary">
 
-<link rel="icon" href="assets/favicon.png?v=20261101a2" type="image/png">
-<link rel="apple-touch-icon" href="assets/icon.png?v=20261101a2">
+<link rel="icon" href="assets/favicon.png?v=20261101b1" type="image/png">
+<link rel="apple-touch-icon" href="assets/icon.png?v=20261101b1">
 <script>
-window.B8_BUILD = '20261101a2';
+window.B8_BUILD = '20261101b1';
 // ?t=<时间戳> 透传到每个资源，配合 /test/ 入口绕开缓存
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
-document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101a2' + window.B8_T + '">');
+document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101b1' + window.B8_T + '">');
 </script>
 <script>document.documentElement.classList.add('js');</script>
 </head>
@@ -43,7 +43,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101a2' + w
 <header class="site-header" id="site-header">
   <div class="wrap header-inner">
     <a class="brand" href="#top" aria-label="回到顶部">
-      <img class="brand-mark" src="assets/icon.png?v=20261101a2" alt="" width="30" height="30">
+      <img class="brand-mark" src="assets/icon.png?v=20261101b1" alt="" width="30" height="30">
       <span class="brand-text">
         <span class="brand-name">八班游乐场</span>
         <span class="brand-ver" id="brand-ver">v1.0</span>
@@ -80,22 +80,32 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101a2' + w
   <div class="gate-card">
     <div class="gate-seal" aria-hidden="true">八</div>
     <h2>八班游乐场</h2>
-    <p class="gate-sub">这里只对八班开放。输入班级口令，第一次进来给自己取个名字。</p>
+    <p class="gate-sub">八班的站只对八班开放。用学号登录，第一次进来给自己设个密码。</p>
     <form id="gate-form" novalidate>
       <div class="field">
-        <label for="gate-nick">你的称呼（可留空）</label>
-        <input class="input" id="gate-nick" maxlength="16" placeholder="比如：后排靠窗" autocomplete="nickname">
+        <label for="gate-no">学号（8 位）</label>
+        <input class="input" id="gate-no" inputmode="numeric" maxlength="8"
+               autocomplete="username" placeholder="20282307">
       </div>
-      <div class="field" style="margin-top:12px">
-        <label for="gate-secret">班级口令</label>
-        <input class="input" id="gate-secret" type="password" placeholder="问班委要" autocomplete="current-password">
+      <div class="field" id="gate-name-wrap" style="margin-top:12px" hidden>
+        <label for="gate-name">姓名</label>
+        <input class="input" id="gate-name" autocomplete="name" placeholder="第一次登录用来核对身份">
       </div>
-      <button class="btn seal" id="gate-submit" type="submit">进入</button>
+      <div class="field" id="gate-pass-wrap" style="margin-top:12px" hidden>
+        <label for="gate-pass">密码</label>
+        <input class="input" id="gate-pass" type="password" autocomplete="current-password">
+      </div>
+      <div class="field" id="gate-pass2-wrap" style="margin-top:12px" hidden>
+        <label for="gate-pass2">再输一次密码</label>
+        <input class="input" id="gate-pass2" type="password" autocomplete="new-password">
+      </div>
+      <p class="gate-hint" id="gate-hint"></p>
+      <button class="btn seal" id="gate-submit" type="submit">下一步</button>
       <p class="gate-err" id="gate-err" role="alert"></p>
     </form>
-    <p class="gate-hint" id="gate-hint" hidden></p>
+    <div class="gate-hintbox" id="gate-hintbox" hidden></div>
     <button class="btn ghost" id="gate-preview" type="button" hidden>先看看界面</button>
-    <p class="gate-foot">口令只存在你自己的浏览器里，30 天有效。</p>
+    <p class="gate-foot">密码只存 sha256，登录状态保存在你自己的浏览器里，30 天有效。</p>
   </div>
 </div>
 
@@ -395,7 +405,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101a2' + w
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101a2' + T;
+  var V = '?v=20261101b1' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
