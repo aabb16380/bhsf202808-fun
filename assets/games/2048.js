@@ -28,6 +28,9 @@
   var submitTimer = 0;
   var writable = false;
   var started = false;
+  var cheated = false;    // 这一局开过作弊，不计排行
+  var cheatOn = false;    // 作弊面板是否开着
+  var picked = [];        // 作弊时选中的格子下标
 
   /* ---------- 小工具 ---------- */
   function whenReady(fn) {
