@@ -262,7 +262,8 @@
 
     if (gained > 0) {
       score += gained;
-      if (score > best) {
+      // 开过作弊的这一局不碰本机最高分——哪怕后面把作弊关掉也一样
+      if (!cheated && score > best) {
         best = score;
         saveBest(best);
         if (bestEl) {
@@ -279,8 +280,12 @@
 
     if (max >= 2048 && !won) {
       won = true;
-      setState('合成 2048 了！可以接着玩，也可以重开。', true);
-      B8.toast('2048！这一局可以记在八班名下了。');
+      if (cheated) {
+        setState('合成 2048 了！不过这一局开过作弊，不算成绩。', true);
+      } else {
+        setState('合成 2048 了！可以接着玩，也可以重开。', true);
+        B8.toast('2048！这一局可以记在八班名下了。');
+      }
     }
 
     if (!canMove()) {
@@ -338,7 +343,7 @@
     updateMax();
     setState('新的一局。方向键 / WASD 移动，手机上直接滑。');
     setNote(writable
-      ? '每 30 秒把当前成绩更新到排行榜（同一个人只占一行，覆盖旧的）。'
+      ? '每 30 秒把当前成绩更新到排行榜（同一个人只占一行，覆盖旧的）；开过作弊的这一局不算。'
       : '成绩只存在这台设备：数据库还没接，暂时不上传排行榜。');
     startReportTimer();
   }
@@ -504,9 +509,9 @@
       markPicked();
       refreshCheatButtons();
       if (cheatOn) {
-        setNote('作弊模式已开：这一局不计入排行榜。点格子选中，改数字或交换。');
+        setNote('作弊模式已开：这一局不计入排行榜，也不更新本机最高分。点格子选中，改数字或交换。');
       } else if (cheated) {
-        setNote('这一局动过作弊模式，结束也不会记到排行榜。想上榜就点重开。');
+        setNote('这一局动过作弊，退出也一样不算成绩（排行榜和本机最高都不记）。想上榜就点重开。');
       }
     });
 
