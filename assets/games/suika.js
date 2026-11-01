@@ -35,21 +35,26 @@
   var DANGER_Y = 208;       // 红线：果子顶越过它就危险
   var DANGER_TIME = 2.2;    // 连续压线多久算输
   var DROP_CD = 0.42;       // 两次落果的间隔
-  var MAX_LEVEL = 6;
+  var WIN_LEVEL = 8;        // 合到第 8 级就算"完成了"
+  var MAX_LEVEL = 9;        // 第 9 级是 8+8 的产物，免得两个辉辉干瞪眼
 
   var KEY_BEST = 'b8.suika.best';
 
   /* 果子表：level 0 空着，方便用 level 直接取。
      r 是逻辑半径（画布宽 600），points 是合成出来的得分。
-     img 一填，就把数字换成人像（圆形裁切），label 只在结算/下一颗里当编号用。 */
+     img 一填，就把数字换成人像（圆形裁切），label 只在结算/下一颗里当编号用。
+     1–8 级是八张脸，第 9 级是那张新给的图（两个 8 级合体才看得到）。 */
   var FRUITS = [
     null,
     { label: '1', r: 30, color: '#e9b949', dark: '#bf8f2a', points: 10, img: 'assets/games/hui/7.jpg' },
-    { label: '2', r: 42, color: '#e2794b', dark: '#b8562e', points: 30, img: 'assets/games/hui/5.jpg' },
-    { label: '3', r: 56, color: '#8fbf5f', dark: '#699840', points: 70, img: 'assets/games/hui/2.jpg' },
-    { label: '4', r: 72, color: '#d9534f', dark: '#a93936', points: 130, img: 'assets/games/hui/1.jpg' },
-    { label: '5', r: 90, color: '#7b6bb5', dark: '#5a4c92', points: 220, img: 'assets/games/hui/8.jpg' },
-    { label: '辉', r: 116, color: '#f0d9a8', dark: '#c9a45c', points: 500, img: 'assets/games/hui/6.jpg' }
+    { label: '2', r: 37, color: '#e2794b', dark: '#b8562e', points: 28, img: 'assets/games/hui/5.jpg' },
+    { label: '3', r: 45, color: '#8fbf5f', dark: '#699840', points: 60, img: 'assets/games/hui/2.jpg' },
+    { label: '4', r: 54, color: '#d9534f', dark: '#a93936', points: 110, img: 'assets/games/hui/1.jpg' },
+    { label: '5', r: 65, color: '#7b6bb5', dark: '#5a4c92', points: 190, img: 'assets/games/hui/8.jpg' },
+    { label: '6', r: 78, color: '#4e8fa3', dark: '#356b7c', points: 300, img: 'assets/games/hui/3.jpg' },
+    { label: '7', r: 93, color: '#c2732c', dark: '#94501a', points: 460, img: 'assets/games/hui/4.jpg' },
+    { label: '辉', r: 111, color: '#a33228', dark: '#7a1f18', points: 700, img: 'assets/games/hui/6.jpg' },
+    { label: '超', r: 132, color: '#f0d9a8', dark: '#c9a45c', points: 1000, img: 'assets/games/hui/9.jpg' }
   ];
 
   var SPAWN = [
@@ -479,10 +484,15 @@
     sfxMerge(nl);
     paintHud();
 
-    if (nl === MAX_LEVEL) {
+    if (nl === WIN_LEVEL) {
       banner.t = 2;
       banner.text = '合成小辉辉！';
       burst(x, y, '#e9b949', 30);
+      sfxWin();
+    } else if (nl === MAX_LEVEL) {
+      banner.t = 2;
+      banner.text = '两个辉辉合体了！';
+      burst(x, y, '#f0d9a8', 36);
       sfxWin();
     }
   }
@@ -888,7 +898,8 @@
     var out = '';
     for (var i = 1; i <= MAX_LEVEL; i++) {
       var f = FRUITS[i];
-      var d = Math.round(16 + i * 3.4);
+      // 9 级台阶要装得下：最小的 16px，最大的 36px
+      var d = Math.round(13 + i * 2.6);
       var style = 'width:' + d + 'px;height:' + d + 'px;font-size:' + Math.round(d * 0.46) + 'px;';
       if (f.img) {
         // 注意：style 属性用双引号包着，url 里必须用单引号，否则 HTML 会被截断
@@ -907,12 +918,12 @@
     panel.innerHTML =
       '<h1>合成小辉辉</h1>' +
       '<p class="sub">两个一样的水果撞在一起，就合成下一级。<br>' +
-        '一路合上去，最后那个是辉辉。</p>' +
+        '一共九级：爬到第 8 级就是辉辉，第 9 级是两个辉辉合体。</p>' +
       '<div class="ladder">' + ladderHtml() + '</div>' +
       '<ul class="rules">' +
         '<li>拖动（或按 <b>← →</b>）选位置，松手落果；电脑上也可以直接点。</li>' +
         '<li>果子会滚，堆歪了会自己滑下来；同级的碰在一起就合成，连着合有加成。</li>' +
-        '<li>辉辉是最后一颗，跟西瓜一样不会再合，两个只会一起占地方。</li>' +
+        '<li><b>第 8 级就是小辉辉</b>，到这儿就算合成完成；两个辉辉还能再合成第 9 级，那个不再合了。</li>' +
         '<li>水果堆过<b>红线 2 秒</b>就结束——红线不是装饰。</li>' +
       '</ul>' +
       '<button class="btn-main" type="button" data-act="go">开始</button>' +
@@ -936,7 +947,7 @@
   }
 
   function showOver(isNew) {
-    var made = maxLevel >= MAX_LEVEL;
+    var made = maxLevel >= WIN_LEVEL;
     panel.innerHTML =
       '<h1>' + (made ? '合出辉辉了' : '这一局') + '</h1>' +
       '<p class="sub">' + (isNew ? '本机新纪录。' : '再来一局，堆得再高一点。') + '</p>' +
