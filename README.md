@@ -173,8 +173,8 @@ select id, kind, label, active, created_at, used_at
 四首曲子的音符数差不多，所以难度越高越占便宜——这是故意的。
 
 合成小辉辉的等级表在 `assets/games/suika.js` 的 `FRUITS`：
-**九级**，1–8 级各一张 `assets/games/hui/N.jpg`，第 9 级（`hui/9.jpg`）是两个 8 级合体的"超"。
-合到第 8 级就算完成（`WIN_LEVEL = 8`）；第 9 级只是给 8+8 一个去处，它自己不再合（`MAX_LEVEL = 9`）。
+**十二级**，1–12 级各一张 `assets/games/hui/N.jpg`（10–12 级是后来加的三张，其中 11、12 是双人照）。
+合到第 11 级就算完成（`WIN_LEVEL = 11`）；第 12 级只是给 11+11 一个去处，它自己不再合（`MAX_LEVEL = 12`）。
 **要换图**：保持正方形（圆形裁切是运行时做的），改 `FRUITS[i].img` 就行；
 换了图之后数字会自动不画。
 

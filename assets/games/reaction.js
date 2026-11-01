@@ -4,7 +4,7 @@
    25 个数字打乱，从 1 点到 25。计时用 performance.now()，
    比 Date.now() 稳；展示精确到毫秒，但只在收表那一刻定稿。
 
-   点错不罚时，只闪红——这是「练专注」，不是「惩罚手滑」。
+   点错一次计时 +1 秒，同时闪红——练的是「看准了再点」，手滑是有代价的。
    排行榜越大越好，所以上传 60000 − 毫秒。
    ============================================================ */
 (function () {
@@ -20,6 +20,7 @@
   var finished = false;
   var startAt = 0;
   var ticker = 0;
+  var penaltyMs = 0;      // 点错一次 +1 秒
   var best = 0;
   var writable = false;
   var submitted = false;
@@ -60,8 +61,12 @@
     return (ms / 1000).toFixed(digits) + ' s';
   }
 
+  function elapsed() {
+    return Math.max(0, now() - startAt + penaltyMs);
+  }
+
   function tick() {
-    if (timeEl) timeEl.textContent = fmt(now() - startAt, 3);
+    if (timeEl) timeEl.textContent = fmt(elapsed(), 3);
   }
 
   /* ---------- 牌面 ---------- */
@@ -111,7 +116,9 @@
       return;
     }
 
-    // 点错：红一下就好，不加时
+    // 点错：红一下，并且计时 +1 秒
+    penaltyMs += 1000;
+    if (timeEl) timeEl.textContent = fmt(elapsed(), 3);
     if (wrongTimer) { clearTimeout(wrongTimer); wrongTimer = 0; }
     btn.classList.add('is-wrong');
     var g = gen;
@@ -119,13 +126,13 @@
       if (g !== gen) return;
       btn.classList.remove('is-wrong');
     }, 320);
-    setState('点错了，现在要找 ' + next + '。', false);
+    setState('点错了 +1 秒，现在要找 ' + next + '。', false);
   }
 
   function finish() {
     finished = true;
     if (ticker) { clearInterval(ticker); ticker = 0; }
-    var ms = Math.max(1, Math.round(now() - startAt));
+    var ms = Math.max(1, Math.round(elapsed()));
     if (timeEl) timeEl.textContent = fmt(ms, 3);
 
     if (!best || ms < best) {
@@ -166,6 +173,7 @@
     started = false;
     finished = false;
     startAt = 0;
+    penaltyMs = 0;
     submitted = false;
 
     build();
