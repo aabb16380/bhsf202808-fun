@@ -849,6 +849,13 @@
     if (mode !== 'play') return;
     mode = 'pause';
     showPause();
+    // 暂停顺手把当前成绩存一份：关掉页面 / 切走也不会白打
+    if (score > 0) {
+      submitScore(score);
+      setNote(writable
+        ? '这一停先把当前 ' + score + ' 分存一份，接着打按更高的算。'
+        : '没登录，成绩只存在这台设备（本机最高 ' + best + ' 分）。');
+    }
   }
 
   function resumeGame() {
@@ -944,9 +951,11 @@
   function showPause() {
     panel.innerHTML =
       '<h1>歇一下</h1>' +
-      '<p class="sub">现在 ' + score + ' 分，合了 ' + merges + ' 次，最高到第 ' + maxLevel + ' 级。</p>' +
+      '<p class="sub">现在 ' + score + ' 分，合了 ' + merges + ' 次，最高到第 ' + maxLevel + ' 级。<br>' +
+        '这一停会先把成绩存一份，接着打再按更高的算。</p>' +
       '<button class="btn-main" type="button" data-act="resume">继续</button>' +
       '<button class="btn-2nd" type="button" data-act="again">重开一局</button>' +
+      '<p class="note-line" id="suika-note"></p>' +
       '<p class="tip"><a href="index.html">← 回游乐场</a></p>';
     overlay.hidden = false;
   }
