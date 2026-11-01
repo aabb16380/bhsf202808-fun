@@ -17,17 +17,17 @@
 <meta property="og:locale" content="zh_CN">
 <meta name="twitter:card" content="summary">
 
-<link rel="icon" href="assets/favicon.png?v=20261101f8" type="image/png">
-<link rel="apple-touch-icon" href="assets/icon.png?v=20261101f8">
+<link rel="icon" href="assets/favicon.png?v=20261101f9" type="image/png">
+<link rel="apple-touch-icon" href="assets/icon.png?v=20261101f9">
 <script>
-window.B8_BUILD = '20261101f8';
+window.B8_BUILD = '20261101f9';
 // ?t=<时间戳> 透传到每个资源，配合 /test/ 入口绕开缓存
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
-document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101f8' + window.B8_T + '">');
+document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101f9' + window.B8_T + '">');
 </script>
 <script>document.documentElement.classList.add('js');</script>
 </head>
@@ -43,7 +43,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101f8' + w
 <header class="site-header" id="site-header">
   <div class="wrap header-inner">
     <a class="brand" href="#top" aria-label="回到顶部">
-      <img class="brand-mark" src="assets/icon.png?v=20261101f8" alt="" width="30" height="30">
+      <img class="brand-mark" src="assets/icon.png?v=20261101f9" alt="" width="30" height="30">
       <span class="brand-text">
         <span class="brand-name">八班游乐场</span>
         <span class="brand-ver" id="brand-ver">v1.0</span>
@@ -122,7 +122,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101f8' + w
 
       <div class="hero-play" aria-hidden="true">
         <span class="play-ring"></span>
-        <img class="play-logo" src="assets/logo.png?v=20261101f8" alt="" width="200" height="160">
+        <img class="play-logo" src="assets/logo.png?v=20261101f9" alt="" width="200" height="160">
         <span class="play-note">下课<br>十分钟</span>
       </div>
     </div>
@@ -146,8 +146,10 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101f8' + w
                     aria-pressed="false" aria-controls="game-panel-memory">记忆翻牌</button>
             <button class="chip game-tab" type="button" data-game="schulte"
                     aria-pressed="false" aria-controls="game-panel-schulte">专注方格</button>
+            <button class="chip game-tab" type="button" data-game="piano"
+                    aria-pressed="false" aria-controls="game-panel-piano">钢琴辉</button>
           </div>
-          <p class="game-head-note">三个都能重开 · 本机记录</p>
+          <p class="game-head-note">四个都能重开 · 本机记录</p>
         </div>
 
         <div class="game-body">
@@ -305,6 +307,56 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101f8' + w
             <p class="game-note" id="gschulte-note"></p>
           </section>
 
+
+          <!-- ---------- 钢琴辉 ---------- -->
+          <section class="game-panel" id="game-panel-piano" data-game="piano" aria-label="钢琴辉" hidden>
+            <div class="game-hud">
+              <div class="game-stat">
+                <span class="gs-label">分数</span>
+                <span class="gs-val" id="piano-score">0</span>
+              </div>
+              <div class="game-stat">
+                <span class="gs-label">连击</span>
+                <span class="gs-val" id="piano-combo">—</span>
+              </div>
+              <div class="game-stat">
+                <span class="gs-label">本机最高</span>
+                <span class="gs-val" id="piano-best">0</span>
+              </div>
+              <div class="game-stat">
+                <span class="gs-label">剩余</span>
+                <span class="gs-val piano-lives" id="piano-lives">♥♥♥</span>
+              </div>
+              <button class="btn ghost sm" id="piano-start" type="button">开始</button>
+              <div class="gs-state" id="piano-state" role="status" aria-live="polite">点「开始」，接住掉下来的辉辉。</div>
+            </div>
+
+            <div class="game-stage">
+              <div class="game-board">
+                <div class="piano-board" id="piano-board" role="application" aria-label="钢琴辉：四个琴键，接住落下来的辉辉">
+                  <div class="piano-lanes" id="piano-lanes"></div>
+                </div>
+              </div>
+
+              <aside class="game-side">
+                <h3>钢琴辉 <span class="tag">PIANO</span></h3>
+                <p class="game-desc">
+                  辉辉从上面掉下来，落在琴键底线时点中它。四道琴键，越接越快。
+                </p>
+                <ul class="game-facts">
+                  <li>键盘：<b>D F J K</b></li>
+                  <li>手机：直接点那一道</li>
+                  <li>点空或漏掉都扣一颗 ♥</li>
+                  <li>三颗 ♥ 用完就结束</li>
+                </ul>
+              </aside>
+            </div>
+
+            <p class="game-hint">
+              玩法：辉辉碰到琴键底部那块高亮区时点它。连击越长，单次得分越高。
+            </p>
+            <p class="game-note" id="piano-note"></p>
+          </section>
         </div>
       </div>
 
@@ -426,7 +478,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101f8' + w
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101f8' + T;
+  var V = '?v=20261101f9' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
@@ -436,6 +488,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101f8' + w
     ['assets/games/2048.js', 1],
     ['assets/games/memory.js', 1],
     ['assets/games/reaction.js', 1],
+    ['assets/games/piano.js', 1],
     ['assets/photos.js', 1]
   ];
   for (var i = 0; i < list.length; i++) {

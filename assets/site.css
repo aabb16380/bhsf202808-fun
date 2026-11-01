@@ -1172,3 +1172,118 @@
   user-select: none;
   -webkit-user-select: none;
 }
+/* ---------- 7. 钢琴辉 ---------- */
+.piano-board {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 3 / 4;
+  margin: 0 auto;
+  border-radius: 6px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, #1b1a22 0%, #24222c 60%, #2b2833 100%);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+              0 10px 30px -18px rgba(0, 0, 0, 0.7);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.piano-lanes {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.piano-lane {
+  position: relative;
+  overflow: hidden;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.piano-lane:last-child { border-right: 0; }
+
+.piano-lane::after {
+  /* 判定区：底部那条高亮带 */
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 22%;
+  background: linear-gradient(180deg, rgba(255, 214, 150, 0) 0%, rgba(255, 214, 150, 0.10) 55%, rgba(255, 214, 150, 0.20) 100%);
+  border-top: 1px dashed rgba(255, 214, 150, 0.35);
+  pointer-events: none;
+}
+
+.piano-key {
+  position: absolute;
+  left: 50%;
+  bottom: 4%;
+  transform: translateX(-50%);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: rgba(255, 240, 210, 0.45);
+  pointer-events: none;
+}
+
+.piano-tile {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #efe6d2;
+  box-shadow: 0 3px 10px -4px rgba(0, 0, 0, 0.6);
+  will-change: transform;
+  transition: box-shadow 0.1s ease;
+}
+
+.piano-face {
+  position: absolute;
+  inset: 0;
+  background-image: url("games/hui.jpg");
+  background-size: cover;
+  background-position: center 22%;
+  filter: saturate(1.05) contrast(1.03);
+}
+
+.piano-tile.is-zone {
+  box-shadow: 0 0 0 2px rgba(255, 214, 150, 0.85),
+              0 0 22px -4px rgba(255, 196, 110, 0.7);
+}
+
+.piano-tile.is-hit {
+  animation: pianoHit 0.22s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes pianoHit {
+  0% { transform: translateY(var(--y, 0)) scale(1); opacity: 1; }
+  60% { opacity: 1; box-shadow: 0 0 0 3px rgba(255, 214, 150, 0.9); }
+  100% { opacity: 0; }
+}
+
+.piano-tile.is-shake { animation: pianoShake 0.22s ease; }
+
+@keyframes pianoShake {
+  0%, 100% { margin-left: 0; }
+  25% { margin-left: -4px; }
+  75% { margin-left: 4px; }
+}
+
+.piano-lives { color: var(--seal); letter-spacing: 0.1em; }
+
+.piano-board.is-running { cursor: pointer; }
+
+@media (max-width: 560px) {
+  .piano-board { max-width: 100%; aspect-ratio: 2 / 3; }
+}
