@@ -4,21 +4,46 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>钢琴辉 · 八班游乐场</title>
-<meta name="theme-color" content="#fdfbf6">
+<meta name="description" content="钢琴辉：辉辉踩着拍子往下掉，落在判定线的一瞬点中它。四道琴键 D F J K，四首曲子，三个难度。">
+<meta name="theme-color" content="#f8f4e9">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="assets/favicon.png?v=20261101g3" type="image/png">
+<script>
+window.B8_BUILD = '20261101g3';
+window.B8_T = (function () {
+  var m = (location.search || '').match(/[?&]t=([^&]+)/);
+  return m ? '&t=' + encodeURIComponent(m[1]) : '';
+})();
+window.B8_TEST = !!window.B8_T;
+</script>
 <style>
-  /* ---------- 全屏钢琴块：白底 ---------- */
+  /* ============================================================
+     钢琴辉 · 独立全屏页
+     和 .fun 主站同一套纸墨配色，但不加载 styles.css：
+     这个页面只关心一块键盘，公用的版心/页脚都是负担。
+     ============================================================ */
+
   :root {
     --paper: #fdfbf6;
+    --paper-2: #f7f1e3;
     --line: #e6dfd0;
+    --line-2: #d3c7ac;
     --ink: #23211c;
     --ink-2: #5b574d;
-    --ink-3: #8d8779;
-    --seal: #a33228;
-    --gold: #c79a3c;
-    --lane: 4;
+    --ink-3: #918a7b;
+    --seal: #c1522f;
+    --gold: #c08c2c;
+    --jade: #2f6f5e;
+    --indigo: #3d5573;
+    --serif: "Songti SC", "Noto Serif SC", "SimSun", serif;
+    --sans: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --keys-h: 84px;
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  [hidden] { display: none !important; }
 
   html, body {
     margin: 0;
@@ -26,15 +51,16 @@
     overflow: hidden;
     background: var(--paper);
     color: var(--ink);
-    font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    font-family: var(--sans);
     -webkit-user-select: none;
     user-select: none;
     touch-action: none;
+    overscroll-behavior: none;
   }
 
-  #game {
+  #app {
     position: fixed;
-    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     display: flex;
     flex-direction: column;
   }
@@ -44,661 +70,619 @@
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 10px 14px calc(10px + env(safe-area-inset-top, 0px));
+    gap: 12px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
     border-bottom: 1px solid var(--line);
-    background: rgba(253, 251, 246, 0.92);
-    backdrop-filter: blur(4px);
+    background: rgba(253, 251, 246, 0.94);
   }
 
-  .hud-item { display: flex; flex-direction: column; gap: 1px; min-width: 44px; }
+  .hud-stats {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    min-width: 0;
+  }
 
-  .hud-label {
-    font-size: 10px;
-    letter-spacing: 0.12em;
+  .stat { display: flex; flex-direction: column; gap: 1px; min-width: 42px; }
+
+  .stat .k {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
     color: var(--ink-3);
+    line-height: 1;
   }
 
-  .hud-val {
+  .stat b {
+    font-family: var(--mono);
     font-size: 17px;
     font-weight: 700;
+    line-height: 1.15;
     font-variant-numeric: tabular-nums;
-    line-height: 1.1;
   }
 
-  .hud-spacer { flex: 1 1 auto; }
+  .stat b.is-hot { color: var(--seal); }
 
-  .hud-lives { color: var(--seal); font-size: 15px; letter-spacing: 0.12em; }
+  .hud-spacer { flex: 1 1 auto; min-width: 0; }
 
-  .hud-btn {
-    padding: 7px 14px;
+  .lives {
+    font-size: 15px;
+    letter-spacing: 0.16em;
+    color: var(--seal);
+    align-self: center;
+    white-space: nowrap;
+  }
+
+  .hud-tools { display: flex; align-items: center; gap: 6px; }
+
+  .icon-btn {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    font-family: var(--mono);
     font-size: 13px;
-    color: var(--ink);
+    line-height: 1;
+    color: var(--ink-2);
     background: #fff;
     border: 1px solid var(--line);
     border-radius: 999px;
     cursor: pointer;
   }
 
-  .hud-btn:active { transform: translateY(1px); }
+  .icon-btn:active { transform: translateY(1px); }
+  .icon-btn[aria-pressed="false"] { color: var(--ink-3); background: var(--paper-2); }
 
-  .hud-btn.ghost { background: transparent; color: var(--ink-3); }
+  .icon-btn.wide {
+    width: auto;
+    padding: 0 12px;
+    font-family: var(--sans);
+    font-size: 12px;
+  }
 
-  /* ---------- 琴键区 ---------- */
-  .stage {
-    position: relative;
-    flex: 1 1 auto;
+  /* ---------- 进度条 ---------- */
+  .progress {
+    flex: 0 0 auto;
+    height: 3px;
+    background: var(--paper-2);
     overflow: hidden;
   }
 
+  .progress i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, var(--gold), var(--seal));
+    transition: width 0.18s linear;
+  }
+
+  /* ---------- 舞台 ---------- */
+  .stage {
+    position: relative;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: linear-gradient(180deg, #fffefb 0%, var(--paper) 60%, #f8f2e4 100%);
+  }
+
   .lanes {
-    position: absolute;
-    inset: 0;
+    position: relative;
+    flex: 1 1 auto;
     display: grid;
-    grid-template-columns: repeat(var(--lane), 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    min-height: 0;
+    overflow: hidden;
   }
 
   .lane {
     position: relative;
     overflow: hidden;
-    border-right: 1px solid var(--line);
-    background: linear-gradient(180deg, #fffefb 0%, #faf7f0 100%);
+    border-right: 1px solid rgba(35, 33, 28, 0.05);
   }
 
   .lane:last-child { border-right: 0; }
 
-  .lane.ishot { background: linear-gradient(180deg, #fffdf6 0%, #fdf3dd 100%); }
-
-  /* 判定带 */
+  /* 判定带：越靠近底线越亮，告诉玩家"在这里点" */
   .lane::after {
     content: "";
     position: absolute;
     left: 0; right: 0; bottom: 0;
-    height: 20%;
-    background: linear-gradient(180deg, rgba(199,154,60,0) 0%, rgba(199,154,60,0.07) 60%, rgba(199,154,60,0.14) 100%);
-    border-top: 1px solid rgba(199,154,60,0.45);
+    height: 22%;
+    background: linear-gradient(180deg, rgba(192, 140, 44, 0) 0%, rgba(192, 140, 44, 0.07) 62%, rgba(192, 140, 44, 0.15) 100%);
     pointer-events: none;
   }
 
-  .hitline {
+  /* 判定线 = 车道区的底线 */
+  .lanes::after {
+    content: "";
     position: absolute;
-    left: 0; right: 0;
-    bottom: 20%;
+    left: 0; right: 0; bottom: 0;
     height: 2px;
-    background: linear-gradient(90deg, rgba(199,154,60,0) 0%, var(--gold) 18%, var(--gold) 82%, rgba(199,154,60,0) 100%);
-    opacity: 0.75;
-    pointer-events: none;
-  }
-
-  .keyhint {
-    position: absolute;
-    left: 50%;
-    bottom: 5%;
-    transform: translateX(-50%);
-    font-size: 11px;
-    letter-spacing: 0.14em;
-    color: rgba(35, 33, 28, 0.28);
+    background: linear-gradient(90deg, rgba(192, 140, 44, 0) 0%, var(--gold) 14%, var(--gold) 86%, rgba(192, 140, 44, 0) 100%);
+    opacity: 0.8;
     pointer-events: none;
   }
 
   /* ---------- 琴块 ---------- */
   .tile {
     position: absolute;
-    left: 5%;
-    right: 5%;
+    left: 7%;
+    right: 7%;
     top: 0;
     border-radius: 5px;
+    border: 1px solid rgba(35, 33, 28, 0.14);
+    box-shadow: 0 6px 16px -12px rgba(35, 33, 28, 0.7);
+    display: grid;
+    place-items: center;
     overflow: hidden;
-    background: #fff;
-    border: 1px solid rgba(35, 33, 28, 0.10);
-    box-shadow: 0 4px 14px -8px rgba(35, 33, 28, 0.5);
-    will-change: transform;
-    pointer-events: none;
+  }
+
+  .tile .num {
+    font-family: var(--mono);
+    font-size: 21px;
+    font-weight: 700;
+    line-height: 1;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
   }
 
   .tile .face {
     position: absolute;
-    inset: 0;
-    background-image: url("assets/games/hui.jpg");
-    background-size: cover;
-    background-position: center 20%;
-  }
-
-  .tile .note {
-    position: absolute;
-    right: 6px;
-    bottom: 4px;
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    color: rgba(255, 255, 255, 0.9);
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
-  }
-
-  .tile.near {
-    border-color: rgba(199, 154, 60, 0.85);
-    box-shadow: 0 0 0 2px rgba(199, 154, 60, 0.5), 0 6px 20px -8px rgba(199, 154, 60, 0.7);
-  }
-
-  .tile.hit { animation: pop 0.18s ease forwards; }
-
-  @keyframes pop {
-    from { opacity: 1; transform: translateY(var(--y, 0)) scale(1); }
-    to { opacity: 0; transform: translateY(var(--y, 0)) scale(1.06); }
-  }
-
-  .ripple {
-    position: absolute;
-    left: 50%;
-    bottom: 6%;
-    width: 10px;
-    height: 10px;
-    margin-left: -5px;
+    right: 3px;
+    bottom: 3px;
+    width: 17px;
+    height: 17px;
     border-radius: 50%;
-    border: 2px solid rgba(199, 154, 60, 0.85);
-    animation: ripple 0.42s ease-out forwards;
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    background: #fff url("assets/games/hui.jpg") center 22% / cover no-repeat;
+    opacity: 0.92;
+  }
+
+  .tile .glow {
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 45%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0));
     pointer-events: none;
   }
 
-  @keyframes ripple {
-    from { transform: scale(1); opacity: 0.9; }
-    to { transform: scale(9); opacity: 0; }
+  .tile.is-hit { animation: tile-hit 0.2s ease-out forwards; }
+
+  @keyframes tile-hit {
+    from { opacity: 1; transform: translateY(var(--y, 0)) scale(1); }
+    to { opacity: 0; transform: translateY(var(--y, 0)) scale(1.14); }
   }
 
-  /* ---------- 遮罩 ---------- */
-  .overlay {
+  /* 每条道一个色系，眼睛先认颜色再认数字 */
+  .lane[data-lane="0"] .tile { background: linear-gradient(180deg, #cf5c39, #a83f22); }
+  .lane[data-lane="1"] .tile { background: linear-gradient(180deg, #d3a03c, #b07f20); }
+  .lane[data-lane="2"] .tile { background: linear-gradient(180deg, #3d8571, #2a5f50); }
+  .lane[data-lane="3"] .tile { background: linear-gradient(180deg, #4e6a8c, #38506e); }
+
+  /* ---------- 判定字 ---------- */
+  .judge {
     position: absolute;
-    inset: 0;
+    left: 0; right: 0;
+    bottom: var(--keys-h);
+    height: 0;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  .judge-pop {
+    position: absolute;
+    bottom: 10px;
+    transform: translateX(-50%);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    white-space: nowrap;
+    animation: judge-pop 0.52s ease-out forwards;
+  }
+
+  .judge-pop.perfect { color: var(--seal); }
+  .judge-pop.good { color: var(--gold); }
+  .judge-pop.miss { color: var(--ink-3); }
+
+  @keyframes judge-pop {
+    0% { opacity: 0; transform: translate(-50%, 8px) scale(0.92); }
+    22% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -18px) scale(1); }
+  }
+
+  /* ---------- 倒计时 ---------- */
+  .countdown {
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
     display: grid;
     place-items: center;
-    padding: 24px;
-    background: rgba(253, 251, 246, 0.94);
-    backdrop-filter: blur(3px);
-    z-index: 20;
+    pointer-events: none;
+    z-index: 6;
   }
 
-  .overlay[hidden] { display: none; }
+  .countdown span {
+    font-family: var(--mono);
+    font-size: 68px;
+    font-weight: 700;
+    color: rgba(193, 82, 47, 0.86);
+    animation: cd 0.86s ease-out;
+  }
+
+  @keyframes cd {
+    from { opacity: 0; transform: scale(1.5); }
+    28% { opacity: 1; transform: scale(1); }
+    to { opacity: 0.12; transform: scale(0.92); }
+  }
+
+  /* ---------- 键盘 ---------- */
+  .keys {
+    flex: 0 0 auto;
+    height: var(--keys-h);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    padding: 0 5px calc(5px + env(safe-area-inset-bottom, 0px));
+    background: var(--paper);
+    border-top: 1px solid var(--line);
+  }
+
+  .key {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 0 0 12px;
+    border: 1px solid var(--line);
+    border-top: 0;
+    border-radius: 0 0 7px 7px;
+    background: linear-gradient(180deg, #fffefb 0%, #f5efe1 100%);
+    box-shadow: inset 0 -3px 0 rgba(35, 33, 28, 0.06);
+    cursor: pointer;
+  }
+
+  .key .k-letter {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    color: var(--ink-3);
+  }
+
+  .key .k-bar {
+    width: 26px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--line-2);
+  }
+
+  .key[data-lane="0"] .k-bar { background: #cf5c39; }
+  .key[data-lane="1"] .k-bar { background: #d3a03c; }
+  .key[data-lane="2"] .k-bar { background: #3d8571; }
+  .key[data-lane="3"] .k-bar { background: #4e6a8c; }
+
+  .key.is-down {
+    background: linear-gradient(180deg, #fdf1d8 0%, #f6e3b6 100%);
+    box-shadow: inset 0 -1px 0 rgba(35, 33, 28, 0.08);
+    transform: translateY(2px);
+  }
+
+  .key .ring {
+    position: absolute;
+    left: 50%;
+    bottom: 34px;
+    width: 12px;
+    height: 12px;
+    margin-left: -6px;
+    border-radius: 50%;
+    border: 2px solid rgba(192, 140, 44, 0.8);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .key.is-down .ring { animation: ring 0.42s ease-out; }
+
+  @keyframes ring {
+    from { opacity: 0.85; transform: scale(0.6); }
+    to { opacity: 0; transform: scale(3.4); }
+  }
+
+  /* ---------- 遮罩 / 面板 ---------- */
+  .overlay {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(253, 251, 246, 0.95);
+    z-index: 20;
+    overflow: auto;
+  }
 
   .panel {
-    width: min(420px, 100%);
+    width: 100%;
+    max-width: 440px;
+    min-width: 0;
+    max-height: calc(100vh - 32px);
+    overflow: auto;
     text-align: center;
+    padding: 4px 2px;
   }
 
   .panel h1 {
     margin: 0 0 6px;
-    font-size: 26px;
-    letter-spacing: 0.04em;
+    font-family: var(--serif);
+    font-size: 27px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
   }
 
   .panel .sub {
-    margin: 0 0 22px;
-    font-size: 13.5px;
+    margin: 0 0 20px;
+    font-size: 13px;
     line-height: 1.9;
     color: var(--ink-2);
   }
 
-  .panel .btn {
-    display: inline-block;
-    padding: 12px 34px;
-    font-size: 15px;
+  .pick { margin: 0 0 14px; text-align: left; }
+
+  .pick-label {
+    display: block;
+    margin-bottom: 7px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--ink-3);
+  }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .chip {
+    min-height: 38px;
+    padding: 8px 14px;
+    font-family: var(--sans);
+    font-size: 12.5px;
+    color: var(--ink-2);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .chip[aria-pressed="true"] {
+    color: #fff;
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+
+  .chip:active { transform: translateY(1px); }
+
+  .chip small {
+    font-family: var(--mono);
+    font-size: 10px;
+    opacity: 0.62;
+    margin-left: 4px;
+  }
+
+  .btn-main {
+    display: block;
+    width: 100%;
+    margin: 18px 0 0;
+    padding: 14px;
+    font-family: var(--sans);
+    font-size: 15.5px;
+    letter-spacing: 0.04em;
     color: #fff;
     background: var(--seal);
     border: 0;
     border-radius: 999px;
     cursor: pointer;
-    box-shadow: 0 8px 20px -12px rgba(163, 50, 40, 0.8);
+    box-shadow: 0 10px 24px -16px rgba(193, 82, 47, 0.9);
   }
 
-  .panel .btn:active { transform: translateY(1px); }
+  .btn-main:active { transform: translateY(1px); }
 
-  .panel .link {
+  .btn-2nd {
     display: block;
-    margin-top: 18px;
-    font-size: 12.5px;
-    color: var(--ink-3);
-    text-decoration: none;
+    width: 100%;
+    margin: 8px 0 0;
+    padding: 12px;
+    font-family: var(--sans);
+    font-size: 13.5px;
+    color: var(--ink-2);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    cursor: pointer;
   }
 
-  .panel .result {
-    margin: 16px 0 22px;
-    font-size: 15px;
-    line-height: 2;
-  }
-
-  .panel .result b { font-size: 30px; }
+  .btn-2nd:active { transform: translateY(1px); }
 
   .tip {
-    margin-top: 14px;
-    font-size: 12px;
+    margin: 14px 0 0;
+    font-size: 11.5px;
+    line-height: 1.8;
     color: var(--ink-3);
-    line-height: 1.9;
   }
 
-  .unsupported {
-    padding: 20px;
-    font-size: 14px;
-    line-height: 1.9;
+  .tip a { color: var(--ink-2); }
+  .tip b { color: var(--ink-2); font-family: var(--mono); letter-spacing: 0.08em; }
+
+  /* ---------- 结算 ---------- */
+  .result {
+    margin: 4px 0 18px;
+    padding: 14px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+  }
+
+  .result .big {
+    font-family: var(--mono);
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1.05;
+    color: var(--seal);
+  }
+
+  .result .big-unit {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--ink-3);
+    margin-left: 4px;
+  }
+
+  .result .rank-line {
+    margin: 6px 0 12px;
+    font-size: 12.5px;
     color: var(--ink-2);
   }
+
+  .result .rank-line b { font-family: var(--serif); font-size: 15px; }
+
+  .result dl {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+  }
+
+  .result dt {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--ink-3);
+  }
+
+  .result dd {
+    margin: 2px 0 0;
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .result dd.perfect { color: var(--seal); }
+  .result dd.good { color: var(--gold); }
+  .result dd.miss { color: var(--ink-3); }
+
+  .note-line {
+    margin: 12px 0 0;
+    min-height: 17px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--ink-3);
+  }
+
+  .note-line.is-err { color: var(--seal); }
+
+  /* ---------- 窄屏 ---------- */
+  @media (max-width: 480px) {
+    .stat-sm { display: none; }
+    .hud { gap: 8px; padding-left: 10px; padding-right: 10px; }
+    .icon-btn { width: 34px; height: 34px; }
+    .icon-btn.wide { padding: 0 9px; }
+    .panel h1 { font-size: 24px; }
+    .result .big { font-size: 34px; }
+  }
+
+  @media (max-height: 620px) {
+    :root { --keys-h: 68px; }
+    .panel .sub { margin-bottom: 12px; }
+    .pick { margin-bottom: 10px; }
+    .countdown span { font-size: 52px; }
+  }
+
+  /* 站内提示条：auth.js 在跨站手牌失败时会用到 .toast */
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    padding: 10px 18px;
+    font-size: 13px;
+    color: #fff;
+    background: rgba(35, 33, 28, 0.9);
+    border-radius: 999px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 60;
+    pointer-events: none;
+  }
+
+  .toast.show { opacity: 1; }
 </style>
 </head>
-<body>
 
-<div id="game">
-  <div class="hud">
-    <div class="hud-item"><span class="hud-label">SCORE</span><span class="hud-val" id="score">0</span></div>
-    <div class="hud-item"><span class="hud-label">COMBO</span><span class="hud-val" id="combo">—</span></div>
-    <div class="hud-item"><span class="hud-label">BEST</span><span class="hud-val" id="best">0</span></div>
+<body data-site="fun">
+
+<div id="app">
+
+  <header class="hud">
+    <div class="hud-stats">
+      <div class="stat"><span class="k">SCORE</span><b id="hud-score">0</b></div>
+      <div class="stat"><span class="k">COMBO</span><b id="hud-combo">—</b></div>
+      <div class="stat stat-sm"><span class="k">ACC</span><b id="hud-acc">—</b></div>
+      <div class="stat stat-sm"><span class="k">BEST</span><b id="hud-best">0</b></div>
+    </div>
+
     <div class="hud-spacer"></div>
-    <span class="hud-lives" id="lives">♥♥♥</span>
-    <button class="hud-btn" type="button" id="restart">重来</button>
-    <button class="hud-btn ghost" type="button" id="exit">退出</button>
-  </div>
 
-  <div class="stage" id="stage">
-    <div class="lanes" id="lanes"></div>
-    <div class="hitline"></div>
-  </div>
+    <span class="lives" id="hud-lives" aria-label="剩余生命">♥♥♥</span>
 
-  <div class="overlay" id="overlay">
-    <div class="panel" id="panel"></div>
-  </div>
+    <div class="hud-tools">
+      <button class="icon-btn" id="btn-sound" type="button" aria-pressed="true"
+              aria-label="声音开" title="声音">♪</button>
+      <button class="icon-btn" id="btn-pause" type="button" aria-label="暂停" title="暂停">❚❚</button>
+      <button class="icon-btn wide" id="btn-exit" type="button">退出</button>
+    </div>
+  </header>
+
+  <div class="progress"><i id="prog-fill"></i></div>
+
+  <main class="stage" id="stage">
+    <div class="lanes" id="lanes" aria-hidden="true"></div>
+    <div class="judge" id="judge" aria-live="polite"></div>
+
+    <div class="keys" id="keys" aria-label="琴键：D F J K"></div>
+
+    <div class="countdown" id="countdown" hidden aria-hidden="true"><span id="cd-num">3</span></div>
+
+    <div class="overlay" id="overlay">
+      <div class="panel" id="panel"></div>
+    </div>
+  </main>
+
 </div>
+
+<noscript>
+  <p style="padding:24px;font-size:14px;line-height:2">
+    钢琴辉要靠 JavaScript 发声和落键，请打开 JavaScript 再进。
+  </p>
+</noscript>
 
 <script>
 (function () {
-  'use strict';
-
-  var LANES = 4;
-  var LANE_KEYS = ['D', 'F', 'J', 'K'];
-  var KEY_BEST = 'b8.piano.best';
-
-  /* ---------- 曲子：小星星 ----------
-     每个音三个值：[拍位, 道, 频率]
-     拍位按 0.5 拍步进，读起来就是简谱 */
-  var BPM = 116;
-  var BEAT = 60000 / BPM;
-  var TRAVEL = 1500;          // 从顶到底多少毫秒
-
-  var C4 = 261.63, D4 = 293.66, E4 = 329.63, F4 = 349.23, G4 = 392.00, A4 = 440.00;
-
-  var SONG = [
-    // 一闪一闪亮晶晶
-    [0, 0, C4], [1, 0, C4], [2, 0, G4], [3, 0, G4], [4, 0, A4], [5, 0, A4], [6, 0, G4],
-    // 满天都是小星星
-    [8, 1, F4], [9, 1, F4], [10, 1, E4], [11, 1, E4], [12, 1, D4], [13, 1, D4], [14, 1, C4],
-    // 挂在天上放光明
-    [16, 2, G4], [17, 2, G4], [18, 2, F4], [19, 2, F4], [20, 2, E4], [21, 2, E4], [22, 2, D4],
-    // 好像许多小眼睛
-    [24, 3, G4], [25, 3, G4], [26, 3, F4], [27, 3, F4], [28, 3, E4], [29, 3, E4], [30, 3, D4],
-    // 一闪一闪亮晶晶
-    [32, 0, C4], [33, 0, C4], [34, 0, G4], [35, 0, G4], [36, 0, A4], [37, 0, A4], [38, 0, G4],
-    // 满天都是小星星
-    [40, 1, F4], [41, 1, F4], [42, 1, E4], [43, 1, E4], [44, 1, D4], [45, 1, D4], [46, 1, C4]
+  var T = window.B8_T || '';
+  var V = '?v=20261101g3' + T;
+  var list = [
+    ['assets/site-config.js', 0],
+    ['assets/main.js', 1],
+    ['assets/sb.js', 1],
+    ['assets/auth.js', 1],
+    ['assets/games/piano.js', 1]
   ];
-
-  var stage, lanesEl, overlay, panel;
-  var scoreEl, comboEl, bestEl, livesEl;
-
-  var laneEls = [];
-  var tiles = [];
-  var running = false;
-  var ended = false;
-
-  var score = 0, combo = 0, maxCombo = 0, lives = 3, hits = 0;
-  var startAt = 0;
-  var raf = 0;
-  var audio = null;
-  var activeTiles = [];     // 当前在场的块
-
-  function $(id) { return document.getElementById(id); }
-
-  function readBest() {
-    try { return Number(localStorage.getItem(KEY_BEST) || 0) || 0; } catch (e) { return 0; }
+  for (var i = 0; i < list.length; i++) {
+    document.write('<script src="' + list[i][0] + V + '"' + (list[i][1] ? ' defer' : '') + '><\/script>');
   }
-  function saveBest(v) {
-    try { localStorage.setItem(KEY_BEST, String(v)); } catch (e) {}
-  }
-
-  function paintHud() {
-    if (scoreEl) scoreEl.textContent = String(score);
-    if (comboEl) comboEl.textContent = combo > 1 ? ('×' + combo) : '—';
-    if (bestEl) bestEl.textContent = String(readBest());
-    if (livesEl) livesEl.textContent = lives > 0 ? new Array(lives + 1).join('♥') : '—';
-  }
-
-  /* ---------- 声音 ---------- */
-  function ensureAudio() {
-    if (audio) return audio;
-    var AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    audio = new AC();
-    return audio;
-  }
-
-  function playNote(freq) {
-    var ac = ensureAudio();
-    if (!ac) return;
-    if (ac.state === 'suspended') ac.resume();
-
-    var t = ac.currentTime;
-    var osc = ac.createOscillator();
-    var gain = ac.createGain();
-    var osc2 = ac.createOscillator();
-
-    osc.type = 'triangle';
-    osc.frequency.value = freq;
-    osc2.type = 'sine';
-    osc2.frequency.value = freq * 2;
-
-    var g2 = ac.createGain();
-    g2.gain.value = 0.18;
-
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.28, t + 0.012);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
-
-    osc.connect(gain);
-    osc2.connect(g2);
-    g2.connect(gain);
-    gain.connect(ac.destination);
-
-    osc.start(t); osc2.start(t);
-    osc.stop(t + 0.6); osc2.stop(t + 0.6);
-  }
-
-  function playMiss() {
-    var ac = ensureAudio();
-    if (!ac) return;
-    if (ac.state === 'suspended') ac.resume();
-    var t = ac.currentTime;
-    var osc = ac.createOscillator();
-    var gain = ac.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(150, t);
-    osc.frequency.exponentialRampToValueAtTime(70, t + 0.22);
-    gain.gain.setValueAtTime(0.16, t);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
-    osc.connect(gain);
-    gain.connect(ac.destination);
-    osc.start(t); osc.stop(t + 0.28);
-  }
-
-  /* ---------- 棋盘 ---------- */
-  function buildLanes() {
-    lanesEl.innerHTML = '';
-    laneEls = [];
-    for (var i = 0; i < LANES; i++) {
-      var lane = document.createElement('div');
-      lane.className = 'lane';
-      lane.setAttribute('data-lane', String(i));
-      var hint = document.createElement('span');
-      hint.className = 'keyhint';
-      hint.textContent = LANE_KEYS[i];
-      lane.appendChild(hint);
-      lanesEl.appendChild(lane);
-      laneEls.push(lane);
-    }
-  }
-
-  function stageH() { return stage ? stage.clientHeight : 0; }
-
-  function tileH() {
-    return Math.max(64, Math.round(stageH() * 0.17));
-  }
-
-  function makeTile(note) {
-    var h = tileH();
-    var el = document.createElement('div');
-    el.className = 'tile';
-    el.style.height = h + 'px';
-
-    var face = document.createElement('span');
-    face.className = 'face';
-    el.appendChild(face);
-
-    var nm = document.createElement('span');
-    nm.className = 'note';
-    nm.textContent = '♪';
-    el.appendChild(nm);
-
-    laneEls[note.lane].appendChild(el);
-
-    return { el: el, note: note, lane: note.lane, h: h, y: -h, done: false };
-  }
-
-  function clearBoard() {
-    for (var i = 0; i < activeTiles.length; i++) {
-      var t = activeTiles[i];
-      if (t.el && t.el.parentNode) t.el.parentNode.removeChild(t.el);
-    }
-    activeTiles = [];
-    for (var j = 0; j < laneEls.length; j++) laneEls[j].classList.remove('ishot');
-  }
-
-  /* ---------- 主循环 ---------- */
-  var nextNote = 0;
-  var lastTime = 0;
-
-  function loop(now) {
-    if (!running) return;
-    if (!lastTime) lastTime = now;
-    var dt = Math.min(64, now - lastTime);
-    lastTime = now;
-
-    var elapsed = now - startAt;
-    var H = stageH();
-    var lineY = H * 0.8;          // 判定线位置（底部 20% 之上）
-
-    // 生成：按曲子时间倒推，让块正好在拍点到达判定线
-    while (nextNote < SONG.length) {
-      var n = SONG[nextNote];
-      var arriveAt = n[0] * BEAT + TRAVEL;
-      if (arriveAt - TRAVEL <= elapsed + 60) {
-        activeTiles.push(makeTile({ lane: n[1], freq: n[2], t: n[0] * BEAT, spawned: true }));
-        nextNote++;
-      } else break;
-    }
-
-    // 位移
-    for (var i = activeTiles.length - 1; i >= 0; i--) {
-      var t = activeTiles[i];
-      if (t.done) { activeTiles.splice(i, 1); continue; }
-
-      var at = t.note.t;                     // 该到线的时刻
-      var y = (elapsed - (at - TRAVEL)) / TRAVEL * (lineY) - t.h;
-      t.y = y;
-      t.el.style.transform = 'translateY(' + y + 'px)';
-
-      var bottom = y + t.h;
-      if (bottom > lineY - t.h * 0.9) t.el.classList.add('near');
-      else t.el.classList.remove('near');
-
-      // 完全越线 → 漏
-      if (y > lineY + t.h * 0.6) {
-        t.done = true;
-        if (t.el && t.el.parentNode) t.el.parentNode.removeChild(t.el);
-        combo = 0;
-        lives -= 1;
-        paintHud();
-        playMiss();
-        if (lives <= 0) { finish(); return; }
-      }
-    }
-
-    // 曲子弹完了就结束
-    if (nextNote >= SONG.length && activeTiles.length === 0) {
-      finish();
-      return;
-    }
-
-    raf = requestAnimationFrame(loop);
-  }
-
-  /* ---------- 敲 ---------- */
-  function hitLane(lane) {
-    if (!running) return;
-
-    var H = stageH();
-    var lineY = H * 0.8;
-    var best = null;
-
-    for (var i = 0; i < activeTiles.length; i++) {
-      var t = activeTiles[i];
-      if (t.done || t.lane !== lane) continue;
-      var bottom = t.y + t.h;
-      // 判定窗口：块底已经接近判定线
-      if (bottom >= lineY - t.h * 0.55 && t.y <= lineY + t.h * 0.5) {
-        if (!best || t.y > best.y) best = t;
-      }
-    }
-
-    if (best) {
-      best.done = true;
-      best.el.classList.add('hit');
-      (function (el) {
-        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 200);
-      })(best.el);
-
-      combo += 1;
-      hits += 1;
-      maxCombo = Math.max(maxCombo, combo);
-      score += 10 + Math.min(combo, 25) * 2;
-      paintHud();
-      playNote(best.note.freq);
-
-      var lane_el = laneEls[lane];
-      lane_el.classList.add('ishot');
-      var rp = document.createElement('span');
-      rp.className = 'ripple';
-      lane_el.appendChild(rp);
-      setTimeout(function () {
-        if (rp.parentNode) rp.parentNode.removeChild(rp);
-        lane_el.classList.remove('ishot');
-      }, 420);
-    } else {
-      // 该道没块 → 点空
-      combo = 0;
-      score = Math.max(0, score - 5);
-      paintHud();
-      playMiss();
-      lives -= 1;
-      paintHud();
-      if (lives <= 0) finish();
-    }
-  }
-
-  function laneOfX(clientX) {
-    var r = stage.getBoundingClientRect();
-    if (!r.width) return -1;
-    var lane = Math.floor(((clientX - r.left) / r.width) * LANES);
-    if (lane < 0 || lane >= LANES) return -1;
-    return lane;
-  }
-
-  /* ---------- 开始 / 结束 ---------- */
-  function start() {
-    clearBoard();
-    ensureAudio();
-    if (audio && audio.state === 'suspended') audio.resume();
-
-    score = 0; combo = 0; maxCombo = 0; lives = 3; hits = 0;
-    nextNote = 0;
-    lastTime = 0;
-    ended = false;
-    running = true;
-    startAt = performance.now() + 700;   // 留一点准备时间
-
-    paintHud();
-    overlay.hidden = true;
-    raf = requestAnimationFrame(loop);
-  }
-
-  function finish() {
-    if (ended) return;
-    ended = true;
-    running = false;
-    if (raf) { cancelAnimationFrame(raf); raf = 0; }
-    clearBoard();
-
-    var best = readBest();
-    var isNew = score > best;
-    if (isNew) saveBest(score);
-    paintHud();
-
-    panel.innerHTML =
-      '<h1>' + (isNew ? '新纪录' : '这一局') + '</h1>' +
-      '<div class="result">' +
-        '<b>' + score + '</b> 分<br>' +
-        '接住 ' + hits + ' 个 · 最高连击 ×' + maxCombo + '<br>' +
-        '本机最高 ' + readBest() + ' 分' +
-      '</div>' +
-      '<button class="btn" type="button" id="again">再来一次</button>' +
-      '<a class="link" href="index.html">回游乐场</a>' +
-      '<p class="tip">键盘 D F J K，或者直接点四道琴键。漏掉或点空都会扣一颗 ♥。</p>';
-    overlay.hidden = false;
-    document.getElementById('again').onclick = start;
-  }
-
-  function showStart() {
-    panel.innerHTML =
-      '<h1>钢琴辉</h1>' +
-      '<p class="sub">辉辉踩着小星星的拍子往下掉。<br>' +
-        '落到判定线上时点中它，弹出那个音。</p>' +
-      '<button class="btn" type="button" id="go">开始</button>' +
-      '<a class="link" href="index.html">回游乐场</a>' +
-      '<p class="tip">键盘 <b>D F J K</b> · 手机直接点四道琴键<br>' +
-        '三颗 ♥，接住越多分越高</p>';
-    overlay.hidden = false;
-    document.getElementById('go').onclick = start;
-  }
-
-  function init() {
-    stage = $('stage');
-    lanesEl = $('lanes');
-    overlay = $('overlay');
-    panel = $('panel');
-    scoreEl = $('score');
-    comboEl = $('combo');
-    bestEl = $('best');
-    livesEl = $('lives');
-
-    buildLanes();
-    paintHud();
-
-    // 点击 / 触摸
-    stage.addEventListener('pointerdown', function (ev) {
-      if (!running) return;
-      ev.preventDefault();
-      var lane = laneOfX(ev.clientX);
-      if (lane >= 0) hitLane(lane);
-    }, { passive: false });
-
-    // 键盘
-    document.addEventListener('keydown', function (ev) {
-      var k = String(ev.key || '').toUpperCase();
-      if (!running) {
-        if (k === ' ' || k === 'ENTER') {
-          if (!overlay.hidden) { ev.preventDefault(); start(); }
-        }
-        return;
-      }
-      var idx = LANE_KEYS.indexOf(k);
-      if (idx >= 0) { ev.preventDefault(); hitLane(idx); }
-    });
-
-    $('restart').addEventListener('click', function () { if (running) finish(); else start(); });
-    $('exit').addEventListener('click', function () { location.href = 'index.html'; });
-
-    window.addEventListener('resize', function () {
-      // 判定线跟着变，块的位置在下一帧自动按新高度重算
-    });
-
-    showStart();
-  }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
 })();
 </script>
+
 </body>
 </html>

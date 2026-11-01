@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>合成小辉辉 · 八班游乐场</title>
+<meta name="description" content="合成小辉辉：两个一样的水果撞在一起就合成下一级，一路合到辉辉。八班游乐场的小游戏。">
+<meta name="theme-color" content="#f8f4e9">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="assets/favicon.png?v=20261101g3" type="image/png">
+<script>
+window.B8_BUILD = '20261101g3';
+window.B8_T = (function () {
+  var m = (location.search || '').match(/[?&]t=([^&]+)/);
+  return m ? '&t=' + encodeURIComponent(m[1]) : '';
+})();
+window.B8_TEST = !!window.B8_T;
+</script>
+<style>
+  /* ============================================================
+     合成小辉辉 · 独立全屏页
+     一块画布 + 一条记分栏。画布尺寸由 JS 按 2:3 算，物理坐标
+     固定 600×900，缩放只影响显示，不影响手感。
+     ============================================================ */
+
+  :root {
+    --paper: #fdfbf6;
+    --paper-2: #f7f1e3;
+    --line: #e6dfd0;
+    --line-2: #d3c7ac;
+    --ink: #23211c;
+    --ink-2: #5b574d;
+    --ink-3: #918a7b;
+    --seal: #c1522f;
+    --gold: #c08c2c;
+    --jade: #2f6f5e;
+    --serif: "Songti SC", "Noto Serif SC", "SimSun", serif;
+    --sans: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  [hidden] { display: none !important; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;
+    overscroll-behavior: none;
+  }
+
+  #app {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- 记分栏 ---------- */
+  .hud {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(253, 251, 246, 0.94);
+  }
+
+  .stat { display: flex; flex-direction: column; gap: 1px; min-width: 44px; }
+
+  .stat .k {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--ink-3);
+    line-height: 1;
+  }
+
+  .stat b {
+    font-family: var(--mono);
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hud-spacer { flex: 1 1 auto; min-width: 0; }
+
+  .next {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .next .k {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--ink-3);
+  }
+
+  .next-ball {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    background: #e9b949;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px -2px rgba(35, 33, 28, 0.4);
+  }
+
+  .icon-btn {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1;
+    color: var(--ink-2);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .icon-btn:active { transform: translateY(1px); }
+
+  .icon-btn.wide {
+    width: auto;
+    padding: 0 12px;
+    font-family: var(--sans);
+    font-size: 12px;
+  }
+
+  .icon-btn[aria-pressed="false"] { color: var(--ink-3); background: var(--paper-2); }
+
+  /* ---------- 画布 ---------- */
+  .board-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    min-height: 0;
+  }
+
+  #board {
+    display: block;
+    border-radius: 12px;
+    background: #fffefb;
+    box-shadow: 0 1px 0 var(--line), 0 18px 40px -30px rgba(35, 33, 28, 0.5);
+    touch-action: none;
+    cursor: crosshair;
+  }
+
+  #board.is-danger {
+    box-shadow: 0 0 0 2px rgba(193, 82, 47, 0.45), 0 18px 40px -30px rgba(193, 82, 47, 0.6);
+  }
+
+  /* ---------- 遮罩 / 面板 ---------- */
+  .overlay {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(253, 251, 246, 0.95);
+    z-index: 20;
+    overflow: auto;
+  }
+
+  .panel {
+    width: 100%;
+    max-width: 430px;
+    min-width: 0;
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    text-align: center;
+    padding: 4px 2px;
+  }
+
+  .panel h1 {
+    margin: 0 0 6px;
+    font-family: var(--serif);
+    font-size: 27px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .panel .sub {
+    margin: 0 0 18px;
+    font-size: 13px;
+    line-height: 1.9;
+    color: var(--ink-2);
+  }
+
+  .ladder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin: 0 0 16px;
+    padding: 12px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    flex-wrap: wrap;
+  }
+
+  .ladder .arrow { color: var(--ink-3); font-size: 10px; }
+
+  .ladder .dot {
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    font-family: var(--mono);
+    font-weight: 700;
+    color: #fff;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px -1px rgba(35, 33, 28, 0.35);
+  }
+
+  .rules {
+    margin: 0 0 18px;
+    padding: 0;
+    list-style: none;
+    text-align: left;
+  }
+
+  .rules li {
+    position: relative;
+    padding-left: 16px;
+    margin: 0 0 8px;
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: var(--ink-2);
+  }
+
+  .rules li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 8px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--seal);
+    opacity: 0.55;
+  }
+
+  .rules b { color: var(--ink); }
+
+  .btn-main {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 14px;
+    font-family: var(--sans);
+    font-size: 15.5px;
+    letter-spacing: 0.04em;
+    color: #fff;
+    background: var(--seal);
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 10px 24px -16px rgba(193, 82, 47, 0.9);
+  }
+
+  .btn-main:active { transform: translateY(1px); }
+
+  .btn-2nd {
+    display: block;
+    width: 100%;
+    margin: 8px 0 0;
+    padding: 12px;
+    font-family: var(--sans);
+    font-size: 13.5px;
+    color: var(--ink-2);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .btn-2nd:active { transform: translateY(1px); }
+
+  .tip {
+    margin: 14px 0 0;
+    font-size: 11.5px;
+    line-height: 1.8;
+    color: var(--ink-3);
+  }
+
+  .tip a { color: var(--ink-2); }
+  .tip b { color: var(--ink-2); font-family: var(--mono); letter-spacing: 0.06em; }
+
+  /* ---------- 结算 ---------- */
+  .result {
+    margin: 0 0 16px;
+    padding: 14px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+  }
+
+  .result .big {
+    font-family: var(--mono);
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1.05;
+    color: var(--seal);
+  }
+
+  .result .big-unit {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--ink-3);
+    margin-left: 4px;
+  }
+
+  .result .rank-line {
+    margin: 6px 0 12px;
+    font-size: 12.5px;
+    color: var(--ink-2);
+  }
+
+  .result .rank-line b { font-family: var(--serif); font-size: 15px; }
+
+  .result dl {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+  }
+
+  .result dt {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--ink-3);
+  }
+
+  .result dd {
+    margin: 2px 0 0;
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .note-line {
+    margin: 12px 0 0;
+    min-height: 17px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--ink-3);
+  }
+
+  .note-line.is-err { color: var(--seal); }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    padding: 10px 18px;
+    font-size: 13px;
+    color: #fff;
+    background: rgba(35, 33, 28, 0.9);
+    border-radius: 999px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 60;
+    pointer-events: none;
+  }
+
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 480px) {
+    .hud { gap: 8px; padding-left: 10px; padding-right: 10px; }
+    .stat { min-width: 38px; }
+    .stat b { font-size: 15px; }
+    .icon-btn { width: 34px; height: 34px; }
+    .icon-btn.wide { padding: 0 9px; }
+    .panel h1 { font-size: 24px; }
+    .result .big { font-size: 34px; }
+  }
+
+  @media (max-height: 620px) {
+    .panel .sub { margin-bottom: 12px; }
+    .rules { margin-bottom: 12px; }
+  }
+</style>
+</head>
+
+<body data-site="fun">
+
+<div id="app">
+
+  <header class="hud">
+    <div class="stat"><span class="k">SCORE</span><b id="hud-score">0</b></div>
+    <div class="stat"><span class="k">BEST</span><b id="hud-best">0</b></div>
+    <div class="hud-spacer"></div>
+    <div class="next">
+      <span class="k">NEXT</span>
+      <span class="next-ball" id="next-ball">1</span>
+    </div>
+    <button class="icon-btn" id="btn-sound" type="button" aria-pressed="true"
+            aria-label="声音开" title="声音">♪</button>
+    <button class="icon-btn" id="btn-pause" type="button" aria-label="暂停" title="暂停">❚❚</button>
+    <button class="icon-btn wide" id="btn-exit" type="button">退出</button>
+  </header>
+
+  <main class="board-wrap" id="board-wrap">
+    <canvas id="board" aria-label="合成小辉辉的场地"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="panel" id="panel"></div>
+    </div>
+  </main>
+
+</div>
+
+<noscript>
+  <p style="padding:24px;font-size:14px;line-height:2">
+    合成小辉辉要靠 JavaScript 跑物理，请打开 JavaScript 再进。
+  </p>
+</noscript>
+
+<script>
+(function () {
+  var T = window.B8_T || '';
+  var V = '?v=20261101g3' + T;
+  var list = [
+    ['assets/site-config.js', 0],
+    ['assets/main.js', 1],
+    ['assets/sb.js', 1],
+    ['assets/auth.js', 1],
+    ['assets/games/suika.js', 1]
+  ];
+  for (var i = 0; i < list.length; i++) {
+    document.write('<script src="' + list[i][0] + V + '"' + (list[i][1] ? ' defer' : '') + '><\/script>');
+  }
+})();
+</script>
+
+</body>
+</html>
