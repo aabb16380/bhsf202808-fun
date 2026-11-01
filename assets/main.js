@@ -144,6 +144,36 @@
     });
   }
 
+  /* ---------- 把「主导航」和「⋯ 菜单」合成一个 ----------
+     页头只留一个 ⋯ 按钮：站点内导航、跨站链接、日/夜、管理入口、
+     调试入口全在同一个面板里。原来的 ▤ 抽屉不再出现。 */
+  function initMergeMenus() {
+    var nav = B8.qs('#nav');
+    var menu = B8.qs('#more-menu');
+    if (!nav || !menu) return;
+
+    var group = document.createElement('div');
+    group.className = 'menu-group';
+
+    var links = B8.qsa('a', nav);
+    links.forEach(function (a) {
+      var copy = document.createElement('a');
+      copy.href = a.getAttribute('href');
+      copy.textContent = a.textContent;
+      var cls = a.getAttribute('class');
+      if (cls) copy.className = cls;
+      group.appendChild(copy);
+    });
+
+    if (group.childNodes.length) {
+      menu.insertBefore(group, menu.firstChild);
+      var sep = document.createElement('span');
+      sep.className = 'menu-sep';
+      menu.insertBefore(sep, group.nextSibling);
+    }
+
+    document.body.classList.add('menu-merged');
+  }
   /* ---------- 入场动画 ---------- */
   function initReveal() {
     var items = B8.qsa('.reveal');
@@ -242,6 +272,7 @@
   /* ---------- 启动 ---------- */
   function boot() {
     initNav();
+    initMergeMenus();
     initMore();
     initReveal();
     initYear();

@@ -1268,6 +1268,25 @@ body[data-site="site"][data-mode="night"] .gate-seal {
 .console-temp { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:10px 0 14px; padding:10px 12px; font-size:13px; color:var(--ink-2); background:var(--jade-soft); border:1px dashed color-mix(in srgb, var(--jade) 45%, transparent); border-radius:var(--radius); }
 .console-temp code { padding:2px 8px; font-family:var(--mono); font-size:15px; letter-spacing:0.08em; color:var(--ink); background:var(--card); border-radius:3px; }
 
+/* ---------- 菜单合并：页头只留一个 ⋯ ---------- */
+body.menu-merged .nav,
+body.menu-merged .nav-toggle { display: none !important; }
+
+.more-menu { max-height: min(72vh, 560px); overflow-y: auto; }
+
+.menu-group { display: grid; gap: 2px; }
+
+.menu-group a {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.menu-group a:hover { background: var(--card-2); color: var(--ink); }
 
 /* ============================================================
    .fun 专用样式（在 _shared/base.css 基础上叠加）
