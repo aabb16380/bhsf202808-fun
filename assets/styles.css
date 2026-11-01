@@ -1156,6 +1156,45 @@ body[data-site="site"][data-mode="night"] .gate-seal {
   margin: 0 auto 16px;
   filter: drop-shadow(0 10px 22px rgba(40, 70, 120, 0.18));
 }
+/* ---------- 页头「更多」菜单 ---------- */
+.more-wrap { position: relative; }
+
+.more-btn { font-size: 18px; line-height: 1; }
+
+.more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 130;
+  display: grid;
+  gap: 2px;
+  min-width: 172px;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+}
+
+.more-menu a,
+.more-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 14px;
+  text-align: left;
+  color: var(--ink-2);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.more-menu a:hover,
+.more-menu button:hover { background: var(--paper-2); color: var(--ink); }
+
+.more-menu .menu-sep { height: 1px; margin: 4px 8px; background: var(--line); }
 
 /* ============================================================
    .fun 专用样式（在 _shared/base.css 基础上叠加）

@@ -9,7 +9,7 @@ window.B8_CONFIG = {
     name: '八班游乐场',
     domain: 'bhsf202808.fun',
     github: 'aabb16380',
-    version: 'v2.1'
+    version: 'v2.2'
   },
 
   supabase: {

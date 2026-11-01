@@ -173,6 +173,39 @@
     }, 1200);
   }
 
+  /* ---------- 页头「更多」菜单 ---------- */
+  function initMore() {
+    var btn = B8.qs('#more-menu-btn');
+    var menu = B8.qs('#more-menu');
+    if (!btn || !menu) return;
+
+    function close() {
+      menu.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+
+    B8.on(btn, 'click', function (e) {
+      e.stopPropagation();
+      var willOpen = menu.hidden;
+      menu.hidden = !willOpen;
+      btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+
+    // 点菜单外面 / 按 Esc 收起
+    B8.on(document, 'click', function (e) {
+      if (menu.hidden) return;
+      if (menu.contains(e.target) || e.target === btn) return;
+      close();
+    });
+    B8.on(document, 'keydown', function (e) {
+      if (e.key === 'Escape') close();
+    });
+
+    B8.qsa('a, button', menu).forEach(function (el) {
+      B8.on(el, 'click', close);
+    });
+  }
+
   /* ---------- 年份 ---------- */
   function initYear() {
     var y = B8.qs('#year');
@@ -209,6 +242,7 @@
   /* ---------- 启动 ---------- */
   function boot() {
     initNav();
+    initMore();
     initReveal();
     initYear();
     initBuild();
