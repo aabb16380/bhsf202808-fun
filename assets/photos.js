@@ -252,6 +252,60 @@
      合影墙
      ============================================================ */
 
+  /**
+   * 排序以客户端为准：
+   *   评分 → 评分人数 → 点赞数
+   *   点赞 → 评分 → 评分人数
+   * 平手时再按时间新到旧兜底，保证每次刷新顺序都一样。
+   * 为什么不放 SQL 里：照片墙最多 200 张，本地重排一次是零成本的；
+   * 真要把 ORDER BY 写进 b8_photos_list 也行，但要大家重跑一遍 SQL。
+   */
+  function sortPhotos(list) {
+    var arr = list.slice();
+
+    function n(v) { return Number(v) || 0; }
+    function byTime(a, b) {
+      return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+    }
+
+    if (curSort === 'new') {
+      arr.sort(byTime);
+      return arr;
+    }
+
+    if (curSort === 'likes') {
+      arr.sort(function (a, b) {
+        return (n(b.likes) - n(a.likes)) ||
+               (n(b.avg) - n(a.avg)) ||
+               (n(b.ratingCount) - n(a.ratingCount)) ||
+               byTime(a, b);
+      });
+      return arr;
+    }
+
+    if (curSort === 'stars') {
+      arr.sort(function (a, b) {
+        return (n(b.avg) - n(a.avg)) ||
+               (n(b.ratingCount) - n(a.ratingCount)) ||
+               (n(b.likes) - n(a.likes)) ||
+               byTime(a, b);
+      });
+      return arr;
+    }
+
+    // best：平均星级 × 2 + ln(1 + 点赞)，和原来 SQL 里的算法一致
+    arr.sort(function (a, b) {
+      var sa = n(a.avg) * 2 + Math.log(1 + n(a.likes));
+      var sb = n(b.avg) * 2 + Math.log(1 + n(b.likes));
+      return (sb - sa) ||
+             (n(b.avg) - n(a.avg)) ||
+             (n(b.ratingCount) - n(a.ratingCount)) ||
+             (n(b.likes) - n(a.likes)) ||
+             byTime(a, b);
+    });
+    return arr;
+  }
+
   function normalize(rows) {
     if (!Array.isArray(rows)) return [];
     return rows.map(function (r) {
@@ -282,7 +336,7 @@
     setStatus('');
 
     if (!writable) {
-      photos = samplePhotos();
+      photos = sortPhotos(samplePhotos());
       paintPhotos(g);
       return;
     }
@@ -296,7 +350,7 @@
     })
       .then(function (rows) {
         if (g !== renderGen) return;
-        photos = normalize(rows);
+        photos = sortPhotos(normalize(rows));
         setStatus('');
         paintPhotos(g);
       })
