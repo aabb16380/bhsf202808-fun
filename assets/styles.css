@@ -1411,7 +1411,9 @@ body.menu-merged .nav-toggle { display: none !important; }
 
 /* ---------- 展开后的列表改成框内滑动 ---------- */
 .scroll-box {
-  max-height: 68vh;
+  /* 展开后给足高度：留出页头 + 一点的边距，剩下的全给它 */
+  max-height: calc(100vh - 180px);
+  min-height: 360px;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -1420,7 +1422,10 @@ body.menu-merged .nav-toggle { display: none !important; }
 }
 
 @media (max-width: 860px) {
-  .scroll-box { max-height: 62vh; }
+  .scroll-box {
+    max-height: calc(100dvh - 150px);
+    min-height: 300px;
+  }
 }
 
 /* ============================================================
