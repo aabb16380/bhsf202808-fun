@@ -1,0 +1,1014 @@
+/* ============================================================
+   .fun 专用样式（在 _shared/base.css 基础上叠加）
+   ------------------------------------------------------------
+   主题由 body[data-site="fun"] 提供：赭石橙 + 青。
+   这里只做「站点性格」：游戏面板像一张记分纸、合影墙像相册、
+   排行榜像值日表。原则仍然是纸 · 墨 · 印，不加渐变发光。
+   ============================================================ */
+
+/* ---------- 0. 共用件没覆盖到的小件 ----------
+   base.css 现在已经有 .build-test / .build-banner 了，这里不再重复定义；
+   只有 .gate-hint 还没有样式（auth.js 会往里写「本站还没接数据库」），补一份。 */
+
+/* ---------- 1. 登录门没开时的门后内容 ----------
+   门是固定定位的整屏纸色，本来就看不见后面；这里再模糊一层，
+   是为了「万一门没画出来 / 门正在淡出」时不会一眼看光，
+   顺便让门开的那一下有个柔和的过渡。 */
+#main {
+  transition: filter 0.42s ease, opacity 0.42s ease;
+}
+
+html.js body:not(.authed) #main {
+  filter: blur(4px);
+  opacity: 0.45;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 登录门里的提示块（auth.js 会往里塞 HTML） */
+.gate-hint {
+  margin-top: 14px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.85;
+  text-align: left;
+  color: var(--ink-2);
+  background: var(--paper-2);
+  border: 1px dashed var(--line-2);
+  border-radius: 3px;
+}
+
+.gate-hint code {
+  padding: 1px 4px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow-wrap: anywhere;
+}
+
+/* 输入框禁用态（预览模式下「配一句话」会锁住） */
+.input[disabled],
+.textarea[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 小屏时门可能比视口高（比如键盘弹起），允许门自己滚 */
+.gate { overflow-y: auto; }
+
+/* ---------- 2. 页头小件 ---------- */
+#fun-logout {
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+}
+
+/* base.css 里 .icon-btn / .nav-toggle 是 36px，手机上点着偏小，抬到 44 */
+.nav-toggle {
+  width: 44px;
+  height: 44px;
+}
+
+.mode-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+/* ---------- 3. 首屏：印章 + 虚线圆 ---------- */
+.hero-inner { position: relative; }
+
+.hero-play {
+  position: absolute;
+  top: 16px;
+  right: 10px;
+  width: 216px;
+  height: 216px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.play-ring {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border: 1px dashed var(--line-2);
+  border-radius: 50%;
+}
+
+.play-seal {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  background: var(--seal);
+  color: #fff;
+  font-family: var(--serif);
+  font-size: 48px;
+  line-height: 1;
+  border-radius: 4px;
+  transform: rotate(-4deg);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.26), 0 16px 34px -20px rgba(193, 82, 47, 0.9);
+}
+
+.play-note {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.7;
+  letter-spacing: 0.2em;
+  text-align: center;
+  color: var(--ink-3);
+  background: var(--paper);
+}
+
+/* 首屏里给三种游戏留一行小票根，比纯文字多一点「游乐场」味 */
+.hero-tickets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.ticket {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--ink-2);
+  background: var(--card);
+  border: 1px dashed var(--line-2);
+  border-radius: 2px;
+}
+
+.ticket:nth-child(2) { transform: rotate(1.2deg); }
+.ticket:nth-child(1) { transform: rotate(-1.5deg); }
+.ticket:nth-child(3) { transform: rotate(0.8deg); }
+
+.ticket b {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+
+.ticket span { color: var(--ink-3); }
+
+/* ---------- 4. 游戏卡片外壳 ---------- */
+.game-card {
+  overflow: hidden;
+}
+
+.game-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.game-tabs { gap: 8px; }
+
+/* 游戏 tab 要能一只手指点中：撑到 44px */
+.game-tab {
+  min-height: 44px;
+  padding: 10px 18px;
+  font-size: 13.5px;
+  font-family: var(--serif);
+  letter-spacing: 0.04em;
+}
+
+.game-head-note {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+
+.game-body { padding: 24px 24px 20px; }
+
+.game-panel[hidden] { display: none !important; }
+
+.game-hud {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: stretch;
+  margin-bottom: 18px;
+}
+
+.game-stat {
+  min-width: 0;
+  padding: 8px 12px 9px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+
+.gs-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+}
+
+.gs-val {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.gs-val.is-record { color: var(--seal); }
+
+.gs-state {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+#g2048-state, #gmemory-state, #gschulte-state {
+  grid-column: 1 / -1;
+  padding: 0 2px;
+  min-height: 1.5em;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+#g2048-state.is-good, #gmemory-state.is-good, #gschulte-state.is-good { color: var(--jade); }
+
+.game-hud .btn {
+  align-self: center;
+  min-height: 44px;
+  padding: 10px 18px;
+}
+
+.game-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 30px;
+  align-items: start;
+}
+
+.game-board {
+  min-width: 0;
+  width: 100%;
+  max-width: 452px;
+  margin-inline: auto;
+}
+
+.game-side {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  background: var(--card);
+  border: 1px dashed var(--line-2);
+  border-radius: 3px;
+}
+
+.game-side h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 1.15rem;
+  letter-spacing: 0.03em;
+}
+
+.game-desc {
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: var(--ink-2);
+}
+
+.game-facts {
+  display: grid;
+  gap: 7px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.game-facts li {
+  position: relative;
+  padding-left: 14px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+.game-facts li::before {
+  content: "·";
+  position: absolute;
+  left: 2px;
+  top: 0;
+  color: var(--seal);
+  font-weight: 700;
+}
+
+.game-hint {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+.game-hint b { color: var(--ink-2); font-weight: 600; }
+
+.game-note {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.75;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+.game-note.err { color: var(--seal); }
+
+/* ---------- 5. 2048 ---------- */
+.b2048 {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  padding: 8px;
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  touch-action: none;
+  -ms-touch-action: none;
+  outline-offset: 3px;
+}
+
+.b2048-grid,
+.b2048-tiles {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+}
+
+.b2048-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.b2048-cell {
+  background: color-mix(in srgb, var(--paper) 62%, transparent);
+  border-radius: 3px;
+}
+
+.b2048-tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 25%;
+  height: 25%;
+  padding: 4px;
+  transition: transform 0.11s ease;
+  will-change: transform;
+}
+
+.b2048-tile.is-dying {
+  z-index: 3;
+  pointer-events: none;
+}
+
+.b2048-tile.is-gone { display: none; }
+
+.b2048-in {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 3px;
+  font-family: var(--serif);
+  font-size: clamp(19px, 4.4vw, 34px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  background: #f3ecdb;
+  box-shadow: inset 0 0 0 1px rgba(25, 23, 19, 0.06);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.b2048-in.d3 { font-size: clamp(16px, 3.6vw, 27px); }
+.b2048-in.d4 { font-size: clamp(13px, 3vw, 22px); }
+
+.b2048-tile.is-new .b2048-in { animation: tileIn 0.16s ease; }
+.b2048-tile.is-merged .b2048-in { animation: tilePop 0.18s ease; }
+
+@keyframes tileIn {
+  from { transform: scale(0.55); opacity: 0.4; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes tilePop {
+  0% { transform: scale(1); }
+  55% { transform: scale(1.14); }
+  100% { transform: scale(1); }
+}
+
+/* 色阶：纸 → 赭石 → 青，分数越高越深 */
+.b2048-in.v4 { background: #eee0c2; }
+.b2048-in.v8 { background: #ebcf9b; }
+.b2048-in.v16 { background: #e3b878; }
+.b2048-in.v32 { background: #d99c58; color: #fffdf7; }
+.b2048-in.v64 { background: #cf8043; color: #fffdf7; }
+.b2048-in.v128 { background: #c85f33; color: #fffdf7; }
+.b2048-in.v256 { background: #b64a28; color: #fffdf7; }
+.b2048-in.v512 { background: #9c3a1e; color: #fffdf7; }
+.b2048-in.v1024 { background: #2f6f5e; color: #fffdf7; }
+.b2048-in.v2048 { background: #1d4f43; color: #fffdf7; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.28); }
+.b2048-in.vbig { background: #16332c; color: #f0d6a4; box-shadow: inset 0 0 0 2px rgba(240, 214, 164, 0.4); }
+
+.b2048.is-over { background: color-mix(in srgb, var(--seal-soft) 60%, var(--paper-2)); }
+
+/* ---------- 6. 记忆翻牌 ---------- */
+.mem-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mem-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  perspective: 700px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mem-inner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: block;
+  transform-style: preserve-3d;
+  transition: transform 0.36s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.mem-card.is-flip .mem-inner { transform: rotateY(180deg); }
+
+.mem-face {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 3px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.mem-back {
+  background: var(--seal);
+  color: rgba(255, 255, 255, 0.82);
+  font-family: var(--serif);
+  font-size: clamp(20px, 5vw, 34px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.mem-back::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  bottom: 5px;
+  left: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+}
+
+.mem-front {
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  transform: rotateY(180deg);
+  font-family: var(--serif);
+  font-size: clamp(22px, 5.6vw, 38px);
+  line-height: 1;
+  color: var(--ink);
+}
+
+.mem-card:hover .mem-back { background: var(--seal-2); }
+
+.mem-card.is-matched .mem-front {
+  color: var(--jade);
+  background: var(--jade-soft);
+  border-color: color-mix(in srgb, var(--jade) 42%, var(--line));
+}
+
+.mem-card.is-matched { cursor: default; }
+
+.mem-card:disabled { cursor: default; }
+
+/* ---------- 7. 专注方格 ---------- */
+.schulte {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.schulte-cell {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: clamp(15px, 3.6vw, 20px);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.schulte-cell:hover { border-color: var(--ink-2); }
+
+.schulte-cell.is-done {
+  color: var(--jade);
+  background: var(--jade-soft);
+  border-color: color-mix(in srgb, var(--jade) 38%, var(--line));
+  cursor: default;
+}
+
+.schulte-cell.is-wrong {
+  color: #fff;
+  background: var(--seal);
+  border-color: var(--seal);
+  animation: wrongShake 0.28s ease;
+}
+
+@keyframes wrongShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  65% { transform: translateX(2px); }
+}
+
+/* ---------- 8. 合影墙 ---------- */
+.photo-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+  padding: 18px 20px;
+  margin-bottom: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: var(--shadow-1);
+}
+
+.photo-tools-side {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.photo-tools .btn { min-height: 44px; }
+
+.photo-tools .form-status { min-height: 1.3em; text-align: right; }
+
+.photo-note { margin-bottom: 24px; }
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.photo-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: var(--shadow-1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.photo-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+  border-color: var(--line-2);
+}
+
+.photo-open {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: var(--paper-2);
+  border: 0;
+  cursor: zoom-in;
+}
+
+.photo-open img {
+  width: 100%;
+  /* 必须写 height:auto：img 上有 width/height 属性（防 CLS），
+     不覆盖的话浏览器会拿 600px 当实际高度，4:3 就被拉开并裁掉了 */
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.photo-card:hover .photo-open img { transform: scale(1.025); }
+
+.photo-flag {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+}
+
+.photo-body {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px 10px;
+}
+
+.photo-cap {
+  font-family: var(--serif);
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.photo-cap.is-empty { color: var(--ink-3); }
+
+.photo-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+
+.photo-meta .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--line-2); }
+
+.photo-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--line);
+}
+
+.photo-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 8px;
+  margin-left: -8px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.photo-act:hover { color: var(--seal); background: var(--seal-soft); }
+.photo-act[disabled] { opacity: 0.4; cursor: not-allowed; background: none; }
+.photo-act.is-liked { color: var(--seal); }
+.photo-act .act-heart { font-size: 14px; line-height: 1; }
+
+.photo-del { color: var(--ink-3); }
+.photo-del:hover { color: var(--seal); }
+
+.photo-empty,
+.rank-empty {
+  padding: 34px 0;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+
+/* ---------- 9. 排行榜 ---------- */
+.rank-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.rank-tab { min-height: 44px; padding: 10px 20px; }
+
+.rank-list {
+  border-top: 1px solid var(--line);
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 104px 88px;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.rank-no {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+
+.rank-row.is-podium .rank-no {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+  color: #fff;
+  background: var(--ink-3);
+  border-radius: 50%;
+}
+
+.rank-row.is-podium:nth-child(1) .rank-no { background: var(--seal); }
+.rank-row.is-podium:nth-child(2) .rank-no { background: var(--jade); }
+.rank-row.is-podium:nth-child(3) .rank-no { background: var(--gold); }
+
+.rank-nick {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--serif);
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.rank-nick .nick-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-nick .tag { flex: 0 0 auto; }
+
+.rank-score {
+  font-family: var(--mono);
+  font-size: 14.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.rank-unit {
+  margin-left: 3px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+.rank-date {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-align: right;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.rank-note {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.85;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 10. 「数据库还没接」提示 ----------
+   三个板块共用：一行小字，不喧宾夺主，但要让人知道现在看到的是示例。 */
+.db-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 22px;
+  padding: 11px 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.85;
+  letter-spacing: 0.01em;
+  color: var(--ink-2);
+  background: color-mix(in srgb, var(--paper-2) 62%, transparent);
+  border: 1px dashed var(--line-2);
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+}
+
+.db-note::before {
+  content: "!";
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #fff;
+  background: var(--seal);
+  border-radius: 50%;
+}
+
+/* ---------- 11. 页脚前的小纸条 ---------- */
+.fun-strip {
+  padding: 26px 0;
+  text-align: center;
+  background: color-mix(in srgb, var(--paper-2) 58%, transparent);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.fun-strip p {
+  font-family: var(--serif);
+  font-size: clamp(0.95rem, 2.2vw, 1.15rem);
+  letter-spacing: 0.24em;
+  text-indent: 0.24em;
+  color: var(--ink-2);
+}
+
+.fun-strip span {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--ink-3);
+}
+
+/* ---------- 12. 404 / 调试入口 ---------- */
+.nf {
+  max-width: 42rem;
+  padding: 40px 0 30px;
+}
+
+.nf-code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.22em;
+  color: var(--seal);
+}
+
+.nf h1 {
+  margin: 16px 0 20px;
+  font-size: clamp(2rem, 5.4vw, 3rem);
+  letter-spacing: 0.04em;
+}
+
+.nf code,
+.debug-form code {
+  padding: 1px 5px;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow-wrap: anywhere;
+}
+
+.debug-form {
+  max-width: 34rem;
+  padding: 20px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: var(--shadow-1);
+}
+
+.debug-form .hero-actions { margin-top: 18px; }
+
+/* ---------- 13. 响应式 ---------- */
+@media (max-width: 1080px) {
+  .hero-play { display: none; }
+}
+
+@media (max-width: 860px) {
+  .game-body { padding: 18px 16px 16px; }
+  .game-head { padding: 12px 14px; }
+  .game-stage { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .game-side { padding: 16px; }
+  .game-facts { display: none; }
+
+  .photo-tools { grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 12px; }
+  .photo-tools-side { justify-items: stretch; }
+  .photo-tools-side .form-status { text-align: left; }
+  .photo-tools-side .btn { width: 100%; }
+
+  .photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+
+  .rank-row { grid-template-columns: 34px minmax(0, 1fr) 96px 80px; gap: 10px; }
+}
+
+@media (max-width: 520px) {
+  .hero-tickets { margin-top: 24px; gap: 8px; }
+  .ticket { padding: 7px 11px; font-size: 10px; }
+
+  .game-tabs { width: 100%; }
+  .game-tab { flex: 1 1 0; min-width: 0; padding: 10px 6px; font-size: 12.5px; }
+  .game-head-note { display: none; }
+
+  .game-hud { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .game-hud .btn { grid-column: 1 / -1; width: 100%; }
+
+  .gs-val { font-size: 16px; }
+  .game-side h3 { font-size: 1.05rem; }
+
+  .photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .photo-body { padding: 10px 10px 8px; gap: 6px; }
+  .photo-cap { font-size: 13px; line-height: 1.6; }
+  .photo-meta { font-size: 10px; gap: 2px 7px; }
+  .photo-act { padding: 0 4px; font-size: 11.5px; }
+
+  .rank-row {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    row-gap: 2px;
+    min-height: 58px;
+    padding: 9px 2px;
+  }
+  .rank-date { grid-column: 2 / -1; grid-row: 2; text-align: left; }
+  .rank-score { font-size: 13.5px; }
+  .rank-row.is-podium .rank-no { width: 22px; height: 22px; font-size: 10px; }
+
+  /* 2 列照片墙在 320px 上也要留得住点击区 */
+  .photo-open img { aspect-ratio: 4 / 3; }
+}
+
+@media (max-width: 380px) {
+  .schulte { gap: 4px; }
+  .mem-grid { gap: 6px; }
+  .photo-grid { grid-template-columns: minmax(0, 1fr); }
+}

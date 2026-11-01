@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>调试入口 · 八班游乐场</title>
+<meta name="description" content="带上新的时间戳打开八班游乐场，绕过浏览器和 Pages 的缓存。">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#f8f4e9">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="../assets/favicon.png?v=20261101a1" type="image/png">
+<script>
+window.B8_BUILD = '20261101a1';
+window.B8_T = (function () {
+  var m = (location.search || '').match(/[?&]t=([^&]+)/);
+  return m ? '&t=' + encodeURIComponent(m[1]) : '';
+})();
+document.write('<link rel="stylesheet" href="../assets/styles.css?v=20261101a1' + window.B8_T + '">');
+</script>
+</head>
+
+<body data-site="fun">
+
+<main id="main">
+  <section class="section">
+    <div class="wrap">
+      <div class="nf">
+        <p class="nf-code">DEBUG · NO-CACHE</p>
+        <h1>调试入口</h1>
+        <p class="lead">
+          这个页面只做一件事：在读到的 <code>to</code> 后面加上 <code>t=&lt;当前时间戳&gt;</code>，
+          然后 <code>location.replace</code> 过去。所有资源都跟着带新时间戳，
+          从而绕开浏览器和 GitHub Pages 的缓存。
+        </p>
+
+        <p class="form-note" id="debug-target" style="margin-top:18px">正在跳转…</p>
+
+        <form class="debug-form" id="debug-form" style="margin-top:22px">
+          <div class="field">
+            <label for="debug-to">要打开的站内路径</label>
+            <input class="input" id="debug-to" name="to" placeholder="/ 或 /index.html">
+          </div>
+          <div class="hero-actions">
+            <button class="btn" type="submit">带时间戳打开</button>
+            <a class="btn ghost" href="../">直接回首页</a>
+          </div>
+        </form>
+
+        <p class="form-note" style="margin-top:22px">
+          用法：<code>test/?to=/</code>、<code>test/?to=/index.html</code>。
+          只接受站内路径（以 <code>/</code> 开头的绝对路径，或相对本站的路径），
+          外站地址会被忽略。
+        </p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var K = '?to=';
+
+  function readTo() {
+    var q = location.search || '';
+    var m = q.match(/[?&]to=([^&]*)/);
+    if (!m) return '';
+    var v = '';
+    try { v = decodeURIComponent(m[1]); } catch (e) { v = m[1]; }
+    return String(v || '').replace(/[\u0000-\u001f\s]/g, '');
+  }
+
+  // 只放行站内路径：挡住 //evil.com、http:、javascript: 之类
+  function normalize(to) {
+    to = String(to || '');
+    if (!to) return '/';
+    if (/^[a-z][a-z0-9+.-]*:/i.test(to)) return '/';   // 带协议的一律不跳
+    if (to.indexOf('//') === 0) return '/' + to.replace(/^\/+/, '');
+    if (to.charAt(0) !== '/') to = '/' + to;
+    return to;
+  }
+
+  function target(to) {
+    var sep = to.indexOf('?') >= 0 ? '&' : '?';
+    return to + sep + 't=' + Date.now();
+  }
+
+  var raw = readTo();
+  var to = normalize(raw);
+
+  var label = document.getElementById('debug-target');
+  if (label) label.textContent = '正在打开 ' + target(to) + ' …';
+
+  // 先让「正在跳转」这句话有机会被看到（也方便被截图取证），再跳
+  setTimeout(function () { location.replace(target(to)); }, 60);
+
+  var form = document.getElementById('debug-form');
+  var input = document.getElementById('debug-to');
+  if (input) input.value = to;
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var next = normalize(input ? input.value : '');
+      location.href = '?to=' + encodeURIComponent(next);
+    });
+  }
+})();
+</script>
+</body>
+</html>
