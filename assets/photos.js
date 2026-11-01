@@ -17,7 +17,7 @@
 
   var DB_NOTE = '数据库还没接：先跑 supabase/schema.sql，再把 URL 和 anon key 填进 assets/site-config.js';
   var EMPTY_TEXT = '还没有合影。传第一张，把今天留下来。';
-  var PHOTO_LIMIT = 60;
+  var PHOTO_LIMIT = 200;
   var PREVIEW_COUNT = 3;      // 默认只露三张
   var showAllPhotos = false;
   var curCat = '';            // '' = 全部
@@ -488,7 +488,8 @@
     img.alt = p.caption || (p.uploader ? p.uploader + ' 上传的合影' : '班级合影');
     img.width = 800;
     img.height = 600;
-    // 故意不加 loading="lazy"：见文件头注释
+    img.loading = 'lazy';
+    img.decoding = 'async';
     img.src = p.url;
     img.onerror = function () {
       img.alt = '这张图打不开了';
@@ -599,48 +600,69 @@
     return card;
   }
 
+  /**
+   * 直接渲染，不再"先把所有图预加载一遍"。
+   * 以前那套离屏预检会在手机上同时发 60 个请求（每张 300–600KB），
+   * 10 秒兜底一到就把没下完的全判成"打不开"，于是出现"33 张图打不开"。
+   * 现在每张图自己加载、自己失败、自己隐藏，谁坏了只影响那一张。
+   */
   function paintPhotos(g) {
-    preloadAll(photos.map(function (p) { return p.url; }), function (ok) {
-      if (g !== renderGen) return;   // 期间又刷新过，这次结果作废
-      grid.innerHTML = '';
-      shown = [];
-      var broken = 0;
+    if (g !== renderGen) return;
+    if (!grid) return;
 
-      // 默认只露三张，剩下的点「展开全部」
-      var limit = showAllPhotos ? photos.length : Math.min(PREVIEW_COUNT, photos.length);
+    grid.innerHTML = '';
+    shown = [];
 
-      photos.forEach(function (p, i) {
-        if (!ok[i]) { broken++; return; }
-        if (shown.length >= limit) return;
-        var card = photoCard(p);
-        var open = card.firstChild;
-        // 大图浏览的索引按「真正显示出来的」这一份来，别用 photos 的下标
-        (function (sidx) {
-          B8.on(open, 'click', function () { lastFocus = open; openBox(sidx); });
-        })(shown.length);
-        shown.push(p);
-        grid.appendChild(card);
-      });
+    var limit = showAllPhotos ? photos.length : Math.min(PREVIEW_COUNT, photos.length);
+    var broken = 0;
+    var pending = 0;
 
-      if (grid) grid.classList.toggle('scroll-box', showAllPhotos);
+    for (var i = 0; i < photos.length && shown.length < limit; i++) {
+      var p = photos[i];
+      var card = photoCard(p);
+      var open = card.firstChild;
 
-      var more = B8.qs('#photo-more');
-      if (more) {
-        var extra = photos.length - limit;
-        more.hidden = extra <= 0 && !showAllPhotos;
-        more.textContent = showAllPhotos ? '收起' : ('展开全部（还有 ' + Math.max(extra, 0) + ' 张）');
-      }
+      (function (sidx, cardEl) {
+        B8.on(open, 'click', function () { lastFocus = open; openBox(sidx); });
+      })(shown.length, card);
 
-      emptyEl.hidden = shown.length > 0;
-      if (!shown.length && photos.length) {
-        emptyEl.textContent = '这几张图都打不开（可能已被删除）。';
-        emptyEl.hidden = false;
-      } else if (!photos.length) {
-        emptyEl.textContent = EMPTY_TEXT;
-      }
-      if (broken) setStatus(broken + ' 张图打不开，已跳过。', true);
-      paintStats();
-    });
+      // 单张失败：把这一格收掉，不影响别人
+      (function (cardEl, pic) {
+        var img = open.querySelector('img');
+        if (!img) return;
+        pending++;
+        img.addEventListener('error', function () {
+          pending--;
+          broken++;
+          cardEl.remove();
+          var idx = shown.indexOf(pic);
+          if (idx >= 0) shown.splice(idx, 1);
+          if (!shown.length && !pending) {
+            emptyEl.textContent = '这几张图暂时打不开，过会儿再刷新试试。';
+            emptyEl.hidden = false;
+          }
+          if (broken) setStatus(broken + ' 张图没加载出来（网络慢或已被删），其它的正常。', true);
+          paintStats();
+        });
+        img.addEventListener('load', function () { pending = Math.max(0, pending - 1); });
+      })(card, p);
+
+      shown.push(p);
+      grid.appendChild(card);
+    }
+
+    if (grid) grid.classList.toggle('scroll-box', showAllPhotos);
+
+    var more = B8.qs('#photo-more');
+    if (more) {
+      var extra = photos.length - limit;
+      more.hidden = extra <= 0 && !showAllPhotos;
+      more.textContent = showAllPhotos ? '收起' : ('展开全部（还有 ' + Math.max(extra, 0) + ' 张）');
+    }
+
+    emptyEl.hidden = shown.length > 0;
+    if (!photos.length) emptyEl.textContent = EMPTY_TEXT;
+    paintStats();
   }
 
   function paintStats() {
