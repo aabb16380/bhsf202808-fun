@@ -1195,6 +1195,75 @@ body[data-site="site"][data-mode="night"] .gate-seal {
 .more-menu button:hover { background: var(--paper-2); color: var(--ink); }
 
 .more-menu .menu-sep { height: 1px; margin: 4px 8px; background: var(--line); }
+/* ---------- 超管控制台 ---------- */
+.console-inner { width: min(720px, 100%); }
+
+.console-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.console-tabs { margin: 14px 0 10px; }
+
+.console-list { margin: 8px 0 4px; }
+
+.console-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+}
+
+.console-row.is-off { opacity: 0.55; }
+.console-main { min-width: 0; }
+
+.console-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14.5px;
+}
+
+.console-dim {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.console-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.console-add {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin: 6px 0 14px;
+}
+
+.console-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 560px) {
+  .console-add { grid-template-columns: 1fr; }
+}
 
 /* ============================================================
    .fun 专用样式（在 _shared/base.css 基础上叠加）
@@ -1216,12 +1285,7 @@ body[data-site="site"][data-mode="night"] .gate-seal {
   transition: filter 0.42s ease, opacity 0.42s ease;
 }
 
-html.js body:not(.authed) #main {
-  filter: blur(4px);
-  opacity: 0.45;
-  pointer-events: none;
-  user-select: none;
-}
+/* 本站公开可进：不再整页模糊。合影墙和排行榜各自按登录状态锁。 */
 
 /* 登录门里的提示块（auth.js 会往里塞 HTML） */
 .gate-hint {

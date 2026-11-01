@@ -4,108 +4,58 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>调试入口 · 八班游乐场</title>
-<meta name="description" content="带上新的时间戳打开八班游乐场，绕过浏览器和 Pages 的缓存。">
-<meta name="robots" content="noindex">
+<meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#f8f4e9">
-<meta name="color-scheme" content="light">
-<link rel="icon" href="../assets/favicon.png?v=20261101b6" type="image/png">
-<script>
-window.B8_BUILD = '20261101b6';
-window.B8_T = (function () {
-  var m = (location.search || '').match(/[?&]t=([^&]+)/);
-  return m ? '&t=' + encodeURIComponent(m[1]) : '';
-})();
-document.write('<link rel="stylesheet" href="../assets/styles.css?v=20261101b6' + window.B8_T + '">');
-</script>
-</head>
-
-<body data-site="fun">
-
-<main id="main">
-  <section class="section">
-    <div class="wrap">
-      <div class="nf">
-        <p class="nf-code">DEBUG · NO-CACHE</p>
-        <h1>调试入口</h1>
-        <p class="lead">
-          这个页面只做一件事：在读到的 <code>to</code> 后面加上 <code>t=&lt;当前时间戳&gt;</code>，
-          然后 <code>location.replace</code> 过去。所有资源都跟着带新时间戳，
-          从而绕开浏览器和 GitHub Pages 的缓存。
-        </p>
-
-        <p class="form-note" id="debug-target" style="margin-top:18px">正在跳转…</p>
-
-        <form class="debug-form" id="debug-form" style="margin-top:22px">
-          <div class="field">
-            <label for="debug-to">要打开的站内路径</label>
-            <input class="input" id="debug-to" name="to" placeholder="/ 或 /index.html">
-          </div>
-          <div class="hero-actions">
-            <button class="btn" type="submit">带时间戳打开</button>
-            <a class="btn ghost" href="../">直接回首页</a>
-          </div>
-        </form>
-
-        <p class="form-note" style="margin-top:22px">
-          用法：<code>test/?to=/</code>、<code>test/?to=/index.html</code>。
-          只接受站内路径（以 <code>/</code> 开头的绝对路径，或相对本站的路径），
-          外站地址会被忽略。
-        </p>
-      </div>
-    </div>
-  </section>
-</main>
-
+<style>
+  html { background: #f8f4e9; color-scheme: light; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.85; color: #4b463c; background: #f8f4e9; text-align: center;
+  }
+  .card { max-width: 27rem; padding: 28px 26px; background: #fffef9; border: 1px solid #e4dcc6; border-radius: 10px; }
+  h1 { margin: 0 0 10px; font-size: 1.15rem; color: #191713; }
+  p { margin: 6px 0; }
+  a { color: #a33228; }
+  .btn {
+    display: inline-block; margin-top: 18px; padding: 9px 18px;
+    border: 1px solid #191713; border-radius: 4px; background: #191713;
+    color: #f8f4e9; text-decoration: none;
+  }
+</style>
 <script>
 (function () {
-  'use strict';
+  // 调试入口只给管理员：这个标签页里必须已经是提权状态（2 小时内，且真输过密钥）
+  var ok = false;
+  try {
+    var raw = sessionStorage.getItem('b8.elev');
+    if (raw) {
+      var o = JSON.parse(raw);
+      ok = !!(o && o.token && (o.kind === 'admin' || o.kind === 'super') &&
+              (!o.exp || Number(o.exp) > Date.now()));
+    }
+  } catch (e) {}
+  if (!ok) { window.__DENY__ = true; return; }
 
-  var K = '?to=';
-
-  function readTo() {
-    var q = location.search || '';
-    var m = q.match(/[?&]to=([^&]*)/);
-    if (!m) return '';
-    var v = '';
-    try { v = decodeURIComponent(m[1]); } catch (e) { v = m[1]; }
-    return String(v || '').replace(/[\u0000-\u001f\s]/g, '');
-  }
-
-  // 只放行站内路径：挡住 //evil.com、http:、javascript: 之类
-  function normalize(to) {
-    to = String(to || '');
-    if (!to) return '/';
-    if (/^[a-z][a-z0-9+.-]*:/i.test(to)) return '/';   // 带协议的一律不跳
-    if (to.indexOf('//') === 0) return '/' + to.replace(/^\/+/, '');
-    if (to.charAt(0) !== '/') to = '/' + to;
-    return to;
-  }
-
-  function target(to) {
-    var sep = to.indexOf('?') >= 0 ? '&' : '?';
-    return to + sep + 't=' + Date.now();
-  }
-
-  var raw = readTo();
-  var to = normalize(raw);
-
-  var label = document.getElementById('debug-target');
-  if (label) label.textContent = '正在打开 ' + target(to) + ' …';
-
-  // 先让「正在跳转」这句话有机会被看到（也方便被截图取证），再跳
-  setTimeout(function () { location.replace(target(to)); }, 60);
-
-  var form = document.getElementById('debug-form');
-  var input = document.getElementById('debug-to');
-  if (input) input.value = to;
-  if (form) {
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var next = normalize(input ? input.value : '');
-      location.href = '?to=' + encodeURIComponent(next);
-    });
-  }
+  var to = new URLSearchParams(location.search).get('to') || '../';
+  location.replace(to + (to.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now());
 })();
 </script>
+</head>
+<body>
+  <div class="card" id="card">
+    <h1>正在跳转到最新版本…</h1>
+    <p>如果没反应，<a id="fallback" href="../">点这里</a>。</p>
+  </div>
+  <script>
+    if (window.__DENY__) {
+      document.getElementById('card').innerHTML =
+        '<h1>这个入口只给管理员</h1>' +
+        '<p>先用学号登录，再在右上角输入管理员密钥，然后从 ⋯ 菜单里的「调试入口」进来。</p>' +
+        '<a class="btn" href="../">回首页</a>';
+    } else {
+      document.getElementById('fallback').href = '../?t=' + Date.now();
+    }
+  </script>
 </body>
 </html>

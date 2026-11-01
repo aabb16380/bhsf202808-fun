@@ -18,12 +18,7 @@
   transition: filter 0.42s ease, opacity 0.42s ease;
 }
 
-html.js body:not(.authed) #main {
-  filter: blur(4px);
-  opacity: 0.45;
-  pointer-events: none;
-  user-select: none;
-}
+/* 本站公开可进：不再整页模糊。合影墙和排行榜各自按登录状态锁。 */
 
 /* 登录门里的提示块（auth.js 会往里塞 HTML） */
 .gate-hint {

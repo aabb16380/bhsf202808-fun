@@ -1,0 +1,355 @@
+/* ============================================================
+   超管控制台（三站共用）
+   ------------------------------------------------------------
+   只有超级管理员看得见：⋯ 菜单里会多一项「控制台」。
+   三个 tab：成员（加人 / 重置密码 / 停用 / 看登录状态）
+             密钥（看状态 / 停用 / 解绑）
+             排行（删单条 / 清空某个游戏）
+   普通管理员和普通同学都看不到入口；就算手动调 RPC，服务端也会按 super 拒绝。
+   ============================================================ */
+(function () {
+  'use strict';
+
+  var B8 = window.B8;
+  if (!B8) return;
+
+  var panel = null;
+  var tab = 'members';
+  var members = [];
+  var keys = [];
+  var scores = [];
+  var scoreGame = '';
+
+  var GAMES = [
+    { key: '', name: '全部' },
+    { key: '2048', name: '2048' },
+    { key: 'memory', name: '记忆翻牌' },
+    { key: 'schulte', name: '专注方格' }
+  ];
+
+  function tok() { return B8.auth.token(); }
+  function esc(s) { return B8.esc(s == null ? '' : s); }
+  function errText(e) { return esc(e && e.message ? e.message : '网络异常'); }
+
+  /* ---------- 外壳 ---------- */
+  function close() {
+    if (panel && panel.parentNode) panel.parentNode.removeChild(panel);
+    panel = null;
+  }
+
+  function open() {
+    close();
+    panel = document.createElement('div');
+    panel.className = 'modal';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.innerHTML = '<div class="modal-inner console-inner" id="console-inner"></div>';
+    document.body.appendChild(panel);
+    B8.on(panel, 'click', function (e) { if (e.target === panel) close(); });
+    B8.on(document, 'keydown', function esc2(e) {
+      if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc2); }
+    });
+    render();
+  }
+
+  function render() {
+    var host = document.getElementById('console-inner');
+    if (!host) return;
+
+    var tabs = [
+      { key: 'members', name: '成员' },
+      { key: 'keys', name: '密钥' },
+      { key: 'scores', name: '排行' }
+    ];
+
+    var html = '<div class="console-head">' +
+      '<h3 class="modal-title">控制台</h3>' +
+      '<button class="btn ghost sm" type="button" id="console-close">关闭</button>' +
+      '</div>' +
+      '<p class="modal-note">' + esc(B8.auth.nick()) + ' · ' + esc(B8.auth.elevLabel() || '超级管理员') +
+      '　权限到 ' + new Date(B8.auth.state().elev.exp).toLocaleString('zh-CN', { hour12: false }) + ' 失效</p>' +
+      '<div class="chip-row console-tabs">';
+    tabs.forEach(function (t) {
+      html += '<button class="chip' + (tab === t.key ? ' on' : '') + '" type="button" data-tab="' +
+        t.key + '" aria-pressed="' + (tab === t.key) + '">' + t.name + '</button>';
+    });
+    html += '</div><div id="console-body"><p class="form-note">读取中…</p></div>';
+    host.innerHTML = html;
+
+    B8.on(document.getElementById('console-close'), 'click', close);
+    B8.qsa('.console-tabs .chip', host).forEach(function (b) {
+      B8.on(b, 'click', function () {
+        tab = b.getAttribute('data-tab');
+        render();
+      });
+    });
+
+    if (tab === 'members') loadMembers();
+    else if (tab === 'keys') loadKeys();
+    else loadScores();
+  }
+
+  function body() { return document.getElementById('console-body'); }
+
+  function fail(err) {
+    var b = body();
+    if (b) b.innerHTML = '<p class="form-status err">读取失败：' + errText(err) + '</p>';
+  }
+
+  /* ---------- 成员 ---------- */
+  function loadMembers() {
+    B8.sb.rpc('b8_super_members', { p_token: tok() }).then(function (rows) {
+      members = rows || [];
+      paintMembers();
+    }, fail);
+  }
+
+  function loginState(m) {
+    if (!m.has_pass) return '<span class="tag plain">还没设密码</span>';
+    if (!m.last_login) return '<span class="tag">已认领 · 从未登录</span>';
+    return '<span class="tag jade">在用 · ' + esc(B8.date(m.last_login)) + '</span>';
+  }
+
+  function paintMembers() {
+    var b = body();
+    if (!b) return;
+
+    var never = members.filter(function (m) { return !m.last_login; }).length;
+
+    var html = '<div class="console-add">' +
+      '<div class="field"><label for="cm-no">学号</label>' +
+      '<input class="input" id="cm-no" inputmode="numeric" maxlength="12" placeholder="20282351"></div>' +
+      '<div class="field"><label for="cm-name">姓名</label>' +
+      '<input class="input" id="cm-name" maxlength="16" placeholder="新同学"></div>' +
+      '<button class="btn sm" type="button" id="cm-add">加进花名册</button>' +
+      '</div>' +
+      '<p class="form-note">共 ' + members.length + ' 人，其中 ' + never + ' 人还没登录过。</p>' +
+      '<div class="console-list">';
+
+    members.forEach(function (m) {
+      html += '<div class="console-row">' +
+        '<div class="console-main">' +
+          '<div class="console-title">' + esc(m.name) + ' <span class="console-dim">' + esc(m.student_no) + '</span></div>' +
+          '<div class="console-meta">' + loginState(m) +
+            (m.claimed_at ? ' · 认领于 ' + esc(B8.date(m.claimed_at)) : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="chip-row">' +
+          '<button class="btn ghost sm" type="button" data-reset="' + esc(m.student_no) + '">重置密码</button>' +
+          '<button class="btn ghost sm" type="button" data-toggle="' + esc(m.student_no) + '" data-active="' + (m.active ? '1' : '0') + '">' +
+            (m.active ? '停用' : '启用') + '</button>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    b.innerHTML = html;
+
+    B8.on(document.getElementById('cm-add'), 'click', function () {
+      var no = (document.getElementById('cm-no').value || '').replace(/\s/g, '');
+      var name = (document.getElementById('cm-name').value || '').trim();
+      if (!/^\d{6,12}$/.test(no)) { B8.toast('学号是 6–12 位数字'); return; }
+      if (name.length < 2) { B8.toast('姓名至少两个字'); return; }
+      this.disabled = true;
+      var btn = this;
+      B8.sb.rpc('b8_super_member_add', { p_token: tok(), p_no: no, p_name: name })
+        .then(function () {
+          B8.toast('已加入：' + name);
+          loadMembers();
+        })
+        .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+    });
+
+    B8.qsa('[data-reset]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        var no = btn.getAttribute('data-reset');
+        var pwd = window.prompt('给 ' + no + ' 设一个新密码（至少 6 位）\n设完让他自己登录后改掉。', '');
+        if (!pwd) return;
+        if (pwd.length < 6) { B8.toast('至少 6 位'); return; }
+        btn.disabled = true;
+        B8.sb.rpc('b8_super_reset_pass', { p_token: tok(), p_no: no, p_new_pass: pwd })
+          .then(function () { B8.toast('密码已重置'); loadMembers(); })
+          .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+      });
+    });
+
+    B8.qsa('[data-toggle]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        var no = btn.getAttribute('data-toggle');
+        var active = btn.getAttribute('data-active') === '1';
+        btn.disabled = true;
+        B8.sb.rpc('b8_super_member_toggle', { p_token: tok(), p_no: no, p_active: !active })
+          .then(function () { B8.toast(active ? '已停用' : '已启用'); loadMembers(); })
+          .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+      });
+    });
+  }
+
+  /* ---------- 密钥 ---------- */
+  function loadKeys() {
+    B8.sb.rpc('b8_super_keys', { p_token: tok() }).then(function (rows) {
+      keys = rows || [];
+      paintKeys();
+    }, fail);
+  }
+
+  function paintKeys() {
+    var b = body();
+    if (!b) return;
+
+    var used = keys.filter(function (k) { return k.bound_no; }).length;
+
+    var html = '<p class="form-note">共 ' + keys.length + ' 把，已绑出去 ' + used + ' 把。停用会立刻踢掉用这把密钥提权的会话。</p>' +
+      '<div class="console-list">';
+
+    keys.forEach(function (k) {
+      html += '<div class="console-row' + (k.active ? '' : ' is-off') + '">' +
+        '<div class="console-main">' +
+          '<div class="console-title">' +
+            '<span class="tag ' + (k.kind === 'super' ? '' : 'jade') + '">' +
+              (k.kind === 'super' ? '超管' : '管理') + '</span> ' +
+            esc(k.label) +
+          '</div>' +
+          '<div class="console-meta">' +
+            (k.bound_no
+              ? '绑给 ' + esc(k.bound_name || '') + '（' + esc(k.bound_no) + '）'
+              : '<span class="console-dim">还没人用</span>') +
+            (k.last_used ? ' · 最后使用 ' + esc(B8.date(k.last_used)) + ' · ' + (k.use_count || 0) + ' 次' : '') +
+            (k.active ? '' : ' · <b>已停用</b>') +
+          '</div>' +
+        '</div>' +
+        '<div class="chip-row">' +
+          '<button class="btn ghost sm" type="button" data-key-toggle="' + k.id + '" data-active="' + (k.active ? '1' : '0') + '">' +
+            (k.active ? '停用' : '启用') + '</button>' +
+          (k.bound_no ? '<button class="btn ghost sm" type="button" data-unbind="' + k.id + '">解绑</button>' : '') +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    b.innerHTML = html;
+
+    B8.qsa('[data-key-toggle]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        var id = Number(btn.getAttribute('data-key-toggle'));
+        var active = btn.getAttribute('data-active') === '1';
+        btn.disabled = true;
+        B8.sb.rpc('b8_super_key_toggle', { p_token: tok(), p_id: id, p_active: !active })
+          .then(function () { B8.toast(active ? '已停用，相关会话已踢掉' : '已启用'); loadKeys(); })
+          .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+      });
+    });
+
+    B8.qsa('[data-unbind]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        var id = Number(btn.getAttribute('data-unbind'));
+        if (!window.confirm('解绑之后这把密钥可以给别人用，确定？')) return;
+        btn.disabled = true;
+        B8.sb.rpc('b8_super_key_unbind', { p_token: tok(), p_id: id })
+          .then(function () { B8.toast('已解绑'); loadKeys(); })
+          .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+      });
+    });
+  }
+
+  /* ---------- 排行 ---------- */
+  function loadScores() {
+    B8.sb.rpc('b8_super_scores', { p_token: tok(), p_game: scoreGame || null, p_limit: 100 })
+      .then(function (rows) {
+        scores = rows || [];
+        paintScores();
+      }, fail);
+  }
+
+  function paintScores() {
+    var b = body();
+    if (!b) return;
+
+    var html = '<div class="chip-row console-tabs">';
+    GAMES.forEach(function (g) {
+      html += '<button class="chip' + (scoreGame === g.key ? ' on' : '') + '" type="button" data-game="' +
+        g.key + '" aria-pressed="' + (scoreGame === g.key) + '">' + g.name + '</button>';
+    });
+    html += '</div>';
+
+    html += '<div class="console-list">';
+    if (!scores.length) {
+      html += '<p class="form-note">这个范围里还没有成绩。</p>';
+    }
+    scores.forEach(function (s, i) {
+      html += '<div class="console-row">' +
+        '<div class="console-main">' +
+          '<div class="console-title">' + (i + 1) + '. ' + esc(s.nick || '匿名') +
+            ' <span class="console-dim">' + esc(s.score) + ' 分 · ' + esc(s.game) + '</span></div>' +
+          '<div class="console-meta">' + esc(B8.dateTime(s.created_at)) +
+            (s.member_no ? ' · ' + esc(s.member_no) : '') + '</div>' +
+        '</div>' +
+        '<div class="chip-row">' +
+          '<button class="btn ghost sm" type="button" data-score-del="' + s.id + '">删除</button>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+
+    html += '<div class="console-foot">' +
+      '<span class="form-note">清空只删这一个游戏的成绩，删了就回不来了。</span>' +
+      '<button class="btn ghost sm" type="button" id="score-clear">清空' +
+        (scoreGame ? '「' + (GAMES.filter(function (g) { return g.key === scoreGame; })[0] || {}).name + '」' : '全部') +
+      '</button></div>';
+    b.innerHTML = html;
+
+    B8.qsa('[data-game]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        scoreGame = btn.getAttribute('data-game');
+        loadScores();
+      });
+    });
+
+    B8.qsa('[data-score-del]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        btn.disabled = true;
+        B8.sb.rpc('b8_super_score_delete', { p_token: tok(), p_id: Number(btn.getAttribute('data-score-del')) })
+          .then(function () { B8.toast('已删除'); loadScores(); })
+          .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+      });
+    });
+
+    var clearBtn = document.getElementById('score-clear');
+    if (clearBtn) {
+      B8.on(clearBtn, 'click', function () {
+        if (!window.confirm('确定清空？删了就回不来了。')) return;
+        clearBtn.disabled = true;
+        B8.sb.rpc('b8_super_score_clear', { p_token: tok(), p_game: scoreGame || null })
+          .then(function (n) { B8.toast('清掉了 ' + (Number(n) || 0) + ' 条'); loadScores(); })
+          .catch(function (err) { clearBtn.disabled = false; B8.toast(errText(err)); });
+      });
+    }
+  }
+
+  /* ---------- 挂到 ⋯ 菜单 ---------- */
+  function mount() {
+    var menu = document.getElementById('more-menu');
+    if (!menu || !B8.auth || !B8.auth.isSuper()) return;
+    if (document.getElementById('console-open')) return;
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'console-open';
+    btn.textContent = '控制台';
+    var sep = menu.querySelector('.menu-sep');
+    if (sep) menu.insertBefore(btn, sep);
+    else menu.appendChild(btn);
+
+    B8.on(btn, 'click', open);
+  }
+
+  function boot() {
+    if (!B8.auth) return;
+    B8.auth.ready(mount);
+    document.addEventListener('b8:auth', mount);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();

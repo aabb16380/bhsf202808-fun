@@ -914,16 +914,72 @@
     }
 
     if (!B8.auth) return;
-    B8.auth.ready(function (st) {
-      writable = !!B8.sb.ready && st.kind !== 'preview';
-      initMode(st);
-      if (!writable) {
+
+    // 本站公开：没登录也能玩游戏，但合影墙和排行榜要登录。
+    function applyAuth() {
+      var st = B8.auth.state();
+      var preview = !!st.preview;
+      var logged = B8.auth.isLogged();
+      writable = !!B8.sb.ready && logged && !preview;
+
+      initMode({
+        kind: preview ? 'preview' : B8.auth.kind(),
+        nick: B8.auth.nick(),
+        isSuper: B8.auth.isSuper()
+      });
+
+      if (!logged) {
+        guestMode();
+        return;
+      }
+
+      if (!B8.sb.ready) {
         showDbNotes();
         lockWrites();
       }
+      if (pickEl) pickEl.hidden = false;
+      if (grid) grid.hidden = false;
       loadPhotos();
       loadRank(rankGame);
-    });
+    }
+
+    B8.auth.ready(applyAuth);
+    document.addEventListener('b8:auth', applyAuth);
+  }
+
+  /** 没登录时的合影墙 + 排行榜 */
+  function guestMode() {
+    if (grid) {
+      grid.innerHTML = '';
+      grid.hidden = true;
+    }
+    if (emptyEl) {
+      emptyEl.innerHTML = '';
+      emptyEl.hidden = false;
+      emptyEl.appendChild(document.createTextNode('合影墙只对八班开放，登录后才能看。 '));
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn ghost sm';
+      b.textContent = '登录看合影';
+      B8.on(b, 'click', function () {
+        var acct = document.getElementById('acct-btn');
+        if (acct) acct.click();
+      });
+      emptyEl.appendChild(b);
+    }
+    if (pickEl) pickEl.hidden = true;
+    if (fileEl) fileEl.disabled = true;
+    if (statusEl) statusEl.textContent = '';
+    if (statPhotos) statPhotos.textContent = '—';
+    if (statToday) statToday.textContent = '—';
+
+    var rl = B8.qs('#rank-list');
+    if (rl) rl.innerHTML = '';
+    var re = B8.qs('#rank-empty');
+    if (re) {
+      re.hidden = false;
+      re.textContent = '登录后才能看排行榜。游戏随便玩，登录了成绩才会计进去。';
+    }
   }
 
   whenReady(init);
