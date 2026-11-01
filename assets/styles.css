@@ -916,6 +916,9 @@ svg { display: block; }
   text-align: left;
 }
 
+/* 空的时候不要留个虚线框在那儿 */
+.gate-hint:empty { display: none; }
+
 .gate-err.is-on { color: var(--seal); }
 
 /* ---------- 15b. 账号面板 ---------- */
