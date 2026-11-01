@@ -1396,6 +1396,32 @@ body.menu-merged .nav-toggle { display: none !important; }
   line-height: 1;
   opacity: 0.85;
 }
+/* ---------- 文件选择框：不能 display:none ----------
+   微信 / QQ 内置浏览器（X5、WKWebView）里，display:none 的 input[type=file]
+   调不出选择器，label 点击也可能被拦。改成"移出视口但仍可见"的写法。 */
+.file-hidden {
+  position: absolute !important;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------- 展开后的列表改成框内滑动 ---------- */
+.scroll-box {
+  max-height: 68vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 6px;
+  scrollbar-width: thin;
+}
+
+@media (max-width: 860px) {
+  .scroll-box { max-height: 62vh; }
+}
 
 /* ============================================================
    .fun 专用样式（在 _shared/base.css 基础上叠加）

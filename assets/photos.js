@@ -622,6 +622,8 @@
         grid.appendChild(card);
       });
 
+      if (grid) grid.classList.toggle('scroll-box', showAllPhotos);
+
       var more = B8.qs('#photo-more');
       if (more) {
         var extra = photos.length - limit;
@@ -1146,13 +1148,12 @@
 
     if (fileEl) B8.on(fileEl, 'change', onPick);
 
-    // 上传入口是个 label，键盘用户按 Enter / 空格也能打开文件框
+    // 上传入口是真按钮：点一下就把文件框弹出来。
+    // （以前是 label 套 input，微信内置浏览器里点不动。）
     if (pickEl) {
-      B8.on(pickEl, 'keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          if (fileEl && !fileEl.disabled) fileEl.click();
-        }
+      B8.on(pickEl, 'click', function (e) {
+        e.preventDefault();
+        if (fileEl && !fileEl.disabled) fileEl.click();
       });
     }
 
