@@ -888,6 +888,16 @@ svg { display: block; }
 
 .gate.is-done { display: none; }
 
+/* 夜色下卡片要和背景拉开一档，否则整块糊在一起 */
+body[data-site="site"][data-mode="night"] .gate-card {
+  background: #1f1f2a;
+  border-color: #35343f;
+}
+
+body[data-site="site"][data-mode="night"] .gate-seal {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22), 0 10px 26px -12px rgba(164, 139, 219, 0.6);
+}
+
 /* ---------- 15. 大图弹层（.fun / .homes 共用） ---------- */
 .lightbox {
   position: fixed;

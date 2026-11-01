@@ -1,9 +1,8 @@
 /* ============================================================
    八班游乐场 · 唯一配置点
    ------------------------------------------------------------
-   在 supabase.com 建一个项目，先跑 supabase/schema.sql，
-   再把 Project URL 与 anon public key 填进来（三站用的是同一个项目）。
-   没填之前站点能打开，但登录门会提示「本站还没接数据库」。
+   Supabase 项目：zcfdtfmxtsxacsklqlhe（Singapore · free）
+   三站共用这一个库；合影走 storage 桶 b8-photos。
    ============================================================ */
 window.B8_CONFIG = {
   site: {
@@ -14,8 +13,8 @@ window.B8_CONFIG = {
   },
 
   supabase: {
-    url: '',
-    anonKey: ''
+    url: 'https://zcfdtfmxtsxacsklqlhe.supabase.co',
+    anonKey: 'sb_publishable_kkJAT4lA9KFJGhua2V9gjw_tr-doaVN'
   },
 
   links: {
