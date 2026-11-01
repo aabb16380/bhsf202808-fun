@@ -1127,3 +1127,11 @@
 
 .photo-edit { color: var(--ink-2); }
 .photo-edit:hover { color: var(--seal); }
+/* label 当按钮用：去掉点击高亮，保证微信里点得动 */
+.photo-tools-side label.btn {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}

@@ -1271,12 +1271,20 @@
 
     if (fileEl) B8.on(fileEl, 'change', onPick);
 
-    // 上传入口是真按钮：点一下就把文件框弹出来。
-    // （以前是 label 套 input，微信内置浏览器里点不动。）
+    // 上传入口是 <label for="photo-file">：点它浏览器自己会转发到文件框，
+    // 微信 / iOS 都认这条路。只有标签不是 label 时才手动补一次点击。
     if (pickEl) {
+      var isLabel = pickEl.tagName && pickEl.tagName.toLowerCase() === 'label';
       B8.on(pickEl, 'click', function (e) {
+        if (isLabel) return;                 // 交给浏览器原生转发，避免弹两次
         e.preventDefault();
         if (fileEl && !fileEl.disabled) fileEl.click();
+      });
+      B8.on(pickEl, 'keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (fileEl && !fileEl.disabled) fileEl.click();
+        }
       });
     }
 
@@ -1304,7 +1312,10 @@
         showDbNotes();
         lockWrites();
       }
-      if (pickEl) pickEl.hidden = false;
+      if (pickEl) { pickEl.hidden = false; pickEl.disabled = false; }
+      // 之前是游客时 fileEl 被 disable 过，登录后必须重新打开，
+      // 否则按钮看得见、点下去 input.click() 落在 disabled 上，毫无反应。
+      if (fileEl) fileEl.disabled = false;
       if (grid) grid.hidden = false;
       loadPhotos();
       loadRank(rankGame);
