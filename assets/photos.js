@@ -741,7 +741,54 @@
    * 所以不直接拒，先丢给 <img> 试一下，能解就画到 canvas 上导成 JPEG，
    * 解不了再明确告诉用户去设置里改格式。
    */
+  /* ---------- HEIC → JPEG ---------- */
+  // 优先用内置解码器（libheif 的 wasm 版本，1.3MB，用到才加载），
+  // 这样 Chrome / 安卓微信也能转；万一库加载不上，再退回浏览器原生解码。
+  var HEIC_LIB = 'assets/vendor/heic2any.min.js';
+  var heicLibPromise = null;
+
+  function loadHeicLib() {
+    if (window.heic2any) return Promise.resolve(window.heic2any);
+    if (heicLibPromise) return heicLibPromise;
+
+    heicLibPromise = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = HEIC_LIB;
+      s.async = true;
+      s.onload = function () {
+        if (window.heic2any) resolve(window.heic2any);
+        else { heicLibPromise = null; reject(new Error('转换库没有正确导出')); }
+      };
+      s.onerror = function () {
+        heicLibPromise = null;
+        reject(new Error('转换库没加载上'));
+      };
+      document.head.appendChild(s);
+    });
+
+    return heicLibPromise;
+  }
+
+  function convertHeicByLib(file) {
+    return loadHeicLib().then(function (lib) {
+      return lib({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+    }).then(function (out) {
+      var blob = Array.isArray(out) ? out[0] : out;
+      if (!blob || !blob.size) throw new Error('转换结果为空');
+      return blob;
+    });
+  }
+
   function convertHeic(file) {
+    // 先试内置解码器
+    return convertHeicByLib(file).catch(function (err) {
+      if (window.console) console.warn('[photos] 内置解码失败，改试浏览器原生解码：', err && err.message);
+      return convertHeicNative(file);
+    });
+  }
+
+  /* 浏览器自己能解 HEIC（Safari / 部分 iOS WebView）时的兜底路径 */
+  function convertHeicNative(file) {
     return new Promise(function (resolve, reject) {
       var url = '';
       try { url = URL.createObjectURL(file); } catch (e) { reject(new Error('读不到文件')); return; }
