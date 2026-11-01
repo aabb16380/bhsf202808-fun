@@ -127,13 +127,25 @@
   }
 
   /* ---------- 上传成绩 ---------- */
-  // 一局只上报一次：结束、合成 2048、或者点重开时各调用一次 reportOnce，
-  // 靠 gameSubmitted 兜住，绝不因为「每走一步都在加分」就写一堆行进来。
-  function reportOnce() {
-    if (gameSubmitted || cheated || !writable) return;
+  // 不再等一局结束才上榜：每 30 秒把当前分送一次。
+  // 服务端一个人一个游戏只留一行（b8_score_add 是覆盖式），
+  // 所以反复提交不会堆出一堆重复记录。
+  var REPORT_EVERY = 30000;
+  var reportTimer = 0;
+
+  function startReportTimer() {
+    stopReportTimer();
+    reportTimer = setInterval(reportTick, REPORT_EVERY);
+  }
+
+  function stopReportTimer() {
+    if (reportTimer) { clearInterval(reportTimer); reportTimer = 0; }
+  }
+
+  function reportTick() {
+    if (!started || !writable || cheated) return;
     if (!B8.auth || !B8.auth.token()) return;
-    if (score <= 0) return;
-    gameSubmitted = true;
+    if (score <= 0 || over) return;
     submitScore(score);
   }
 
@@ -267,14 +279,13 @@
       won = true;
       setState('合成 2048 了！可以接着玩，也可以重开。', true);
       B8.toast('2048！这一局可以记在八班名下了。');
-      reportOnce();
     }
 
     if (!canMove()) {
       over = true;
       board.classList.add('is-over');
       setState('没有可走的方向了。这一局 ' + score + ' 分，点重开再来。', false);
-      reportOnce();
+      stopReportTimer();
     } else if (!won) {
       setState('得分 ' + score + ' · 最大方块 ' + max + '。', false);
     } else {
@@ -298,8 +309,7 @@
   /* ---------- 开局 / 重开 ---------- */
   function reset() {
     clearTimeout(submitTimer);
-    // 重开前把这一局的分送出去（只送这一次，除非开过作弊）
-    if (started && score > 0) reportOnce();
+    stopReportTimer();
     slots = [];
     for (var i = 0; i < N * N; i++) slots.push(null);
     layerEl.innerHTML = '';
@@ -326,8 +336,9 @@
     updateMax();
     setState('新的一局。方向键 / WASD 移动，手机上直接滑。');
     setNote(writable
-      ? '一局只记一次成绩：结束或重开时上榜，中途不会重复写。'
+      ? '每 30 秒把当前成绩更新到排行榜（同一个人只占一行，覆盖旧的）。'
       : '成绩只存在这台设备：数据库还没接，暂时不上传排行榜。');
+    startReportTimer();
   }
 
   /* ---------- 输入 ---------- */
@@ -398,7 +409,7 @@
   }
 
   /* ---------- 作弊模式 ---------- */
-  // 只在本地改棋盘，不动分数、不上榜；开了作弊的这一局 reportOnce 会被 cheated 挡住。
+  // 只在本地改棋盘，不动分数、不上榜；开了作弊的这一局 reportTick 会被 cheated 挡住。
   var cheatOn = false;
 
   function cheatEls() {
