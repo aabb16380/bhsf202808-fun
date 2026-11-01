@@ -1375,6 +1375,27 @@ body.menu-merged .nav-toggle { display: none !important; }
   font-size: 10.5px;
   color: var(--ink-3);
 }
+/* ---------- 品牌：版本号放在站名下面一行，小字 ---------- */
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  line-height: 1.15;
+}
+
+.brand-name {
+  font-size: 15.5px;
+  line-height: 1.2;
+}
+
+.brand-ver {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  line-height: 1;
+  opacity: 0.85;
+}
 
 /* ============================================================
    .fun 专用样式（在 _shared/base.css 基础上叠加）

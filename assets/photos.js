@@ -593,56 +593,75 @@
     });
   }
 
+  /* 一次可以选多张：逐张排队上传，任何一张失败都不影响后面的 */
   function onPick() {
     if (!writable || uploading) return;
-    var file = fileEl && fileEl.files && fileEl.files[0];
-    if (!file) return;
-    fileEl.value = '';   // 清掉，允许再选同一张
+    var picked = fileEl && fileEl.files ? Array.prototype.slice.call(fileEl.files) : [];
+    if (!picked.length) return;
+    fileEl.value = '';   // 清掉，允许再选同一批
 
-    var name = file.name || '';
-    var type = readType(file);
+    var queue = [];
+    var skipped = 0;
 
-    // HEIC：iPhone 默认格式，浏览器解不了，Supabase 桶也不收
-    if (/heic|heif/.test(type) || /\.heic$|\.heif$/i.test(name)) {
-      failUpload('这是 HEIC 照片，浏览器解不了。iPhone 请在相册里导出为 JPG 再传。');
-      return;
-    }
-    if (!ALLOWED[type]) {
-      failUpload('只收 JPG / PNG / WebP / GIF，这张是 ' + (type || '未知格式') + '。');
+    picked.forEach(function (f) {
+      var name = f.name || '';
+      var type = readType(f);
+      if (/heic|heif/.test(type) || /\.heic$|\.heif$/i.test(name)) { skipped++; return; }
+      if (!ALLOWED[type]) { skipped++; return; }
+      queue.push(f);
+    });
+
+    if (!queue.length) {
+      failUpload(skipped
+        ? '这几张都不支持：只收 JPG / PNG / WebP / GIF（iPhone 的 HEIC 请先导出成 JPG）。'
+        : '没有可上传的图片。');
       return;
     }
 
     uploading = true;
-    setStatus(file.size > MAX_BYTES ? '这张超过 10 MB，正在压到 1600px…' : '正在上传…');
-
-    var path = 'photos/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+    var total = queue.length;
+    var done = 0;
+    var failed = 0;
     var caption = B8.trim(captionEl ? captionEl.value : '', 60);
 
-    (file.size > MAX_BYTES ? compress(file) : Promise.resolve(file))
-      .then(function (blob) {
-        return uploadFile('b8-photos', path, blob);
-      })
-      .then(function (url) {
-        return B8.sb.rpc('b8_photo_add', {
-          p_token: B8.auth.token(),
-          p_path: path,
-          p_url: url,
-          p_caption: caption,
-          p_taken_on: null
-        });
-      })
-      .then(function () {
+    function next() {
+      if (!queue.length) {
         if (captionEl) captionEl.value = '';
-        setStatus('传上去了，正在刷新…');
+        setStatus('传完 ' + done + ' 张' + (failed ? '，失败 ' + failed + ' 张' : '') +
+                  (skipped ? '，跳过 ' + skipped + ' 张不支持的格式' : '') + '。', failed > 0);
         loadPhotos();
-        B8.toast('合影已上传');
-      })
-      .catch(function (err) {
-        setStatus(err && err.message ? err.message : '上传失败', true);
-      })
-      .then(function () {
+        B8.toast('合影已上传 ' + done + ' 张');
         uploading = false;
-      });
+        return;
+      }
+
+      var file = queue.shift();
+      setStatus('正在上传 ' + (done + failed + 1) + ' / ' + total + '…');
+
+      var path = 'photos/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+
+      (file.size > MAX_BYTES ? compress(file) : Promise.resolve(file))
+        .then(function (blob) {
+          return uploadFile('b8-photos', path, blob);
+        })
+        .then(function (url) {
+          return B8.sb.rpc('b8_photo_add', {
+            p_token: B8.auth.token(),
+            p_path: path,
+            p_url: url,
+            p_caption: caption,
+            p_taken_on: null
+          });
+        })
+        .then(function () { done += 1; })
+        .catch(function (err) {
+          failed += 1;
+          if (window.console) console.warn('[photos] 这张没传上去：', err && err.message);
+        })
+        .then(next);
+    }
+
+    next();
   }
 
   /* ---------- 大图弹层（复用 base.css 的 .lightbox） ---------- */
