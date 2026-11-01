@@ -437,6 +437,82 @@
     renderPanel();
   }
 
+  /* ---------- 个人主页：我发过什么 ---------- */
+  function mineRow(title, body, when) {
+    var row = document.createElement('div');
+    row.className = 'mine-row';
+    var t = document.createElement('p');
+    t.className = 'mine-body';
+    t.textContent = body;
+    row.appendChild(t);
+    var m = document.createElement('p');
+    m.className = 'mine-meta';
+    m.textContent = (title ? title + ' · ' : '') + B8.ago(when);
+    row.appendChild(m);
+    return row;
+  }
+
+  function mineSection(label, list, map) {
+    if (!list || !list.length) return null;
+    var box = document.createElement('details');
+    box.className = 'mine-block';
+    if (list.length <= 3) box.open = true;
+
+    var sum = document.createElement('summary');
+    sum.textContent = label + '（' + list.length + '）';
+    box.appendChild(sum);
+
+    list.forEach(function (it) { box.appendChild(map(it)); });
+    return box;
+  }
+
+  function loadMine(host) {
+    if (!host || !B8.sb || !B8.sb.ready) return;
+    host.innerHTML = '<p class="mine-loading">正在翻你的记录…</p>';
+
+    B8.sb.rpc('b8_my_all', { p_token: auth.token() })
+      .then(function (data) {
+        host.innerHTML = '';
+        if (!data) { host.appendChild(document.createTextNode('')); return; }
+
+        var any = false;
+        var secs = [
+          mineSection('我发的悄悄话', data.whispers, function (w) {
+            return mineRow(w.anon ? '匿名' : '署名', w.body, w.created_at);
+          }),
+          mineSection('我提的问题', data.questions, function (q) {
+            return mineRow(q.anon ? '匿名' : '署名', q.body, q.created_at);
+          }),
+          mineSection('我写的回答', data.answers, function (a) {
+            return mineRow(a.anon ? '匿名' : '署名', a.body, a.created_at);
+          }),
+          mineSection('我埋的时光胶囊', data.capsules, function (c) {
+            return mineRow(c.title || '无题', '', c.created_at);
+          }),
+          mineSection('我传的照片', data.photos, function (p) {
+            return mineRow(p.caption || '合影', '', p.created_at);
+          })
+        ];
+
+        secs.forEach(function (s) {
+          if (s) { host.appendChild(s); any = true; }
+        });
+
+        if (!any) {
+          var empty = document.createElement('p');
+          empty.className = 'mine-loading';
+          empty.textContent = '还没有发过什么。';
+          host.appendChild(empty);
+        }
+      })
+      .catch(function (err) {
+        host.innerHTML = '';
+        var p2 = document.createElement('p');
+        p2.className = 'mine-loading';
+        p2.textContent = '记录没读出来：' + (err && err.message ? err.message : '网络异常');
+        host.appendChild(p2);
+      });
+  }
   function renderPanel() {
     var host = $('acct-inner');
     if (!host) return;
@@ -484,7 +560,14 @@
         '</p>';
     }
 
+    html +=
+      '<div class="mine-wrap" style="margin-top:22px;border-top:1px solid var(--line,#e2d9c6);padding-top:16px">' +
+        '<p class="mine-title">我发过的</p>' +
+        '<div id="acct-mine"></div>' +
+      '</div>';
+
     host.innerHTML = html;
+    loadMine($('acct-mine'));
 
     var st = $('acct-status');
     function status(msg, kind) {
@@ -591,6 +674,27 @@
     });
   }
 
+  /* ---------- 「正在登录」占位：老用户不该看见登录框闪一下 ---------- */
+  function showSplash() {
+    if (document.getElementById('auth-splash')) return;
+    var el = document.createElement('div');
+    el.id = 'auth-splash';
+    el.className = 'auth-splash';
+    el.innerHTML =
+      '<div class="auth-splash-inner">' +
+        '<span class="auth-spinner" aria-hidden="true"></span>' +
+        '<p>正在登录…</p>' +
+      '</div>';
+    document.body.appendChild(el);
+    document.body.classList.add('is-signing');
+  }
+
+  function hideSplash() {
+    var el = document.getElementById('auth-splash');
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    document.body.classList.remove('is-signing');
+  }
+
   function boot() {
     initAccountButton();
     initCrossSite();
@@ -625,6 +729,11 @@
     var e = readJson('session', K_ELEV);
     var ready = B8.sb && B8.sb.ready;
 
+    // 这台设备上有存档：先挂一块「正在登录」，门不要弹
+    if (m && m.token && !autoGate && document.getElementById('gate')) {
+      showSplash();
+    }
+
     var verify = function (obj, isElev) {
       if (!obj || !obj.token || !ready) return Promise.resolve(false);
       return B8.sb.rpc('b8_check', { p_token: obj.token })
@@ -657,6 +766,7 @@
       }
 
       if (state.member) {
+        hideSplash();
         hideGate();
         broadcast();
         settle();
@@ -664,11 +774,13 @@
         var b = $('acct-btn');
         if (b) b.textContent = btnLabel();
       } else {
+        hideSplash();
         initGate();
       }
       return null;
     }).catch(function (err) {
       if (window.console) console.warn('[auth] 启动失败：', err && err.message);
+      hideSplash();
       initGate();
     });
   }
