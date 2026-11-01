@@ -405,12 +405,15 @@
     return {
       panel: B8.qs('#g2048-cheat'),
       toggle: B8.qs('#g2048-cheat-toggle'),
-      num: B8.qs('#g2048-cheat-num'),
-      setBtn: B8.qs('#g2048-cheat-set'),
+      halfBtn: B8.qs('#g2048-cheat-half'),
+      doubleBtn: B8.qs('#g2048-cheat-double'),
+      valEl: B8.qs('#g2048-cheat-val'),
       swapBtn: B8.qs('#g2048-cheat-swap'),
       clearBtn: B8.qs('#g2048-cheat-clear')
     };
   }
+
+  var CHEAT_MAX = 131072;   // 2^17，再大就没意义了
 
   function cellFromPoint(clientX, clientY) {
     var grid = B8.qs('#g2048-grid');
@@ -433,10 +436,19 @@
     });
   }
 
+  function pickedValue() {
+    if (!picked.length) return 0;
+    var t = slots[picked[picked.length - 1]];
+    return t ? t.v : 0;
+  }
+
   function refreshCheatButtons() {
     var e = cheatEls();
-    if (!e.setBtn) return;
-    e.setBtn.disabled = picked.length < 1;
+    if (!e.swapBtn) return;
+    var v = pickedValue();
+    if (e.halfBtn) e.halfBtn.disabled = !v || v <= 2;
+    if (e.doubleBtn) e.doubleBtn.disabled = !v || v >= CHEAT_MAX;
+    if (e.valEl) e.valEl.textContent = v ? String(v) : '—';
     e.swapBtn.disabled = picked.length < 2;
     e.clearBtn.disabled = picked.length < 1;
   }
@@ -492,16 +504,21 @@
       pickCell(cellFromPoint(ev.clientX, ev.clientY));
     });
 
-    B8.on(e.setBtn, 'click', function () {
+    function stepCell(mul) {
       if (!picked.length) return;
-      var v = Number(e.num && e.num.value);
-      if (!v || v < 2 || (v & (v - 1)) !== 0 || v > 131072) {
-        B8.toast('填 2、4、8 这种 2 的幂（最大 131072）');
-        return;
-      }
-      setCell(picked[picked.length - 1], v);
-      B8.toast('第 ' + (picked[picked.length - 1] + 1) + ' 格改成 ' + v);
-    });
+      var idx = picked[picked.length - 1];
+      var cur = slots[idx] ? slots[idx].v : 0;
+      if (!cur) return;
+      var next = mul > 0 ? cur * 2 : Math.floor(cur / 2);
+      if (next < 2) next = 2;
+      if (next > CHEAT_MAX) next = CHEAT_MAX;
+      if (next === cur) return;
+      setCell(idx, next);
+      refreshCheatButtons();
+    }
+
+    B8.on(e.doubleBtn, 'click', function () { stepCell(1); });
+    B8.on(e.halfBtn, 'click', function () { stepCell(-1); });
 
     B8.on(e.swapBtn, 'click', function () {
       if (picked.length < 2) return;
