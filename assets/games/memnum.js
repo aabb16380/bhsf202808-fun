@@ -109,6 +109,38 @@
     return sum / ROUNDS;       // 分母固定 5：中途显示时也不会虚高
   }
 
+  /** 分数显示统一缩小 1000 倍、保留两位小数（内部标准分不变） */
+  function fmtScore(v) {
+    return (Number(v || 0) / 1000).toFixed(2);
+  }
+
+  /**
+   * 答案 / 作答两行对照，逐位对齐。
+   * 作答里写错的数字标红；没写到的位显示 _；不再用括号夹正确数字。
+   */
+  function compareHtml(target, input) {
+    var n = target.length;
+    var ans = '';
+    var usr = '';
+    for (var i = 0; i < n; i++) {
+      ans += '<span class="mn-d">' + target.charAt(i) + '</span>';
+      if (input === '跳过') {
+        usr += '<span class="mn-d is-miss">_</span>';
+      } else {
+        var u = input.charAt(i);
+        if (!u) usr += '<span class="mn-d is-miss">_</span>';
+        else if (u === target.charAt(i)) usr += '<span class="mn-d">' + u + '</span>';
+        else usr += '<span class="mn-d is-bad">' + u + '</span>';
+      }
+    }
+    return '<div class="mn-cmp" style="--n:' + n + '">' +
+      '<div class="mn-cmp-line"><span class="mn-cmp-k">答案</span>' +
+        '<span class="mn-cmp-cells">' + ans + '</span></div>' +
+      '<div class="mn-cmp-line"><span class="mn-cmp-k">作答</span>' +
+        '<span class="mn-cmp-cells">' + usr + '</span></div>' +
+      '</div>';
+  }
+
   function levelText() {
     return 'Lv' + (level + 1);
   }
@@ -122,9 +154,9 @@
     if (roundEl) roundEl.textContent = round ? (round + '/' + ROUNDS) : '—';
     if (scoreEl) {
       var live = Math.round(avgOf(results) * LEVELS[level].coef * BASE);
-      scoreEl.textContent = String(clamp(live, 0, MAX_SCORE));
+      scoreEl.textContent = fmtScore(clamp(live, 0, MAX_SCORE));
     }
-    if (bestEl) bestEl.textContent = String(best);
+    if (bestEl) bestEl.textContent = fmtScore(best);
   }
 
   function setProgress(text) {
@@ -243,23 +275,15 @@
 
     var len = target.length;
     var hits = 0;
-    var html = '';
     for (var i = 0; i < len; i++) {
-      var u = val.charAt(i);
-      if (!u) {
-        html += '<span class="miss">_</span>';
-      } else if (u === target.charAt(i)) {
-        hits++;
-        html += '<span class="ok">' + u + '</span>';
-      } else {
-        html += '<span class="bad">' + u + '<span class="correct">(' + target.charAt(i) + ')</span></span>';
-      }
+      if (val.charAt(i) && val.charAt(i) === target.charAt(i)) hits++;
     }
 
     results.push({ target: target, input: val, hits: hits, acc: hits / len });
     phase = 'feedback';
     setControls(false);
-    setFeedback(html + '<br><span class="msg">' + hits + ' / ' + len + ' 位正确</span>');
+    setFeedback(compareHtml(target, val) +
+      '<span class="msg">' + hits + ' / ' + len + ' 位正确</span>');
     setHint('记住这一轮，下一轮马上来。');
     paintHud();
 
@@ -313,7 +337,7 @@
       var L = LEVELS[i];
       out += '<tr' + (i === level ? ' class="is-on"' : '') + '>' +
         '<td>Lv' + (i + 1) + '</td><td>' + L.len + '</td><td>' + L.time + 'ms</td>' +
-        '<td>×' + L.coef.toFixed(2) + '</td><td>' + Math.round(L.coef * BASE) + '</td></tr>';
+        '<td>×' + L.coef.toFixed(2) + '</td><td>' + fmtScore(Math.round(L.coef * BASE)) + '</td></tr>';
     }
     return out + '</tbody></table>';
   }
@@ -346,7 +370,7 @@
         '<div class="chips">' + chips + '</div></div>' +
       '<p class="tip" style="margin:8px 0 0">当前 <b>Lv' + (level + 1) + '</b>：' +
         L.len + ' 位 · ' + L.time + 'ms · 系数 <b>×' + L.coef.toFixed(2) + '</b> · ' +
-        '满分 <b>' + Math.round(L.coef * BASE) + '</b>。</p>' +
+        '满分 <b>' + fmtScore(Math.round(L.coef * BASE)) + '</b>。</p>' +
       '<ul class="rules" style="margin-top:12px">' +
         '<li>每轮先 3、2、1 倒计时，然后数字闪现；闪完输入。</li>' +
         '<li>按<b>位</b>计分：位置和数字都对才算一位，错一位只扣那一位。</li>' +
@@ -358,7 +382,7 @@
       '<button class="btn-main" type="button" data-act="go">开始 Lv' + (level + 1) + '</button>' +
       '<p class="tip">' +
         (B8.auth && B8.auth.isLogged()
-          ? '成绩会记到排行榜（标准分，跨等级可比；本机最高 ' + best + '）。'
+          ? '成绩会记到排行榜（标准分，跨等级可比；本机最高 ' + fmtScore(best) + '）。'
           : '没登录，成绩只存在这台设备 · <a href="index.html">回游乐场登录</a>') +
       '</p>' +
       '<p class="tip"><a href="index.html">← 回游乐场</a></p>';
@@ -372,11 +396,14 @@
     var pct = Math.round(acc * 1000) / 10;
     var coef = LEVELS[level].coef;
     var max = Math.round(coef * BASE);
-    var rows = '';
+    var review = '';
     for (var i = 0; i < results.length; i++) {
       var r = results[i];
-      rows += '<tr><td>' + (i + 1) + '</td><td>' + r.target + '</td><td>' + r.input +
-        '</td><td>' + r.hits + '/' + r.target.length + '</td></tr>';
+      review += '<div class="mn-review-item">' +
+        '<div class="mn-review-head"><b>第 ' + (i + 1) + ' 轮</b>' +
+          '<span>' + r.hits + ' / ' + r.target.length + ' 位正确</span></div>' +
+        compareHtml(r.target, r.input) +
+        '</div>';
     }
 
     panel.innerHTML =
@@ -384,19 +411,17 @@
       '<p class="sub">Lv' + (level + 1) + ' · ' + LEVELS[level].len + ' 位 · ' +
         LEVELS[level].time + 'ms · 系数 ×' + coef.toFixed(2) + '</p>' +
       '<div class="result">' +
-        '<div><span class="big">' + score + '</span><span class="big-unit">分</span></div>' +
-        '<p class="rank-line">平均准确率 <b>' + pct + '%</b> · 本级满分 ' + max + '</p>' +
+        '<div><span class="big">' + fmtScore(score) + '</span><span class="big-unit">分</span></div>' +
+        '<p class="rank-line">平均准确率 <b>' + pct + '%</b> · 本级满分 ' + fmtScore(max) + '</p>' +
         '<dl>' +
           '<div><dt>平均准确率</dt><dd>' + pct + '%</dd></div>' +
           '<div><dt>等级系数</dt><dd>×' + coef.toFixed(2) + '</dd></div>' +
-          '<div><dt>本机最高</dt><dd>' + best + '</dd></div>' +
+          '<div><dt>本机最高</dt><dd>' + fmtScore(best) + '</dd></div>' +
         '</dl>' +
-        '<table class="lv-table" style="margin:12px 0 0"><thead><tr>' +
-          '<th>轮</th><th>答案</th><th>你的输入</th><th>正确位</th></tr></thead><tbody>' +
-          rows + '</tbody></table>' +
+        '<div class="mn-review">' + review + '</div>' +
       '</div>' +
       '<p class="note-line" id="mn-note">' +
-        (isNew ? '本机新纪录。' : '本机最高 ' + best + ' 分。') +
+        (isNew ? '本机新纪录。' : '本机最高 ' + fmtScore(best) + ' 分。') +
       '</p>' +
       '<button class="btn-main" type="button" data-act="again">再来一次 Lv' + (level + 1) + '</button>' +
       '<button class="btn-2nd" type="button" data-act="menu">换等级</button>' +
@@ -425,7 +450,7 @@
       p_game: 'memnum',
       p_score: Math.floor(v)
     }).then(function () {
-      setNote('成绩已记到排行榜：' + v + ' 分（Lv' + (level + 1) + ' · 系数 ×' + LEVELS[level].coef.toFixed(2) + '）。');
+      setNote('成绩已记到排行榜：' + fmtScore(v) + ' 分（Lv' + (level + 1) + ' · 系数 ×' + LEVELS[level].coef.toFixed(2) + '）。');
     }).catch(function (err) {
       submitted = 0;
       setNote('成绩没传上去：' + (err && err.message ? err.message : '网络异常'), true);

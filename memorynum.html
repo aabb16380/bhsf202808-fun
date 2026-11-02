@@ -7,17 +7,17 @@
 <meta name="description" content="记忆数字：数字闪一下，凭记忆输入。11 个等级、每级 5 轮，按等级系数折算成 1000000 分制，排行榜跨等级公平比较。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g25" type="image/png">
-<link rel="stylesheet" href="assets/games/lab.css?v=20261101g25">
+<link rel="icon" href="assets/favicon.png?v=20261101g26" type="image/png">
+<link rel="stylesheet" href="assets/games/lab.css?v=20261101g26">
 <script>
-window.B8_BUILD = '20261101g25';
+window.B8_BUILD = '20261101g26';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g25"></script>
+<script src="assets/theme.js?v=20261101g26"></script>
 <style>
   /* ---------- 记忆数字 ---------- */
   #app { background: #efe7d5; }
@@ -157,11 +157,87 @@ window.B8_TEST = !!window.B8_T;
     word-break: break-all;
   }
 
-  .mn-feedback .ok { color: var(--jade); font-weight: 700; }
-  .mn-feedback .bad { color: var(--seal); font-weight: 700; }
-  .mn-feedback .miss { color: var(--ink-3); }
-  .mn-feedback .correct { color: var(--ink-3); font-size: 0.78em; }
-  .mn-feedback .msg { font-family: var(--sans); font-size: 12.5px; color: var(--ink-2); }
+  .mn-feedback .msg {
+    display: block;
+    margin-top: 5px;
+    font-family: var(--sans);
+    font-size: 12.5px;
+    color: var(--ink-2);
+  }
+
+  .mn-cmp {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 3px 0;
+    text-align: left;
+  }
+
+  .mn-cmp-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mn-cmp-k {
+    flex: 0 0 2.3em;
+    font-family: var(--sans);
+    font-size: 11px;
+    text-align: right;
+    color: var(--ink-3);
+  }
+
+  .mn-cmp-cells {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1.15em;
+    font-family: var(--mono);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .mn-d {
+    text-align: center;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mn-d.is-bad {
+    color: var(--seal);
+    font-weight: 700;
+  }
+
+  .mn-d.is-miss { color: var(--ink-3); }
+
+  .mn-review {
+    margin: 12px 0 0;
+    border-top: 1px dashed var(--line);
+  }
+
+  .mn-review-item {
+    padding: 9px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mn-review-item:last-child { border-bottom: 0; }
+
+  .mn-review-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 1px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-3);
+  }
+
+  .mn-review-head b {
+    font-family: var(--sans);
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--ink-2);
+  }
 
   .mn-skip {
     align-self: center;
@@ -189,7 +265,7 @@ window.B8_TEST = !!window.B8_T;
     .mn-wrap { gap: 8px; }
   }
 </style>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g25">
+<link rel="stylesheet" href="assets/theme.css?v=20261101g26">
 </head>
 
 <body data-site="fun">
@@ -246,7 +322,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g25' + T;
+  var V = '?v=20261101g26' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

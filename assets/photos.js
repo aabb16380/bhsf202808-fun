@@ -1292,6 +1292,9 @@
     if (game === 'clickspeed') {
       return { text: String(Math.round(n / 1000)), unit: '次' };
     }
+    if (game === 'memnum') {
+      return { text: (n / 1000).toFixed(2), unit: '分' };
+    }
     return { text: String(n), unit: '分' };
   }
 

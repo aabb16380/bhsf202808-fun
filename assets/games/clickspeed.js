@@ -6,7 +6,7 @@
    鼠标/触屏都行；空格用键盘代替点击也计入（不响应长按重复）。
 
    上榜分 = 点击数 × 1000（10 秒 100 下 = 100000 分）。
-   上限 1000000 对应 1000 下/10 秒，正常人手到不了。
+   上限 100000000 对应 100000 下/10 秒（v2.67 从 1000 下提高）。
    ============================================================ */
 (function () {
   'use strict';
@@ -15,7 +15,7 @@
   if (!B8) return;
 
   var DURATION = 10000;
-  var MAX_SCORE = 1000000;
+  var MAX_SCORE = 100000000;
   var KEY_BEST = 'b8.clickspeed.best';
 
   var pad, countEl, hintEl, tipEl, ringEl, overlay, panel;
@@ -178,6 +178,7 @@
         '<li>倒计时 3、2、1 后开始，固定 <b>10 秒</b>。</li>' +
         '<li>点击区里每个 <b>pointerdown</b> 算一次；长按不重复计数。</li>' +
         '<li>上报分 = <b>点击数 × 1000</b>：50 下 = 50000，80 下 = 80000。</li>' +
+        '<li>计数上限 <b>100000 下</b>（对应 100000000 分），正常 10 秒到不了。</li>' +
         '<li>同一个人只留最高分；手机上多指轮点也算。</li>' +
       '</ul>' +
       '<p class="rf-score-note" style="margin:10px 0 0;font-size:11.5px;line-height:1.8;color:var(--ink-3);text-align:left">' +
