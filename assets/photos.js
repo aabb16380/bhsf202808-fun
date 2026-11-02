@@ -286,9 +286,9 @@
       { nick: '数学课代表', score: 751000, created_at: '2026-10-29T19:36:00+08:00' }
     ],
     clickspeed: [
-      { nick: '体委', score: 92000, created_at: '2026-11-02T20:30:00+08:00' },
-      { nick: '后排靠窗', score: 84000, created_at: '2026-11-01T12:55:00+08:00' },
-      { nick: '文艺委员', score: 76000, created_at: '2026-10-31T17:10:00+08:00' }
+      { nick: '体委', score: 92, created_at: '2026-11-02T20:30:00+08:00' },
+      { nick: '后排靠窗', score: 84, created_at: '2026-11-01T12:55:00+08:00' },
+      { nick: '文艺委员', score: 76, created_at: '2026-10-31T17:10:00+08:00' }
     ]
   };
 
@@ -1290,10 +1290,10 @@
       return rt > 0 ? { text: (rt / 1000).toFixed(0), unit: 'ms' } : { text: String(n), unit: '分' };
     }
     if (game === 'clickspeed') {
-      return { text: String(Math.round(n / 1000)), unit: '次' };
+      return { text: String(n), unit: '次' };
     }
     if (game === 'memnum') {
-      return { text: (n / 1000).toFixed(2), unit: '分' };
+      return { text: (n / 10000).toFixed(2), unit: '分' };
     }
     return { text: String(n), unit: '分' };
   }
@@ -1430,9 +1430,10 @@
 
     rankSkeleton();
     var rpcName = game === 'piano' ? 'b8_piano_top' : 'b8_score_top';
+    var rpcGame = game === 'clickspeed' ? 'clickspeed2' : game;
     var rpcArgs = game === 'piano'
       ? { p_token: B8.auth.token(), p_limit: 10 }
-      : { p_token: B8.auth.token(), p_game: game, p_limit: 10 };
+      : { p_token: B8.auth.token(), p_game: rpcGame, p_limit: 10 };
     B8.sb.rpc(rpcName, rpcArgs)
       .then(function (rows) {
         if (seq !== rankSeq) return;   // 切了 tab，别把旧结果画上去

@@ -5,8 +5,8 @@
    每个 pointerdown 算一次（多指触屏时每根手指各算一次），
    鼠标/触屏都行；空格用键盘代替点击也计入（不响应长按重复）。
 
-   上榜分 = 点击数 × 1000（10 秒 100 下 = 100000 分）。
-   上限 100000000 对应 100000 下/10 秒（v2.67 从 1000 下提高）。
+   上榜分 = 点击数（1 次 = 1 分，不再乘 1000，避免没有意义的大数和溢出）。
+   计数上限 100000 次/10 秒（v2.68 从 1000 次提高）。
    ============================================================ */
 (function () {
   'use strict';
@@ -15,8 +15,11 @@
   if (!B8) return;
 
   var DURATION = 10000;
-  var MAX_SCORE = 100000000;
-  var KEY_BEST = 'b8.clickspeed.best';
+  var MAX_SCORE = 100000;
+  var KEY_BEST = 'b8.clickspeed.best.v2';
+  var OLD_KEY_BEST = 'b8.clickspeed.best';
+  // v2.68 换了计分方式，用新键把旧版「点击数 × 1000」的榜单独隔开
+  var GAME_KEY = 'clickspeed2';
 
   var pad, countEl, hintEl, tipEl, ringEl, overlay, panel;
   var timeEl, clicksEl, cpsEl, bestEl;
@@ -50,6 +53,19 @@
     try { return Number(localStorage.getItem(key) || 0) || 0; } catch (e) { return 0; }
   }
 
+  /** 旧版把分数存成 点击数 × 1000；v2.68 起直接存点击数，读一次旧记录做迁移 */
+  function readBest() {
+    var v = clamp(readNum(KEY_BEST), 0, MAX_SCORE);
+    if (v > 0) return v;
+    var old = readNum(OLD_KEY_BEST);
+    if (old > 0) {
+      v = clamp(Math.round(old / 1000), 0, MAX_SCORE);
+      store(KEY_BEST, v);
+      return v;
+    }
+    return 0;
+  }
+
   function store(key, val) {
     try { localStorage.setItem(key, String(val)); } catch (e) {}
   }
@@ -61,11 +77,11 @@
   }
 
   function scoreOf(n) {
-    return clamp(Math.round(n * 1000), 0, MAX_SCORE);
+    return clamp(Math.round(n), 0, MAX_SCORE);
   }
 
   function bestClicks() {
-    return Math.floor(best / 1000);
+    return best;
   }
 
   function paintHud(left) {
@@ -177,8 +193,8 @@
       '<ul class="rules">' +
         '<li>倒计时 3、2、1 后开始，固定 <b>10 秒</b>。</li>' +
         '<li>点击区里每个 <b>pointerdown</b> 算一次；长按不重复计数。</li>' +
-        '<li>上报分 = <b>点击数 × 1000</b>：50 下 = 50000，80 下 = 80000。</li>' +
-        '<li>计数上限 <b>100000 下</b>（对应 100000000 分），正常 10 秒到不了。</li>' +
+        '<li>上报分 = <b>点击数</b>：1 次 = 1 分，不乘系数。</li>' +
+        '<li>计数上限 <b>100000 次</b>（对应 100000 分），正常 10 秒到不了。</li>' +
         '<li>同一个人只留最高分；手机上多指轮点也算。</li>' +
       '</ul>' +
       '<p class="rf-score-note" style="margin:10px 0 0;font-size:11.5px;line-height:1.8;color:var(--ink-3);text-align:left">' +
@@ -187,7 +203,7 @@
       '<button class="btn-main" type="button" data-act="go">开始</button>' +
       '<p class="tip">' +
         (B8.auth && B8.auth.isLogged()
-          ? '成绩会记到排行榜（本机最高 ' + bestClicks() + ' 下 / ' + best + ' 分）。'
+          ? '成绩会记到排行榜（本机最高 ' + bestClicks() + ' 次）。'
           : '没登录，成绩只存在这台设备 · <a href="index.html">回游乐场登录</a>') +
       '</p>' +
       '<p class="tip"><a href="index.html">← 回游乐场</a></p>';
@@ -236,7 +252,7 @@
     submitted = v;
     B8.sb.rpc('b8_score_add', {
       p_token: B8.auth.token(),
-      p_game: 'clickspeed',
+      p_game: GAME_KEY,
       p_score: Math.floor(v)
     }).then(function () {
       setNote('成绩已记到排行榜：' + v + ' 分（' + count + ' 下 / 10 秒）。');
@@ -291,7 +307,7 @@
 
     if (!pad || !panel) return;
 
-    best = readNum(KEY_BEST);
+    best = readBest();
     paintHud(DURATION);
     bindPanel();
 
