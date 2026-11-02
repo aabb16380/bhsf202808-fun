@@ -411,3 +411,9 @@ html, body {
   .panel .sub { margin-bottom: 12px; }
   .rules { margin-bottom: 10px; }
 }
+
+@media (max-width: 480px) {
+  .lv-table { font-size: 10px; }
+  .lv-table th,
+  .lv-table td { padding: 5px 3px; }
+}

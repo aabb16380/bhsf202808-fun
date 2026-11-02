@@ -1495,3 +1495,9 @@
 @media (max-width: 720px) {
   .game-more { grid-template-columns: minmax(0, 1fr); }
 }
+/* 手机上的 8 个游戏 tab：不要平均挤成 8 条，按内容宽度换行更好读 */
+@media (max-width: 640px) {
+  .game-tabs .game-tab {
+    flex: 0 1 auto;
+  }
+}
