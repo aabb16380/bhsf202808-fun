@@ -157,6 +157,10 @@ html[data-mode="night"] #board {
   box-shadow: 0 1px 0 var(--line), 0 18px 40px -30px rgba(0, 0, 0, 0.9);
 }
 
+html[data-mode="night"] .cs-pad.is-run:active {
+  background: #22222c;
+}
+
 html[data-mode="night"] .btn-2nd {
   color: var(--ink-2);
   border-color: var(--line);
