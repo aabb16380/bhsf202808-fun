@@ -51,6 +51,15 @@
     return n;
   }
 
+  /** 只有管理员 / 超管能看到「谁传的」；普通用户和预览态一律看不到 */
+  function canSeeUploader() {
+    try {
+      return !!(B8.auth && B8.auth.isAdmin && B8.auth.isAdmin());
+    } catch (e) {
+      return false;
+    }
+  }
+
   function whenReady(fn) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
     else fn();
@@ -196,8 +205,7 @@
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
 
-  function samplePhotos() {
-    var caps = [
+  function samplePhotos() {    var caps = [
       '运动会那天，4×100 最后一棒',
       '秋游回来，在校门口的最后一张',
       '联欢会彩排，灯还没亮'
@@ -589,7 +597,7 @@
     open.setAttribute('aria-label', '查看大图：' + (p.caption || '班级合影'));
 
     var img = el('img');
-    img.alt = p.caption || (p.uploader ? p.uploader + ' 上传的合影' : '班级合影');
+    img.alt = p.caption || (canSeeUploader() && p.uploader ? p.uploader + ' 上传的合影' : '班级合影');
     img.width = 800;
     img.height = 600;
     img.loading = 'lazy';
@@ -621,7 +629,7 @@
     meta.appendChild(catTag);
 
     // 上传者：只有管理员和超管看得到名字
-    var isBoss = B8.auth && B8.auth.isAdmin && B8.auth.isAdmin();
+    var isBoss = canSeeUploader();
     if (isBoss) {
       var who = el('span', 'photo-who');
       who.textContent = p.uploader || '同学';
@@ -1209,7 +1217,8 @@
     b.img.src = p.url;
     b.img.alt = p.caption || '班级合影';
     b.cap.textContent = p.caption || '（没写说明）';
-    b.meta.textContent = (p.uploader || '同学') + ' · ' + (B8.date(p.taken_on || p.created_at) || '某一天') +
+    var who = (canSeeUploader() && p.uploader) ? p.uploader : '同学';
+    b.meta.textContent = who + ' · ' + (B8.date(p.taken_on || p.created_at) || '某一天') +
       ' · ' + (i + 1) + ' / ' + shown.length;
     b.prev.hidden = shown.length < 2;
     b.next.hidden = shown.length < 2;

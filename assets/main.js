@@ -232,6 +232,8 @@
     });
 
     B8.qsa('a, button', menu).forEach(function (el) {
+      // 夜间模式按钮是连续切换用的，点一下不能把菜单关掉
+      if (el.id === 'theme-btn') return;
       B8.on(el, 'click', close);
     });
   }
