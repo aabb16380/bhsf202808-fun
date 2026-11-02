@@ -353,10 +353,6 @@
     start: start,
     press: press,
     menu: showMenu,
-    forceRed: function () {
-      if (state === 'wait') turnRed();
-      return state;
-    },
     scoreFor: scoreOf,
     state: function () {
       return {
@@ -368,6 +364,10 @@
   };
 
   if (window.B8_TEST) {
+    api.forceRed = function () {
+      if (state === 'wait') turnRed();
+      return state;
+    };
     api.feed = function (list) {
       times = (list || []).slice();
       penalties = [];

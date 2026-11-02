@@ -519,12 +519,6 @@
   var api = {
     start: function (lv) { startLevel((Number(lv) || 1) - 1); },
     menu: showMenu,
-    answer: function (v) {
-      if (phase !== 'input') return false;
-      if (inputEl) inputEl.value = String(v == null ? '' : v);
-      submitAnswer();
-      return true;
-    },
     skip: skipRound,
     scoreFor: function (lv, accs) { return scoreOf((Number(lv) || 1) - 1, accs || []); },
     levels: function () {
@@ -542,6 +536,12 @@
   };
 
   if (window.B8_TEST) {
+    api.answer = function (v) {
+      if (phase !== 'input') return false;
+      if (inputEl) inputEl.value = String(v == null ? '' : v);
+      submitAnswer();
+      return true;
+    };
     api.result = function () {
       var accs = [];
       for (var i = 0; i < results.length; i++) accs.push(results[i].acc);

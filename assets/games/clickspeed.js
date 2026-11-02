@@ -330,18 +330,6 @@
   B8.games = B8.games || {};
   var api = {
     start: start,
-    forceRun: function () {
-      if (state === 'count') {
-        if (countdownTimer) { clearTimeout(countdownTimer); countdownTimer = 0; }
-        beginRun();
-      }
-      return state;
-    },
-    hit: function (n) {
-      var times = Math.max(1, Number(n) || 1);
-      for (var i = 0; i < times; i++) hit(null);
-      return count;
-    },
     finish: finish,
     menu: showMenu,
     scoreFor: scoreOf,
@@ -355,6 +343,18 @@
   };
 
   if (window.B8_TEST) {
+    api.forceRun = function () {
+      if (state === 'count') {
+        if (countdownTimer) { clearTimeout(countdownTimer); countdownTimer = 0; }
+        beginRun();
+      }
+      return state;
+    };
+    api.hit = function (n) {
+      var times = Math.max(1, Number(n) || 1);
+      for (var i = 0; i < times; i++) hit(null);
+      return count;
+    };
     api.feed = function (n) {
       state = 'run';
       count = clamp(Number(n) || 0, 0, 100000);

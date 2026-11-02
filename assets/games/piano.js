@@ -1154,12 +1154,25 @@
     tick: function (ts) {
       if (mode === 'count' || mode === 'play') frame(ts || performance.now());
     },
-    // 自检：把当前局直接切到 play，并按指定判定走完整首
-    forcePlay: function () {
+    state: function () {
+      return {
+        mode: mode, score: score, combo: combo, maxCombo: maxCombo,
+        song: song.id, diff: diff.id, level: song.lv[diff.id],
+        judged: counts.perfect + counts.good + counts.miss,
+        total: total, counts: counts, grade: gradeOf(score),
+        parts: partsOf(counts, maxCombo, total)
+      };
+    }
+  };
+
+  /* 自动演奏 / 直接结算 / 公式查询只放在 ?t= 调试入口，
+     正常访问拿不到，免得在控制台里一键满分。 */
+  if (window.B8_TEST) {
+    api.forcePlay = function () {
       if (mode === 'count') { countdownEl.hidden = true; }
       if (mode === 'count' || mode === 'play') mode = 'play';
-    },
-    simulate: function (kind) {
+    };
+    api.simulate = function (kind) {
       if (mode !== 'play') return null;
       for (var i = 0; i < notes.length; i++) {
         var n = notes[i];
@@ -1173,24 +1186,12 @@
       }
       paint();
       return { score: score, counts: counts, maxCombo: maxCombo };
-    },
-    finish: function () { finish(); },
-    scoreFor: function (p, g, m, mc, e, n) {
+    };
+    api.finish = function () { finish(); };
+    api.scoreFor = function (p, g, m, mc, e, n) {
       return scoreOf({ perfect: p, good: g, miss: m, empty: e }, mc, n || total || 1);
-    },
-    gradeFor: gradeOf,
-    state: function () {
-      return {
-        mode: mode, score: score, combo: combo, maxCombo: maxCombo,
-        song: song.id, diff: diff.id, level: song.lv[diff.id],
-        judged: counts.perfect + counts.good + counts.miss,
-        total: total, counts: counts, grade: gradeOf(score),
-        parts: partsOf(counts, maxCombo, total)
-      };
-    }
-  };
-
-  if (window.B8_TEST) {
+    };
+    api.gradeFor = gradeOf;
     api.chart = function () {
       var out = [];
       for (var i = 0; i < notes.length; i++) {
