@@ -136,6 +136,10 @@
 
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 
+  function nightMode() {
+    return document.documentElement.getAttribute('data-mode') === 'night';
+  }
+
   function readNum(key) {
     try { return Number(localStorage.getItem(key) || 0) || 0; } catch (e) { return 0; }
   }
@@ -581,12 +585,12 @@
      ============================================================ */
 
   function drawBoard() {
-    ctx.fillStyle = '#fffefb';
+    ctx.fillStyle = nightMode() ? '#15151c' : '#fffefb';
     ctx.fillRect(0, 0, W, H + 2);
 
     // 淡淡的方格，像草稿纸
     ctx.save();
-    ctx.strokeStyle = 'rgba(35, 33, 28, 0.045)';
+    ctx.strokeStyle = nightMode() ? 'rgba(236, 233, 242, 0.05)' : 'rgba(35, 33, 28, 0.045)';
     ctx.lineWidth = 1;
     var step = 75;
     for (var x = step; x < W; x += step) {
@@ -604,7 +608,7 @@
     ctx.restore();
 
     // 箱底
-    ctx.fillStyle = 'rgba(35, 33, 28, 0.06)';
+    ctx.fillStyle = nightMode() ? 'rgba(236, 233, 242, 0.07)' : 'rgba(35, 33, 28, 0.06)';
     ctx.fillRect(0, H - 6, W, 6);
   }
 
@@ -638,7 +642,7 @@
     ctx.save();
     ctx.setLineDash([7, 9]);
     ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(35, 33, 28, 0.14)';
+    ctx.strokeStyle = nightMode() ? 'rgba(236, 233, 242, 0.2)' : 'rgba(35, 33, 28, 0.14)';
     ctx.beginPath();
     ctx.moveTo(aimX, DROP_Y + f.r);
     ctx.lineTo(aimX, H - 8);
@@ -696,7 +700,7 @@
       p.y -= 46 * dt;
       var a = Math.min(1, p.life / p.max * 1.6);
       ctx.globalAlpha = a;
-      ctx.fillStyle = '#a33228';
+      ctx.fillStyle = nightMode() ? '#e8b29c' : '#a33228';
       ctx.font = '700 26px "SFMono-Regular", Consolas, monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -710,13 +714,13 @@
     var a = Math.min(1, banner.t);
     ctx.save();
     ctx.globalAlpha = a;
-    ctx.fillStyle = 'rgba(253, 251, 246, 0.86)';
+    ctx.fillStyle = nightMode() ? 'rgba(20, 20, 26, 0.9)' : 'rgba(253, 251, 246, 0.86)';
     var bw = W * 0.82;
     var bh = 104;
     roundRect((W - bw) / 2, H * 0.36, bw, bh, 10);
     ctx.fill();
 
-    ctx.fillStyle = '#a33228';
+    ctx.fillStyle = nightMode() ? '#ece9f2' : '#a33228';
     ctx.font = '700 40px "Songti SC", "Noto Serif SC", serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

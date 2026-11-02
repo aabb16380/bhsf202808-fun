@@ -1,0 +1,189 @@
+/* ============================================================
+   八班游乐场 · 夜间模式样式
+   ------------------------------------------------------------
+   由 assets/theme.js 在 <head> 里先给 <html> 打 data-mode="night"，
+   这份表在所有页面样式之后加载，只覆盖颜色/背景，不改布局。
+   ============================================================ */
+
+html[data-mode="night"] { color-scheme: dark; }
+
+html[data-mode="night"] body {
+  --paper: #121218;
+  --paper-2: #0d0d12;
+  --card: #1b1b23;
+  --card-2: #22222c;
+  --ink: #ece9f2;
+  --ink-2: #b6b2c2;
+  --ink-3: #7d7a8c;
+  --line: #2b2b36;
+  --line-2: #3b3b49;
+  --seal: #d97757;
+  --seal-2: #e58d6b;
+  --seal-soft: rgba(217, 119, 87, 0.13);
+  --jade: #6fa8b3;
+  --jade-soft: rgba(111, 168, 179, 0.13);
+  --gold: #c9a86a;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px -16px rgba(0, 0, 0, 0.65);
+  --shadow-2: 0 2px 8px rgba(0, 0, 0, 0.45), 0 24px 50px -22px rgba(0, 0, 0, 0.8);
+  color: var(--ink);
+  background-color: #101014;
+  background-image:
+    linear-gradient(rgba(236, 233, 242, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(236, 233, 242, 0.025) 1px, transparent 1px);
+}
+
+html[data-mode="night"] body[data-site="fun"] {
+  --seal: #d97757;
+  --seal-2: #e58d6b;
+  --jade: #6fa8b3;
+  --gold: #c9a86a;
+}
+
+/* ---------- 主站头尾 / 卡片 ---------- */
+html[data-mode="night"] .site-header,
+html[data-mode="night"] .lab-hud,
+html[data-mode="night"] .hud,
+html[data-mode="night"] .topbar {
+  background: rgba(18, 18, 24, 0.94);
+  border-color: var(--line);
+}
+
+html[data-mode="night"] .section-alt {
+  background: rgba(13, 13, 18, 0.55);
+}
+
+html[data-mode="night"] .more-menu,
+html[data-mode="night"] .gate-card,
+html[data-mode="night"] .modal-inner,
+html[data-mode="night"] .card,
+html[data-mode="night"] .game-card,
+html[data-mode="night"] .photo-card,
+html[data-mode="night"] .game-more-card,
+html[data-mode="night"] .result,
+html[data-mode="night"] .lv-table,
+html[data-mode="night"] .my-scores,
+html[data-mode="night"] .ladder,
+html[data-mode="night"] .mn-screen,
+html[data-mode="night"] .mn-input,
+html[data-mode="night"] .cs-pad,
+html[data-mode="night"] .back {
+  background: var(--card);
+  border-color: var(--line);
+  color: var(--ink-2);
+}
+
+html[data-mode="night"] .game-more-card b,
+html[data-mode="night"] .brand,
+html[data-mode="night"] .panel h1,
+html[data-mode="night"] .log h1,
+html[data-mode="night"] .log h2,
+html[data-mode="night"] .log h3 {
+  color: var(--ink);
+}
+
+html[data-mode="night"] .more-menu a:hover,
+html[data-mode="night"] .more-menu button:hover,
+html[data-mode="night"] .menu-group a:hover {
+  background: var(--card-2);
+}
+
+/* ---------- 小游戏卡片 ---------- */
+html[data-mode="night"] .game-stat,
+html[data-mode="night"] .b2048,
+html[data-mode="night"] .b2048-cell {
+  background: var(--paper-2);
+  border-color: var(--line);
+}
+
+html[data-mode="night"] .b2048.is-plain .b2048-in {
+  background: #24242d !important;
+  background-image: none !important;
+  color: var(--ink) !important;
+  text-shadow: none !important;
+}
+
+html[data-mode="night"] .mem-front.has-img,
+html[data-mode="night"] .mem-card.is-matched .mem-front.has-img {
+  background: #24242d;
+}
+
+html[data-mode="night"] .schulte-cell,
+html[data-mode="night"] .chip:not([aria-pressed="true"]),
+html[data-mode="night"] .icon-btn,
+html[data-mode="night"] .acct-btn,
+html[data-mode="night"] .input,
+html[data-mode="night"] .select,
+html[data-mode="night"] .textarea {
+  background: var(--card);
+  border-color: var(--line-2);
+  color: var(--ink);
+}
+
+/* ---------- 独立游戏页 ---------- */
+html[data-mode="night"] .stage,
+html[data-mode="night"] .lab-stage {
+  background: linear-gradient(180deg, #17171e 0%, #121218 60%, #0f0f14 100%);
+  box-shadow: 0 0 0 1px var(--line), 0 24px 60px -48px rgba(0, 0, 0, 0.85);
+}
+
+html[data-mode="night"] .overlay {
+  background: rgba(12, 12, 16, 0.96);
+}
+
+html[data-mode="night"] .key {
+  background: linear-gradient(180deg, #1f1f28 0%, #17171e 100%);
+  border-color: var(--line);
+}
+
+html[data-mode="night"] .key.is-down {
+  background: linear-gradient(180deg, #2a2a36 0%, #22222c 100%);
+}
+
+html[data-mode="night"] .rf-field:not(.is-wait):not(.is-red):not(.is-result) {
+  background: linear-gradient(180deg, #17171e 0%, #121218 100%);
+  color: var(--ink);
+}
+
+html[data-mode="night"] .mn-screen,
+html[data-mode="night"] .mn-input,
+html[data-mode="night"] .cs-pad,
+html[data-mode="night"] #board,
+html[data-mode="night"] .rf-field:not(.is-wait):not(.is-red):not(.is-result) {
+  border-color: var(--line);
+}
+
+html[data-mode="night"] #board {
+  background: #15151c;
+  box-shadow: 0 1px 0 var(--line), 0 18px 40px -30px rgba(0, 0, 0, 0.9);
+}
+
+html[data-mode="night"] .btn-2nd {
+  color: var(--ink-2);
+  border-color: var(--line);
+}
+
+html[data-mode="night"] .chip[aria-pressed="true"] {
+  background: var(--ink);
+  color: #101014;
+  border-color: var(--ink);
+}
+
+/* ---------- 更新日志页 ---------- */
+html[data-mode="night"] .log code {
+  color: #e8b29c;
+  background: rgba(217, 119, 87, 0.12);
+  border-color: rgba(217, 119, 87, 0.2);
+}
+
+html[data-mode="night"] .log blockquote {
+  background: var(--paper-2);
+  border-left-color: var(--line-2);
+  color: var(--ink-2);
+}
+
+html[data-mode="night"] .page-head,
+html[data-mode="night"] .page-foot,
+html[data-mode="night"] .log h2,
+html[data-mode="night"] .log hr {
+  border-color: var(--line);
+}

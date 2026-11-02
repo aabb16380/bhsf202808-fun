@@ -5,7 +5,7 @@
    抢跑一次 +800ms（累加到本轮），不直接判负——比"作废重来"
    更宽容，也更难靠乱点刷成绩。
 
-   五次去掉最快、最慢，取中间三次平均（抗一次手抖/一次爆种）。
+   五次全部计入平均，不掐头去尾（抢跑仍按 +800ms/次计入本轮）。
    上榜分 = 1000000 − 平均毫秒 × 1000：
      150ms → 850000，200ms → 800000，250ms → 750000，300ms → 700000。
    ============================================================ */
@@ -70,21 +70,18 @@
     return clamp(Math.round(MAX_SCORE - ms * 1000), 0, MAX_SCORE);
   }
 
-  /** 去掉一个最快、一个最慢，取中间三次 */
-  function trimmed(list) {
+  /** 五次全部计入，直接取平均 */
+  function average(list) {
     if (!list.length) return 0;
-    var s = list.slice().sort(function (a, b) { return a - b; });
-    if (s.length >= 5) return (s[1] + s[2] + s[3]) / 3;
-    if (s.length >= 3) return (s[1] + s[s.length - 2]) / 2;
     var sum = 0;
-    for (var i = 0; i < s.length; i++) sum += s[i];
-    return sum / s.length;
+    for (var i = 0; i < list.length; i++) sum += list[i];
+    return sum / list.length;
   }
 
   function paintHud() {
     if (roundEl) roundEl.textContent = round ? (round + '/' + ROUNDS) : '—';
     if (lastEl) lastEl.textContent = times.length ? (Math.round(times[times.length - 1]) + 'ms') : '—';
-    if (avgEl) avgEl.textContent = times.length ? (Math.round(trimmed(times)) + 'ms') : '—';
+    if (avgEl) avgEl.textContent = times.length ? (Math.round(average(times)) + 'ms') : '—';
     if (bestEl) bestEl.textContent = String(best);
   }
 
@@ -170,7 +167,7 @@
   function finish() {
     state = 'over';
     clearTimers();
-    var avg = trimmed(times);
+    var avg = average(times);
     var score = scoreOf(avg);
     var isNew = score > best;
     if (isNew) {
@@ -203,10 +200,10 @@
       '<ul class="rules">' +
         '<li>一共 <b>5 轮</b>，每轮随机等待 1.5–4 秒。</li>' +
         '<li>红的之前点 = <b>抢跑</b>，本轮 <b>+800ms</b>，继续等。</li>' +
-        '<li>五次去掉最快、最慢，取中间三次平均。</li>' +
+        '<li><b>五次全部计入平均</b>，不掐头去尾。</li>' +
         '<li>上榜分 = <b>1000000 − 平均毫秒 × 1000</b>：150ms → 850000，200ms → 800000，300ms → 700000。</li>' +
       '</ul>' +
-      '<p class="rf-score-note">这个换算对所有人都一样，五次取中间三次也是为了不让一次误触毁掉整局。' +
+      '<p class="rf-score-note">五次都算，每一轮都要认真；抢跑和手抖不会被自动丢掉。' +
         '手机触屏本身有几十毫秒延迟，成绩会比电脑略慢，这属于设备差异。</p>' +
       '<button class="btn-main" type="button" data-act="go">开始</button>' +
       '<p class="tip">' +
@@ -229,8 +226,8 @@
 
     panel.innerHTML =
       '<h1>' + (isNew ? '新纪录' : '五轮结束') + '</h1>' +
-      '<p class="sub">去掉最快 ' + Math.round(bestSingle) + 'ms、最慢 ' +
-        Math.round(Math.max.apply(null, times)) + 'ms 后，取中间三次。</p>' +
+      '<p class="sub">五次全部计入，直接取平均（最快 ' + Math.round(bestSingle) +
+        'ms / 最慢 ' + Math.round(Math.max.apply(null, times)) + 'ms 只作参考，不剔除）。</p>' +
       '<div class="result">' +
         '<div><span class="big">' + score + '</span><span class="big-unit">分</span></div>' +
         '<p class="rank-line">平均反应 <b>' + Math.round(avg) + 'ms</b> · 本机最高 ' + best + '</p>' +
@@ -273,7 +270,7 @@
       p_game: 'reflex',
       p_score: Math.floor(v)
     }).then(function () {
-      setNote('成绩已记到排行榜：' + v + ' 分（平均 ' + Math.round(trimmed(times)) + 'ms）。');
+      setNote('成绩已记到排行榜：' + v + ' 分（平均 ' + Math.round(average(times)) + 'ms）。');
     }).catch(function (err) {
       submitted = 0;
       setNote('成绩没传上去：' + (err && err.message ? err.message : '网络异常'), true);
@@ -358,7 +355,7 @@
       return {
         state: state, round: round, times: times.slice(),
         penalties: penalties.slice(), falseStarts: falseStarts,
-        avg: times.length ? trimmed(times) : 0, best: best, writable: writable
+        avg: times.length ? average(times) : 0, best: best, writable: writable
       };
     }
   };
@@ -374,7 +371,7 @@
       falseStarts = 0;
       round = ROUNDS;
       finish();
-      return { score: scoreOf(trimmed(times)), avg: trimmed(times) };
+      return { score: scoreOf(average(times)), avg: average(times) };
     };
   }
 

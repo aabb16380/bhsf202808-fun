@@ -23,7 +23,7 @@ fun/
 ├─ piano.html              钢琴辉：独立全屏音游（四道，十首曲子，四档难度）
 ├─ suika.html              合成小辉辉：独立全屏合成游戏（物理堆叠）
 ├─ memorynum.html          记忆数字：11 级 × 5 轮，等级系数折算标准分
-├─ reaction.html           反应速度：等屏幕变红，5 轮取中间三次
+├─ reaction.html           反应速度：等屏幕变红，5 轮全部计入平均
 ├─ clickspeed.html         手速测试：10 秒点击区
 ├─ 404.html                找不到页面时的落地页
 ├─ test/index.html         调试入口：?to=<站内路径>，自动加 ?t=<时间戳> 绕缓存
@@ -46,6 +46,7 @@ fun/
    ├─ games/reflex.js      反应速度
    ├─ games/clickspeed.js  手速测试
    ├─ games/lab.css        上面三个独立页的公共样式
+   ├─ theme.js / theme.css 夜间模式（自动 / 常开 / 常关）
    ├─ games/hui/1–12.jpg   辉辉的十二张脸：记忆翻牌、合成的水果、钢琴琴块都用它们
    ├─ games/hui.jpg        最早那张脸（v2.46 起不再被页面引用，留着当素材）
    ├─ icon.png / favicon.png
@@ -113,6 +114,8 @@ supabase: {
 | 删自己的 / 管理员删任意 | `b8_photo_del(p_token, p_id)` |
 | 交成绩 | `b8_score_add(p_token, p_game, p_score)` |
 | 排行榜 | `b8_score_top(p_token, p_game, p_limit)` |
+| 钢琴辉排行（三首加权） | `b8_piano_top(p_token, p_limit)` |
+| 钢琴辉我的每首歌成绩 | `b8_piano_mine(p_token)` |
 
 上传路径固定为 `photos/<时间戳>-<随机>.jpg`，桶名 `b8-photos`。
 
@@ -157,10 +160,10 @@ select id, kind, label, active, created_at, used_at
 | 2048 | `b8.2048.best`（最高分） | 实际分数 | 分数（分） |
 | 记忆翻牌 | `b8.memory.best`（最少步数） | `1000 − 步数` | `1000 − 分数`（步，越少越好） |
 | 专注方格 | `b8.reaction.best`（最快毫秒） | `60000 − 毫秒` | `60000 − 分数`（秒） |
-| 钢琴辉 | `b8.piano.best`（最高分，不分曲目） | 实际分数（Phi+Mil，满分 1000000） | 分数（分） |
+| 钢琴辉 | `b8.piano.songs.<学号>`（每首歌最高一档） | 每首歌单独传 `piano:<song>:<diff>`，服务器取较大值 | 三首最高「成绩 × 难度系数」之和（不足三首按实际首数） |
 | 合成小辉辉 | `b8.suika.best`（最高分） | 实际分数 | 分数（分） |
 | 记忆数字 | `b8.memnum.best`（最高标准分） | `平均准确率 × 等级系数 × 400000` | 分数（分） |
-| 反应速度 | `b8.reflex.best`（最高分） | `1000000 − 去极值平均毫秒 × 1000` | `1000000 − 分数`（ms） |
+| 反应速度 | `b8.reflex.best`（最高分） | `1000000 − 五次平均毫秒 × 1000` | `1000000 − 分数`（ms） |
 | 手速测试 | `b8.clickspeed.best`（最高分） | `点击数 × 1000` | `分数 ÷ 1000`（次） |
 
 排行榜的数据库列是「越大越好」，所以中间几个游戏做了换算，界面上也写清楚了。
@@ -227,6 +230,14 @@ v2.59 起整条尺寸阶梯**往上提三级**（1 级 45、……、12 级 199 
 - 流程：改完代码 → 在 `更新日志.md` 顶部加一节（版本号 / 日期 / 构建号 / 改了什么）→
   升 `assets/site-config.js` 的 `version` 和 HTML 的 `window.B8_BUILD` → 发布。
 - 没有写更新日志的版本不算发完。
+
+### 夜间模式
+
+- 页头 `⋯` 菜单里的「夜间：自动 / 常开 / 常关」循环切换，选择存在 `b8.fun.theme`。
+- **自动**：跟随 `prefers-color-scheme`；另外 **21:00–04:00 一律算夜间**，到点自动切。
+- 实现：`assets/theme.js` 在 `<head>` 里先给 `<html>` 打 `data-mode="night"`，
+  `assets/theme.css` 在所有页面样式之后覆盖颜色；系统主题变化和跨 21:00 / 04:00 会重算。
+- 独立页也都加载了这两个文件；合成小辉辉的 canvas 颜色在 `suika.js` 里按 `data-mode` 切换。
 
 ---
 
