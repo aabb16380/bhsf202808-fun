@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>反应速度 · 八班游乐场</title>
+<meta name="description" content="反应速度：屏幕变红的瞬间点下去。五次取中间三次平均，越快分越高，排行榜见。">
+<meta name="theme-color" content="#f8f4e9">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="assets/favicon.png?v=20261101g18" type="image/png">
+<link rel="stylesheet" href="assets/games/lab.css?v=20261101g18">
+<script>
+window.B8_BUILD = '20261101g18';
+window.B8_T = (function () {
+  var m = (location.search || '').match(/[?&]t=([^&]+)/);
+  return m ? '&t=' + encodeURIComponent(m[1]) : '';
+})();
+window.B8_TEST = !!window.B8_T;
+</script>
+<style>
+  #app { background: #efe7d5; }
+
+  .icon-btn {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-2);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .icon-btn:active { transform: translateY(1px); }
+
+  .rf-field {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 24px;
+    text-align: center;
+    background: linear-gradient(180deg, #fffefb 0%, var(--paper) 100%);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background-color 0.07s linear;
+  }
+
+  .rf-field.is-wait {
+    background: linear-gradient(160deg, #3d5573 0%, #2c3f57 100%);
+    color: #fff;
+  }
+
+  .rf-field.is-red {
+    background: linear-gradient(160deg, #d24530 0%, #a33228 100%);
+    color: #fff;
+  }
+
+  .rf-field.is-result {
+    background: linear-gradient(160deg, #357a67 0%, #24584a 100%);
+    color: #fff;
+  }
+
+  .rf-big {
+    font-family: var(--mono);
+    font-size: clamp(2rem, 8vw, 4.2rem);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rf-sub {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.8;
+    opacity: 0.78;
+  }
+
+  .rf-field.is-wait .rf-big,
+  .rf-field.is-red .rf-big,
+  .rf-field.is-result .rf-big { text-shadow: 0 2px 20px rgba(0, 0, 0, 0.18); }
+
+  .rf-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.55;
+    animation: rf-pulse 1.1s ease-in-out infinite;
+  }
+
+  .rf-field.is-red .rf-dot {
+    width: 28px;
+    height: 28px;
+    opacity: 1;
+    animation: none;
+  }
+
+  @keyframes rf-pulse {
+    0%, 100% { transform: scale(0.8); opacity: 0.35; }
+    50% { transform: scale(1.3); opacity: 0.85; }
+  }
+
+  .rf-flag {
+    margin: 0;
+    min-height: 18px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #f6d9a8;
+  }
+
+  .rf-field:not(.is-wait) .rf-flag { color: var(--ink-3); }
+
+  .rf-score-note {
+    margin: 10px 0 0;
+    font-size: 11.5px;
+    line-height: 1.8;
+    color: var(--ink-3);
+    text-align: left;
+  }
+</style>
+</head>
+
+<body data-site="fun">
+
+<div id="app">
+  <header class="lab-hud">
+    <div class="lab-title">
+      <b>反应速度</b>
+      <span>REACTION TEST</span>
+    </div>
+    <div class="lab-stats">
+      <div class="stat"><span class="k">ROUND</span><b id="rf-round">—</b></div>
+      <div class="stat"><span class="k">LAST</span><b id="rf-last">—</b></div>
+      <div class="stat"><span class="k">AVG</span><b id="rf-avg">—</b></div>
+      <div class="stat"><span class="k">BEST</span><b id="rf-best">0</b></div>
+    </div>
+    <button class="icon-btn" id="btn-exit" type="button">退出</button>
+  </header>
+
+  <main class="lab-stage">
+    <div class="rf-field" id="rf-field">
+      <span class="rf-dot" aria-hidden="true"></span>
+      <div class="rf-big" id="rf-big">准备</div>
+      <p class="rf-sub" id="rf-sub">点「开始」后，屏幕会先保持安静。</p>
+      <p class="rf-flag" id="rf-flag"></p>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="panel" id="panel"></div>
+    </div>
+  </main>
+</div>
+
+<noscript>
+  <p style="padding:24px;font-size:14px;line-height:2">
+    反应速度测试要靠 JavaScript 计时，请打开 JavaScript 再进。
+  </p>
+</noscript>
+
+<script>
+(function () {
+  var T = window.B8_T || '';
+  var V = '?v=20261101g18' + T;
+  var list = [
+    ['assets/site-config.js', 0],
+    ['assets/main.js', 1],
+    ['assets/sb.js', 1],
+    ['assets/auth.js', 1],
+    ['assets/games/reflex.js', 1]
+  ];
+  for (var i = 0; i < list.length; i++) {
+    document.write('<script src="' + list[i][0] + V + '"' + (list[i][1] ? ' defer' : '') + '><\/script>');
+  }
+})();
+</script>
+
+</body>
+</html>

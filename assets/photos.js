@@ -72,6 +72,9 @@
     if (!tabs.length) return;
 
     tabs.forEach(function (btn) {
+      // 独立页面的入口是 <a class="game-tab">，没有 data-game，
+      // 不要给它绑切面板的逻辑（否则新标签打开时当前页的面板会被全藏掉）。
+      if (!btn.getAttribute('data-game')) return;
       B8.on(btn, 'click', function () {
         var g = btn.getAttribute('data-game');
         tabs.forEach(function (b) {
@@ -245,6 +248,21 @@
       { nick: '后排靠窗', score: 1860, created_at: '2026-10-31T19:22:00+08:00' },
       { nick: '数学课代表', score: 1420, created_at: '2026-10-28T13:10:00+08:00' },
       { nick: '文艺委员', score: 980, created_at: '2026-10-24T16:05:00+08:00' }
+    ],
+    memnum: [
+      { nick: '数学课代表', score: 880000, created_at: '2026-11-02T20:18:00+08:00' },
+      { nick: '后排靠窗', score: 700000, created_at: '2026-11-01T12:42:00+08:00' },
+      { nick: '文艺委员', score: 512000, created_at: '2026-10-30T18:20:00+08:00' }
+    ],
+    reflex: [
+      { nick: '体委', score: 812000, created_at: '2026-11-02T20:24:00+08:00' },
+      { nick: '后排靠窗', score: 786000, created_at: '2026-11-01T13:08:00+08:00' },
+      { nick: '数学课代表', score: 751000, created_at: '2026-10-29T19:36:00+08:00' }
+    ],
+    clickspeed: [
+      { nick: '体委', score: 92000, created_at: '2026-11-02T20:30:00+08:00' },
+      { nick: '后排靠窗', score: 84000, created_at: '2026-11-01T12:55:00+08:00' },
+      { nick: '文艺委员', score: 76000, created_at: '2026-10-31T17:10:00+08:00' }
     ]
   };
 
@@ -1231,6 +1249,13 @@
     if (game === 'schulte') {
       var ms = 60000 - n;
       return ms > 0 ? { text: (ms / 1000).toFixed(2), unit: '秒' } : { text: String(n), unit: '分' };
+    }
+    if (game === 'reflex') {
+      var rt = 1000000 - n;
+      return rt > 0 ? { text: (rt / 1000).toFixed(0), unit: 'ms' } : { text: String(n), unit: '分' };
+    }
+    if (game === 'clickspeed') {
+      return { text: String(Math.round(n / 1000)), unit: '次' };
     }
     return { text: String(n), unit: '分' };
   }

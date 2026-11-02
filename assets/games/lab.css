@@ -1,0 +1,413 @@
+/* ============================================================
+   八班游乐场 · 小游戏独立页公共样式
+   ------------------------------------------------------------
+   memorynum.html / reaction.html / clickspeed.html 共用。
+   和 piano.html / suika.html 同一套纸墨配色，但不加载主站样式，
+   省得公用的版心、页脚、照片墙样式把全屏游戏挤小。
+   ============================================================ */
+
+:root {
+  --paper: #fdfbf6;
+  --paper-2: #f7f1e3;
+  --line: #e6dfd0;
+  --line-2: #d3c7ac;
+  --ink: #23211c;
+  --ink-2: #5b574d;
+  --ink-3: #918a7b;
+  --seal: #c1522f;
+  --gold: #c08c2c;
+  --jade: #2f6f5e;
+  --indigo: #3d5573;
+  --serif: "Songti SC", "Noto Serif SC", "SimSun", serif;
+  --sans: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #efe7d5;
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+}
+
+#app {
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ---------- 顶栏 ---------- */
+.lab-hud {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(253, 251, 246, 0.95);
+}
+
+.lab-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.lab-title b {
+  font-family: var(--serif);
+  font-size: 16px;
+  line-height: 1.2;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.lab-title span {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+}
+
+.lab-stats {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.stat { display: flex; flex-direction: column; gap: 1px; min-width: 40px; }
+
+.stat .k {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  line-height: 1;
+}
+
+.stat b {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.stat b.is-hot { color: var(--seal); }
+
+/* ---------- 舞台 ---------- */
+.lab-stage {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 720px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #fffefb 0%, var(--paper) 62%, #f8f2e4 100%);
+  box-shadow: 0 0 0 1px var(--line), 0 24px 60px -48px rgba(35, 33, 28, 0.55);
+  overflow: hidden;
+}
+
+/* ---------- 遮罩 / 面板 ---------- */
+.overlay {
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(253, 251, 246, 0.96);
+  z-index: 20;
+  overflow: auto;
+}
+
+.panel {
+  width: 100%;
+  max-width: 460px;
+  min-width: 0;
+  max-height: calc(100vh - 28px);
+  overflow: auto;
+  text-align: center;
+  padding: 4px 2px;
+}
+
+.panel h1 {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.panel .sub {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--ink-2);
+}
+
+.pick { margin: 0 0 14px; text-align: left; }
+
+.pick-label {
+  display: block;
+  margin-bottom: 7px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--ink-3);
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.chip {
+  min-height: 38px;
+  padding: 8px 13px;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  color: #fff;
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.chip:active { transform: translateY(1px); }
+
+.chip small {
+  font-family: var(--mono);
+  font-size: 10px;
+  opacity: 0.62;
+  margin-left: 5px;
+}
+
+.btn-main {
+  display: block;
+  width: 100%;
+  margin: 16px 0 0;
+  padding: 14px;
+  font-family: var(--sans);
+  font-size: 15.5px;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: var(--seal);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px -16px rgba(193, 82, 47, 0.9);
+}
+
+.btn-main:active { transform: translateY(1px); }
+.btn-main:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+.btn-2nd {
+  display: block;
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 12px;
+  font-family: var(--sans);
+  font-size: 13.5px;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.btn-2nd:active { transform: translateY(1px); }
+
+.tip {
+  margin: 13px 0 0;
+  font-size: 11.5px;
+  line-height: 1.8;
+  color: var(--ink-3);
+  text-align: left;
+}
+
+.tip a { color: var(--ink-2); }
+.tip b { color: var(--ink-2); font-family: var(--mono); letter-spacing: 0.06em; }
+
+.rules {
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.rules li {
+  position: relative;
+  padding-left: 16px;
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--ink-2);
+}
+
+.rules li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--seal);
+  opacity: 0.55;
+}
+
+.rules b { color: var(--ink); }
+
+/* ---------- 结算 ---------- */
+.result {
+  margin: 4px 0 16px;
+  padding: 14px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.result .big {
+  font-family: var(--mono);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--seal);
+  font-variant-numeric: tabular-nums;
+}
+
+.result .big-unit {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+  margin-left: 4px;
+}
+
+.result .rank-line {
+  margin: 6px 0 12px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.result .rank-line b { font-family: var(--serif); font-size: 15px; }
+
+.result dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.result dt {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+}
+
+.result dd {
+  margin: 2px 0 0;
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.note-line {
+  margin: 12px 0 0;
+  min-height: 17px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+.note-line.is-err { color: var(--seal); }
+
+/* ---------- 等级/成绩表 ---------- */
+.lv-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 14px;
+  font-size: 11.5px;
+  background: #fff;
+}
+
+.lv-table th,
+.lv-table td {
+  padding: 6px 5px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.lv-table th {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+
+.lv-table td:first-child,
+.lv-table th:first-child { text-align: left; }
+
+.lv-table tr.is-on td {
+  color: var(--seal);
+  font-weight: 700;
+  background: rgba(193, 82, 47, 0.05);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(35, 33, 28, 0.9);
+  border-radius: 999px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.toast.show { opacity: 1; }
+
+@media (max-width: 480px) {
+  .lab-hud { gap: 8px; padding-left: 10px; padding-right: 10px; }
+  .lab-title b { font-size: 14px; }
+  .stat { min-width: 34px; }
+  .stat b { font-size: 14px; }
+  .panel h1 { font-size: 24px; }
+  .result .big { font-size: 34px; }
+}
+
+@media (max-height: 620px) {
+  .panel .sub { margin-bottom: 12px; }
+  .rules { margin-bottom: 10px; }
+}

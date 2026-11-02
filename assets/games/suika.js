@@ -43,21 +43,26 @@
   /* 果子表：level 0 空着，方便用 level 直接取。
      r 是逻辑半径（画布宽 600），points 是合成出来的得分。
      img 一填，就把数字换成人像（圆形裁切），label 只在结算/下一颗里当编号用。
-     十二级，1–12 级各一张脸；第 12 级是两个 11 级合体才看得到的。 */
+     十二级，1–12 级各一张脸；第 12 级是两个 11 级合体才看得到的。
+
+     v3：整条尺寸阶梯往上提三级（45 / 51 / 59 … 199），
+     也就是每一级都按原来「高三级」的半径来画，脸更大更好认。
+     半径仍然全部是逻辑坐标（画布固定 600×900），fit() 只做等比缩放，
+     所以任何屏幕上「球半径 / 容器宽度」都恒等于 r / 600。 */
   var FRUITS = [
     null,
-    { label: '1', r: 30, color: '#e9b949', dark: '#bf8f2a', points: 10, img: 'assets/games/hui/7.jpg' },
-    { label: '2', r: 34, color: '#e2794b', dark: '#b8562e', points: 25, img: 'assets/games/hui/5.jpg' },
-    { label: '3', r: 39, color: '#8fbf5f', dark: '#699840', points: 50, img: 'assets/games/hui/2.jpg' },
-    { label: '4', r: 45, color: '#d9534f', dark: '#a93936', points: 90, img: 'assets/games/hui/1.jpg' },
-    { label: '5', r: 51, color: '#7b6bb5', dark: '#5a4c92', points: 150, img: 'assets/games/hui/8.jpg' },
-    { label: '6', r: 59, color: '#4e8fa3', dark: '#356b7c', points: 240, img: 'assets/games/hui/3.jpg' },
-    { label: '7', r: 67, color: '#c2732c', dark: '#94501a', points: 370, img: 'assets/games/hui/4.jpg' },
-    { label: '8', r: 77, color: '#a33228', dark: '#7a1f18', points: 550, img: 'assets/games/hui/6.jpg' },
-    { label: '9', r: 88, color: '#3f7d6a', dark: '#2c5b4d', points: 790, img: 'assets/games/hui/9.jpg' },
-    { label: '10', r: 100, color: '#5b6fb0', dark: '#41538a', points: 1100, img: 'assets/games/hui/10.jpg' },
-    { label: '辉', r: 114, color: '#8a5aa8', dark: '#673f80', points: 1500, img: 'assets/games/hui/11.jpg' },
-    { label: '超', r: 131, color: '#f0d9a8', dark: '#c9a45c', points: 2000, img: 'assets/games/hui/12.jpg' }
+    { label: '1', r: 45, color: '#e9b949', dark: '#bf8f2a', points: 10, img: 'assets/games/hui/7.jpg' },
+    { label: '2', r: 51, color: '#e2794b', dark: '#b8562e', points: 25, img: 'assets/games/hui/5.jpg' },
+    { label: '3', r: 59, color: '#8fbf5f', dark: '#699840', points: 50, img: 'assets/games/hui/2.jpg' },
+    { label: '4', r: 67, color: '#d9534f', dark: '#a93936', points: 90, img: 'assets/games/hui/1.jpg' },
+    { label: '5', r: 77, color: '#7b6bb5', dark: '#5a4c92', points: 150, img: 'assets/games/hui/8.jpg' },
+    { label: '6', r: 88, color: '#4e8fa3', dark: '#356b7c', points: 240, img: 'assets/games/hui/3.jpg' },
+    { label: '7', r: 100, color: '#c2732c', dark: '#94501a', points: 370, img: 'assets/games/hui/4.jpg' },
+    { label: '8', r: 114, color: '#a33228', dark: '#7a1f18', points: 550, img: 'assets/games/hui/6.jpg' },
+    { label: '9', r: 131, color: '#3f7d6a', dark: '#2c5b4d', points: 790, img: 'assets/games/hui/9.jpg' },
+    { label: '10', r: 151, color: '#5b6fb0', dark: '#41538a', points: 1100, img: 'assets/games/hui/10.jpg' },
+    { label: '辉', r: 173, color: '#8a5aa8', dark: '#673f80', points: 1500, img: 'assets/games/hui/11.jpg' },
+    { label: '超', r: 199, color: '#f0d9a8', dark: '#c9a45c', points: 2000, img: 'assets/games/hui/12.jpg' }
   ];
 
   var SPAWN = [
@@ -910,8 +915,9 @@
     var out = '';
     for (var i = 1; i <= MAX_LEVEL; i++) {
       var f = FRUITS[i];
-      // 12 级台阶要装得下：最小的 11px，最大的 33px
-      var d = Math.round(9 + i * 2);
+      // 12 级台阶要装得下：最小的 7px，最大的 23px
+      // （320px 窄屏上 12 个圆点 + 边框也放得下一行，不折行）
+      var d = Math.round(5 + i * 1.5);
       var style = 'width:' + d + 'px;height:' + d + 'px;font-size:' + Math.round(d * 0.46) + 'px;';
       if (f.img) {
         // 注意：style 属性用双引号包着，url 里必须用单引号，否则 HTML 会被截断
@@ -920,7 +926,8 @@
         style += 'background:' + f.color + ';';
       }
       out += '<span class="dot" style="' + style + '">' + f.label + '</span>';
-      if (i < MAX_LEVEL) out += '<span class="arrow">→</span>';
+      // 不画箭头：12 级台阶 + 11 个箭头在窄屏上会挤成两行，
+      // 圆点本身从小到大已经能说明进阶关系。
     }
     return out;
   }
@@ -1132,15 +1139,22 @@
     var box = boardWrap.getBoundingClientRect();
     var availW = Math.max(120, box.width - 16);
     var availH = Math.max(180, box.height - 16);
-    var w = Math.min(availW, availH / 1.5);
-    var h = w * 1.5;
 
-    canvas.style.width = Math.round(w) + 'px';
-    canvas.style.height = Math.round(h) + 'px';
+    /* 容器宽高比恒为 W:H（2:3），画布只做等比缩放。
+       宽取整到 CSS 像素，高由宽算出来——两边分别四舍五入会让
+       宽高比在个别尺寸下差 0.5px，球看起来就"不在同一个比例"。
+       所有半径都是逻辑坐标（见 FRUITS），所以显示出来的
+       「球半径 / 容器宽度」永远等于 r / W，和屏幕尺寸无关。 */
+    var ratio = H / W;
+    var w = Math.max(120, Math.floor(Math.min(availW, availH / ratio)));
+    var h = Math.round(w * ratio);
+
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
 
     dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.max(1, Math.round(w * dpr));
-    canvas.height = Math.max(1, Math.round(h * dpr));
+    canvas.height = Math.max(1, Math.round(canvas.width * ratio));
     k = canvas.width / W;
   }
 
@@ -1276,6 +1290,23 @@
       return balls.length;
     };
     api.over = function () { gameOver(); };
+    api.radii = function () {
+      var out = [];
+      for (var i = 1; i <= MAX_LEVEL; i++) out.push(FRUITS[i].r);
+      return out;
+    };
+    // 验证「容器/球半径」比例：球直径 ÷ 画布 CSS 宽度 应当恒等于 2r / W
+    api.layout = function () {
+      var r = canvas.getBoundingClientRect();
+      return {
+        cssW: Math.round(r.width * 1000) / 1000,
+        cssH: Math.round(r.height * 1000) / 1000,
+        dpr: dpr,
+        ball1CssR: r.width * FRUITS[1].r / W,
+        ratio: FRUITS[1].r / W,
+        aspect: r.height ? r.width / r.height : 0
+      };
+    };
   }
 
   B8.games.suika = api;

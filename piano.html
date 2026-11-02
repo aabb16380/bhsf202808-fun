@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>钢琴辉 · 八班游乐场</title>
-<meta name="description" content="钢琴辉：辉辉踩着拍子往下掉，落在判定线的一瞬点中它。四道琴键 D F J K，四首曲子，三个难度。">
+<meta name="description" content="钢琴辉：辉辉踩着拍子往下掉，落在判定线的一瞬点中它。四道琴键 D F J K，十首曲子，四档难度，Phi+Mil 计分满分 1000000。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light">
-<link rel="icon" href="assets/favicon.png?v=20261101g17" type="image/png">
+<link rel="icon" href="assets/favicon.png?v=20261101g18" type="image/png">
 <script>
-window.B8_BUILD = '20261101g17';
+window.B8_BUILD = '20261101g18';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
@@ -124,8 +124,9 @@ window.B8_TEST = !!window.B8_T;
   .hud-spacer { flex: 1 1 auto; min-width: 0; }
 
   .lives {
-    font-size: 15px;
-    letter-spacing: 0.16em;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
     color: var(--seal);
     align-self: center;
     white-space: nowrap;
@@ -532,6 +533,77 @@ window.B8_TEST = !!window.B8_T;
   .tip a { color: var(--ink-2); }
   .tip b { color: var(--ink-2); font-family: var(--mono); letter-spacing: 0.08em; }
 
+  .score-rule {
+    margin: 4px 0 10px;
+    text-align: left;
+    font-size: 11px;
+    line-height: 1.85;
+    color: var(--ink-3);
+  }
+
+  .score-rule b { color: var(--ink-2); }
+
+  /* 曲目表：十首 × 四档定数，收在 details 里，不打开不占地方 */
+  .lv-table {
+    margin: 0 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    text-align: left;
+  }
+
+  .lv-table summary {
+    padding: 9px 12px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+
+  .lv-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+  }
+
+  .lv-table th,
+  .lv-table td {
+    padding: 5px 6px;
+    border-top: 1px solid var(--line);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .lv-table th:first-child,
+  .lv-table td:first-child { text-align: left; }
+
+  .lv-table th {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    color: var(--ink-3);
+  }
+
+  .lv-table tr.is-on td {
+    color: var(--seal);
+    font-weight: 700;
+    background: rgba(193, 82, 47, 0.05);
+  }
+
+  .score-parts {
+    margin: 10px 0 0;
+    padding-top: 9px;
+    border-top: 1px dashed var(--line);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    line-height: 1.7;
+    color: var(--ink-3);
+  }
+
+  .score-parts b { color: var(--seal); }
+
   /* ---------- 结算 ---------- */
   .result {
     margin: 4px 0 18px;
@@ -654,7 +726,7 @@ window.B8_TEST = !!window.B8_T;
 
     <div class="hud-spacer"></div>
 
-    <span class="lives" id="hud-lives" aria-label="剩余生命">♥♥♥</span>
+    <span class="lives" id="hud-lives" aria-label="失误数">MISS 0</span>
 
     <div class="hud-tools">
       <button class="icon-btn" id="btn-sound" type="button" aria-pressed="true"
@@ -690,7 +762,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g17' + T;
+  var V = '?v=20261101g18' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

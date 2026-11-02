@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>手速测试 · 八班游乐场</title>
+<meta name="description" content="手速测试：10 秒内在一块点击区里点得越多越好。点击数 × 1000 上榜，看看全班谁的手最快。">
+<meta name="theme-color" content="#f8f4e9">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="assets/favicon.png?v=20261101g18" type="image/png">
+<link rel="stylesheet" href="assets/games/lab.css?v=20261101g18">
+<script>
+window.B8_BUILD = '20261101g18';
+window.B8_T = (function () {
+  var m = (location.search || '').match(/[?&]t=([^&]+)/);
+  return m ? '&t=' + encodeURIComponent(m[1]) : '';
+})();
+window.B8_TEST = !!window.B8_T;
+</script>
+<style>
+  #app { background: #efe7d5; }
+
+  .icon-btn {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-2);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .icon-btn:active { transform: translateY(1px); }
+
+  .cs-wrap {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .cs-pad {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background:
+      radial-gradient(circle at 50% 42%, rgba(193, 82, 47, 0.06) 0%, rgba(193, 82, 47, 0) 58%),
+      #fffefb;
+    overflow: hidden;
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: background-color 0.08s linear;
+  }
+
+  .cs-pad.is-run {
+    background:
+      radial-gradient(circle at 50% 42%, rgba(193, 82, 47, 0.12) 0%, rgba(193, 82, 47, 0) 62%),
+      #fffdf8;
+  }
+
+  .cs-pad.is-run:active { background: #fdf1e7; }
+  .cs-pad.is-over { background: #f7f1e3; }
+
+  .cs-count {
+    font-family: var(--mono);
+    font-size: clamp(4rem, 22vw, 10rem);
+    font-weight: 700;
+    line-height: 0.95;
+    color: var(--seal);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+
+  .cs-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--ink-3);
+    pointer-events: none;
+  }
+
+  .cs-tip {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: 16px;
+    margin: 0;
+    padding: 0 16px;
+    text-align: center;
+    font-size: 11.5px;
+    line-height: 1.7;
+    color: var(--ink-3);
+    pointer-events: none;
+  }
+
+  .cs-ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 60px;
+    height: 60px;
+    margin: -30px 0 0 -30px;
+    border: 2px solid rgba(193, 82, 47, 0.5);
+    border-radius: 50%;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .cs-ring.is-go { animation: cs-ring 0.42s ease-out; }
+
+  @keyframes cs-ring {
+    from { opacity: 0.8; transform: scale(0.5); }
+    to { opacity: 0; transform: scale(5); }
+  }
+
+  .cs-pad.is-count .cs-count {
+    color: var(--ink-2);
+    font-size: clamp(3rem, 16vw, 7rem);
+  }
+
+  .cs-hint {
+    position: absolute;
+    top: 14px;
+    left: 0; right: 0;
+    margin: 0;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--ink-3);
+    pointer-events: none;
+  }
+</style>
+</head>
+
+<body data-site="fun">
+
+<div id="app">
+  <header class="lab-hud">
+    <div class="lab-title">
+      <b>手速测试</b>
+      <span>CLICK SPEED · 10s</span>
+    </div>
+    <div class="lab-stats">
+      <div class="stat"><span class="k">TIME</span><b id="cs-time">10.0</b></div>
+      <div class="stat"><span class="k">CLICKS</span><b id="cs-clicks">0</b></div>
+      <div class="stat"><span class="k">CPS</span><b id="cs-cps">0.00</b></div>
+      <div class="stat"><span class="k">BEST</span><b id="cs-best">0</b></div>
+    </div>
+    <button class="icon-btn" id="btn-exit" type="button">退出</button>
+  </header>
+
+  <main class="lab-stage">
+    <div class="cs-wrap">
+      <div class="cs-pad" id="cs-pad">
+        <p class="cs-hint" id="cs-hint">10 秒，点这块区域</p>
+        <span class="cs-ring" id="cs-ring" aria-hidden="true"></span>
+        <div class="cs-count" id="cs-count">0</div>
+        <div class="cs-label">CLICKS</div>
+        <p class="cs-tip" id="cs-tip">点「开始」后倒计时 3、2、1，然后开始计数。</p>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="panel" id="panel"></div>
+    </div>
+  </main>
+</div>
+
+<noscript>
+  <p style="padding:24px;font-size:14px;line-height:2">
+    手速测试要靠 JavaScript 计时，请打开 JavaScript 再进。
+  </p>
+</noscript>
+
+<script>
+(function () {
+  var T = window.B8_T || '';
+  var V = '?v=20261101g18' + T;
+  var list = [
+    ['assets/site-config.js', 0],
+    ['assets/main.js', 1],
+    ['assets/sb.js', 1],
+    ['assets/auth.js', 1],
+    ['assets/games/clickspeed.js', 1]
+  ];
+  for (var i = 0; i < list.length; i++) {
+    document.write('<script src="' + list[i][0] + V + '"' + (list[i][1] ? ' defer' : '') + '><\/script>');
+  }
+})();
+</script>
+
+</body>
+</html>

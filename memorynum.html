@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>记忆数字 · 八班游乐场</title>
+<meta name="description" content="记忆数字：数字闪一下，凭记忆输入。11 个等级、每级 5 轮，按等级系数折算成 1000000 分制，排行榜跨等级公平比较。">
+<meta name="theme-color" content="#f8f4e9">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="assets/favicon.png?v=20261101g18" type="image/png">
+<link rel="stylesheet" href="assets/games/lab.css?v=20261101g18">
+<script>
+window.B8_BUILD = '20261101g18';
+window.B8_T = (function () {
+  var m = (location.search || '').match(/[?&]t=([^&]+)/);
+  return m ? '&t=' + encodeURIComponent(m[1]) : '';
+})();
+window.B8_TEST = !!window.B8_T;
+</script>
+<style>
+  /* ---------- 记忆数字 ---------- */
+  #app { background: #efe7d5; }
+
+  .icon-btn {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-2);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .icon-btn:active { transform: translateY(1px); }
+
+  .mn-wrap {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 560px;
+    min-height: 0;
+    margin: 0 auto;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 13px;
+  }
+
+  .mn-progress {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    color: var(--ink-3);
+    text-align: center;
+  }
+
+  .mn-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 132px;
+    padding: 10px 8px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 14px 34px -30px rgba(35, 33, 28, 0.45);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    overflow: hidden;
+  }
+
+  .mn-screen.is-show {
+    border-color: rgba(193, 82, 47, 0.55);
+    box-shadow: 0 0 0 3px rgba(193, 82, 47, 0.08), 0 14px 34px -30px rgba(35, 33, 28, 0.45);
+  }
+
+  .mn-screen span {
+    font-family: var(--mono);
+    font-size: clamp(1.7rem, 7.4vw, 3.4rem);
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    line-height: 1.2;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mn-screen span.is-count {
+    font-size: 64px;
+    letter-spacing: 0;
+    color: var(--seal);
+  }
+
+  .mn-hint {
+    margin: 0;
+    min-height: 18px;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--ink-3);
+  }
+
+  .mn-input-row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .mn-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 54px;
+    padding: 0 12px;
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    text-align: center;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid var(--line-2);
+    border-radius: 8px;
+    outline: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mn-input:focus { border-color: var(--seal); }
+  .mn-input:disabled { background: var(--paper-2); color: var(--ink-3); }
+
+  .mn-submit {
+    flex: 0 0 auto;
+    min-width: 84px;
+    height: 54px;
+    padding: 0 18px;
+    font-size: 14px;
+    color: #fff;
+    background: var(--seal);
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .mn-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .mn-feedback {
+    min-height: 46px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 15px;
+    line-height: 1.7;
+    word-break: break-all;
+  }
+
+  .mn-feedback .ok { color: var(--jade); font-weight: 700; }
+  .mn-feedback .bad { color: var(--seal); font-weight: 700; }
+  .mn-feedback .miss { color: var(--ink-3); }
+  .mn-feedback .correct { color: var(--ink-3); font-size: 0.78em; }
+  .mn-feedback .msg { font-family: var(--sans); font-size: 12.5px; color: var(--ink-2); }
+
+  .mn-skip {
+    align-self: center;
+    margin-top: 2px;
+    padding: 7px 16px;
+    font-size: 12px;
+    color: var(--ink-3);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .mn-skip:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  @media (max-width: 480px) {
+    .mn-wrap { padding-left: 12px; padding-right: 12px; gap: 10px; }
+    .mn-screen { min-height: 112px; }
+    .mn-input { font-size: 20px; letter-spacing: 0.18em; }
+    .mn-submit { min-width: 72px; padding: 0 12px; }
+  }
+
+  @media (max-height: 620px) {
+    .mn-screen { min-height: 96px; }
+    .mn-wrap { gap: 8px; }
+  }
+</style>
+</head>
+
+<body data-site="fun">
+
+<div id="app">
+  <header class="lab-hud">
+    <div class="lab-title">
+      <b>记忆数字</b>
+      <span>NUMBER MEMORY</span>
+    </div>
+    <div class="lab-stats">
+      <div class="stat"><span class="k">LEVEL</span><b id="mn-level">—</b></div>
+      <div class="stat"><span class="k">ROUND</span><b id="mn-round">—</b></div>
+      <div class="stat"><span class="k">SCORE</span><b id="mn-score">0</b></div>
+      <div class="stat"><span class="k">BEST</span><b id="mn-best">0</b></div>
+    </div>
+    <button class="icon-btn" id="btn-exit" type="button">退出</button>
+  </header>
+
+  <main class="lab-stage">
+    <div class="mn-wrap">
+      <p class="mn-progress" id="mn-progress">选一个等级，开始五轮</p>
+
+      <div class="mn-screen" id="mn-screen" aria-live="polite">
+        <span id="mn-digits">准备</span>
+      </div>
+
+      <p class="mn-hint" id="mn-hint">数字闪一下，凭记忆输入；每级五轮。</p>
+
+      <div class="mn-input-row">
+        <input class="mn-input" id="mn-input" type="text" inputmode="numeric"
+               pattern="[0-9]*" autocomplete="off" autocapitalize="off"
+               spellcheck="false" maxlength="12" placeholder="在这里输入" disabled>
+        <button class="mn-submit" id="mn-submit" type="button" disabled>提交</button>
+      </div>
+
+      <div class="mn-feedback" id="mn-feedback"></div>
+
+      <button class="mn-skip" id="mn-skip" type="button" disabled>跳过本轮</button>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="panel" id="panel"></div>
+    </div>
+  </main>
+</div>
+
+<noscript>
+  <p style="padding:24px;font-size:14px;line-height:2">
+    记忆数字要靠 JavaScript 计时和判分，请打开 JavaScript 再进。
+  </p>
+</noscript>
+
+<script>
+(function () {
+  var T = window.B8_T || '';
+  var V = '?v=20261101g18' + T;
+  var list = [
+    ['assets/site-config.js', 0],
+    ['assets/main.js', 1],
+    ['assets/sb.js', 1],
+    ['assets/auth.js', 1],
+    ['assets/games/memnum.js', 1]
+  ];
+  for (var i = 0; i < list.length; i++) {
+    document.write('<script src="' + list[i][0] + V + '"' + (list[i][1] ? ' defer' : '') + '><\/script>');
+  }
+})();
+</script>
+
+</body>
+</html>
