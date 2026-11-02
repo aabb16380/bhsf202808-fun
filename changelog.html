@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>更新日志 · 八班游乐场</title>
+<meta name="description" content="八班游乐场每个版本改了什么。新的在最上面。">
+<meta name="theme-color" content="#f8f4e9">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="assets/favicon.png?v=20261101g21" type="image/png">
+<script src="assets/site-config.js?v=20261101g21"></script>
+<script>
+window.B8_BUILD = '20261101g21';
+window.B8_T = (function () {
+  var m = (location.search || '').match(/[?&]t=([^&]+)/);
+  return m ? '&t=' + encodeURIComponent(m[1]) : '';
+})();
+</script>
+<style>
+  :root {
+    --paper: #fdfbf6;
+    --paper-2: #f7f1e3;
+    --line: #e6dfd0;
+    --line-2: #d3c7ac;
+    --ink: #23211c;
+    --ink-2: #5b574d;
+    --ink-3: #918a7b;
+    --seal: #c1522f;
+    --gold: #c08c2c;
+    --jade: #2f6f5e;
+    --serif: "Songti SC", "Noto Serif SC", "SimSun", serif;
+    --sans: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { background: #efe7d5; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--ink);
+    background:
+      linear-gradient(180deg, #fdfbf6 0%, #f8f2e4 100%);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.9;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  a { color: var(--seal); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:hover { color: #8f3521; }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(253, 251, 246, 0.94);
+    backdrop-filter: blur(6px);
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .brand b {
+    font-family: var(--serif);
+    font-size: 17px;
+    letter-spacing: 0.05em;
+  }
+
+  .brand span {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--ink-3);
+  }
+
+  .topbar .spacer { flex: 1 1 auto; }
+
+  .back {
+    display: inline-block;
+    padding: 7px 15px;
+    font-size: 12.5px;
+    color: var(--ink-2);
+    text-decoration: none;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+
+  .back:active { transform: translateY(1px); }
+
+  .page {
+    width: 100%;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 28px 22px 70px;
+  }
+
+  .page-head {
+    margin: 0 0 22px;
+    padding: 0 0 18px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .page-head .kicker {
+    margin: 0 0 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--ink-3);
+  }
+
+  .page-head h1 {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: 32px;
+    line-height: 1.3;
+    letter-spacing: 0.05em;
+  }
+
+  .page-head .sub {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+
+  .log {
+    font-size: 14.5px;
+    line-height: 1.95;
+  }
+
+  .log h1 {
+    margin: 0 0 10px;
+    font-family: var(--serif);
+    font-size: 26px;
+    letter-spacing: 0.04em;
+  }
+
+  .log h2 {
+    margin: 34px 0 12px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-family: var(--serif);
+    font-size: 21px;
+    line-height: 1.45;
+    letter-spacing: 0.03em;
+  }
+
+  .log h2:first-of-type { margin-top: 12px; }
+
+  .log h3 {
+    margin: 20px 0 6px;
+    font-family: var(--serif);
+    font-size: 17px;
+  }
+
+  .log p { margin: 9px 0; }
+
+  .log ul {
+    margin: 8px 0 14px;
+    padding-left: 1.35em;
+  }
+
+  .log li { margin: 5px 0; }
+
+  .log strong { color: var(--ink); }
+
+  .log code {
+    padding: 1px 5px;
+    font-family: var(--mono);
+    font-size: 0.88em;
+    color: #7d3b24;
+    background: rgba(193, 82, 47, 0.07);
+    border: 1px solid rgba(193, 82, 47, 0.12);
+    border-radius: 4px;
+    word-break: break-word;
+  }
+
+  .log blockquote {
+    margin: 12px 0 16px;
+    padding: 10px 14px;
+    color: var(--ink-2);
+    background: var(--paper-2);
+    border-left: 3px solid var(--line-2);
+    border-radius: 0 5px 5px 0;
+  }
+
+  .log blockquote p { margin: 4px 0; }
+
+  .log hr {
+    margin: 34px 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .log a { word-break: break-all; }
+
+  .loading,
+  .failed {
+    padding: 24px 0;
+    font-size: 13px;
+    color: var(--ink-3);
+  }
+
+  .failed { color: var(--seal); }
+
+  .page-foot {
+    margin-top: 46px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: 11.5px;
+    line-height: 1.8;
+    color: var(--ink-3);
+  }
+
+  .page-foot a { color: var(--ink-2); }
+
+  @media (max-width: 560px) {
+    .topbar { padding: 9px 12px; }
+    .brand b { font-size: 15px; }
+    .brand span { font-size: 9px; }
+    .back { padding: 6px 12px; font-size: 12px; }
+    .page { padding: 22px 16px 56px; }
+    .page-head h1 { font-size: 27px; }
+    .log { font-size: 14px; }
+    .log h2 { font-size: 19px; margin-top: 28px; }
+    .log code { font-size: 0.84em; }
+  }
+</style>
+</head>
+
+<body>
+
+<header class="topbar">
+  <a class="brand" href="index.html">
+    <b>八班游乐场</b>
+    <span id="ver">更新日志</span>
+  </a>
+  <span class="spacer"></span>
+  <a class="back" href="index.html">← 回游乐场</a>
+</header>
+
+<main class="page">
+  <header class="page-head">
+    <p class="kicker">CHANGELOG · BHSF 2028 CLASS 08</p>
+    <h1>更新日志</h1>
+    <p class="sub">每个版本改了什么，新的在最上面。版本号见页脚。</p>
+  </header>
+
+  <div class="log" id="log">
+    <p class="loading">正在读取更新日志…</p>
+  </div>
+
+  <footer class="page-foot">
+    <p>这份日志的唯一来源是 <a href="更新日志.md">更新日志.md</a>；每次升版本都要在最上面加一节。</p>
+    <p>八班游乐场 · <span id="foot-ver">v2.62</span> · 由 GitHub Pages 托管</p>
+  </footer>
+</main>
+
+<noscript>
+  <p style="padding:24px;font-size:14px;line-height:2">
+    更新日志靠 JavaScript 读取 Markdown 渲染；也可以直接打开
+    <a href="更新日志.md">更新日志.md</a>。
+  </p>
+</noscript>
+
+<script>
+(function () {
+  'use strict';
+
+  var logEl = document.getElementById('log');
+  var verEl = document.getElementById('ver');
+  var footEl = document.getElementById('foot-ver');
+  var cfg = window.B8_CONFIG && window.B8_CONFIG.site;
+  var version = cfg && cfg.version ? cfg.version : '';
+
+  if (version) {
+    if (footEl) footEl.textContent = version;
+    if (verEl) verEl.textContent = version + ' · 更新日志';
+  }
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function inline(s) {
+    var out = esc(s);
+    out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+    out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_, text, href) {
+      return '<a href="' + href + '">' + text + '</a>';
+    });
+    // 没有 Markdown 链接时，把裸 URL 也变成可点的
+    if (out.indexOf('<a ') < 0) {
+      out = out.replace(/(https?:\/\/[^\s<"]+)/g, '<a href="$1">$1</a>');
+    }
+    return out;
+  }
+
+  function render(md) {
+    var lines = String(md).replace(/\r/g, '').split('\n');
+    var out = [];
+    var para = [];
+    var listOpen = false;
+    var quoteOpen = false;
+    var seenH1 = false;
+
+    function flushPara() {
+      if (para.length) {
+        out.push('<p>' + inline(para.join(' ')) + '</p>');
+        para = [];
+      }
+    }
+
+    function closeList() {
+      if (listOpen) { out.push('</ul>'); listOpen = false; }
+    }
+
+    function closeQuote() {
+      if (quoteOpen) { out.push('</blockquote>'); quoteOpen = false; }
+    }
+
+    function closeBlocks() {
+      flushPara();
+      closeList();
+      closeQuote();
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var t = line.trim();
+
+      if (/^-{3,}$/.test(t)) {
+        closeBlocks();
+        out.push('<hr>');
+        continue;
+      }
+
+      var h = /^(#{1,3})\s+(.*)$/.exec(line);
+      if (h) {
+        closeBlocks();
+        var level = h[1].length;
+        // 文件第一行是文档标题，页面上面已经有「更新日志」了，不重复画
+        if (level === 1 && !seenH1) { seenH1 = true; continue; }
+        out.push('<h' + level + '>' + inline(h[2]) + '</h' + level + '>');
+        continue;
+      }
+
+      if (/^>\s?/.test(line)) {
+        flushPara();
+        closeList();
+        if (!quoteOpen) { out.push('<blockquote>'); quoteOpen = true; }
+        out.push('<p>' + inline(line.replace(/^>\s?/, '')) + '</p>');
+        continue;
+      }
+      closeQuote();
+
+      if (/^\s*[-*]\s+/.test(line)) {
+        flushPara();
+        if (!listOpen) { out.push('<ul>'); listOpen = true; }
+        out.push('<li>' + inline(line.replace(/^\s*[-*]\s+/, '')) + '</li>');
+        continue;
+      }
+
+      // 列表项的续行：缩进但没有新的 -，接在上一个 li 后面
+      if (listOpen && /^\s{2,}\S/.test(line)) {
+        if (out.length) {
+          out[out.length - 1] = out[out.length - 1].replace(/<\/li>$/, ' ' + inline(t) + '</li>');
+        }
+        continue;
+      }
+
+      if (!t) {
+        closeBlocks();
+        continue;
+      }
+
+      closeList();
+      para.push(t);
+    }
+
+    closeBlocks();
+    return out.join('\n');
+  }
+
+  var url = '更新日志.md?v=' + window.B8_BUILD + (window.B8_T || '');
+
+  fetch(url, { cache: 'no-cache' })
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(function (md) {
+      if (!logEl) return;
+      logEl.innerHTML = render(md);
+    })
+    .catch(function () {
+      if (!logEl) return;
+      logEl.innerHTML =
+        '<p class="failed">更新日志没读出来。可以直接打开 <a href="更新日志.md">更新日志.md</a>。</p>';
+    });
+})();
+</script>
+
+</body>
+</html>
