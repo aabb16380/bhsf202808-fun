@@ -240,9 +240,27 @@
       { nick: '数学课代表', score: 33480, created_at: '2026-10-20T11:20:00+08:00' }
     ],
     piano: [
-      { nick: '文艺委员', score: 6728, created_at: '2026-10-30T20:15:00+08:00' },
-      { nick: '后排靠窗', score: 5412, created_at: '2026-10-29T12:32:00+08:00' },
-      { nick: '体委', score: 3980, created_at: '2026-10-25T17:48:00+08:00' }
+      {
+        nick: '文艺委员', total: 3990000, created_at: '2026-11-02T20:15:00+08:00',
+        songs: [
+          { song: 'twinkle', diff: 'extreme', score: 1000000, coef: 1.75, weighted: 1750000 },
+          { song: 'birthday', diff: 'hard', score: 800000, coef: 1.45, weighted: 1160000 },
+          { song: 'joy', diff: 'normal', score: 900000, coef: 1.2, weighted: 1080000 }
+        ]
+      },
+      {
+        nick: '后排靠窗', total: 2620000, created_at: '2026-11-01T12:32:00+08:00',
+        songs: [
+          { song: 'bells', diff: 'extreme', score: 1000000, coef: 1.75, weighted: 1750000 },
+          { song: 'farewell', diff: 'hard', score: 600000, coef: 1.45, weighted: 870000 }
+        ]
+      },
+      {
+        nick: '体委', total: 1000000, created_at: '2026-10-25T17:48:00+08:00',
+        songs: [
+          { song: 'twinkle', diff: 'easy', score: 1000000, coef: 1.0, weighted: 1000000 }
+        ]
+      }
     ],
     suika: [
       { nick: '后排靠窗', score: 1860, created_at: '2026-10-31T19:22:00+08:00' },
@@ -1234,6 +1252,14 @@
   var rankFailed = {};       // game -> 错误信息
   var rankSeq = 0;
 
+  // 钢琴辉的成绩存的是 song id / diff id，排行榜显示时换成人话
+  var PIANO_SONGS = {
+    twinkle: '小星星', tiger: '两只老虎', joy: '欢乐颂', bells: '铃儿响叮当',
+    birthday: '生日快乐', jasmine: '茉莉花', farewell: '送别',
+    cancan: '康康舞曲', turkish: '土耳其进行曲', elise: '致爱丽丝'
+  };
+  var PIANO_DIFFS = { easy: '简单', normal: '普通', hard: '困难', extreme: '极难' };
+
   function rankAppend(tag, cls, text) {
     var n = el(tag, cls);
     if (text != null) n.textContent = text;
@@ -1260,6 +1286,58 @@
     return { text: String(n), unit: '分' };
   }
 
+  function rankInt(n) {
+    return Number(n || 0).toLocaleString('en-US');
+  }
+
+  /** 钢琴辉：每人三首（或不足三首）歌 + 加权总分 */
+  function renderPianoRows(rows, isSample) {
+    var listEl = B8.qs('#rank-list');
+    if (!listEl) return;
+
+    rows.forEach(function (r, i) {
+      var li = el('li', 'rank-row rank-piano' + (i < 3 ? ' is-podium' : ''));
+
+      li.appendChild(rankAppend('span', 'rank-no', (i + 1 < 10 ? '0' : '') + (i + 1)));
+
+      var body = el('div', 'rank-piano-body');
+      var head = el('div', 'rank-piano-head');
+
+      var nickWrap = el('span', 'rank-nick');
+      nickWrap.appendChild(rankAppend('span', 'nick-name', r.nick || '同学'));
+      if (isSample) {
+        var tag = el('span', 'tag plain');
+        tag.textContent = '示例';
+        nickWrap.appendChild(tag);
+      }
+      head.appendChild(nickWrap);
+
+      var totalWrap = el('span', 'rank-piano-total');
+      totalWrap.appendChild(rankAppend('span', null, rankInt(r.total)));
+      totalWrap.appendChild(rankAppend('span', 'rank-unit', '分'));
+      head.appendChild(totalWrap);
+      body.appendChild(head);
+
+      var ul = el('ul', 'rank-piano-songs');
+      var songs = Array.isArray(r.songs) ? r.songs : [];
+      songs.forEach(function (s) {
+        var line = el('li', 'rank-piano-song');
+        line.appendChild(rankAppend('span', 'rps-name', PIANO_SONGS[s.song] || s.song));
+        line.appendChild(rankAppend('span', 'rps-diff', PIANO_DIFFS[s.diff] || s.diff));
+        line.appendChild(rankAppend('span', 'rps-score', rankInt(s.score)));
+        line.appendChild(rankAppend('span', 'rps-mult', '×' + Number(s.coef || 1).toFixed(2)));
+        line.appendChild(rankAppend('span', 'rps-weight', '= ' + rankInt(s.weighted)));
+        ul.appendChild(line);
+      });
+      body.appendChild(ul);
+      li.appendChild(body);
+
+      li.appendChild(rankAppend('span', 'rank-date',
+        B8.date(r.created_at || r.updated_at) || '—'));
+      listEl.appendChild(li);
+    });
+  }
+
   function renderRank(game, rows, isSample) {
     var listEl = B8.qs('#rank-list');
     var empty = B8.qs('#rank-empty');
@@ -1277,6 +1355,11 @@
       return;
     }
     if (empty) empty.hidden = true;
+
+    if (game === 'piano') {
+      renderPianoRows(rows, isSample);
+      return;
+    }
 
     rows.forEach(function (r, i) {
       var li = el('li', 'rank-row' + (i < 3 ? ' is-podium' : ''));
@@ -1334,7 +1417,11 @@
     }
 
     rankSkeleton();
-    B8.sb.rpc('b8_score_top', { p_token: B8.auth.token(), p_game: game, p_limit: 10 })
+    var rpcName = game === 'piano' ? 'b8_piano_top' : 'b8_score_top';
+    var rpcArgs = game === 'piano'
+      ? { p_token: B8.auth.token(), p_limit: 10 }
+      : { p_token: B8.auth.token(), p_game: game, p_limit: 10 };
+    B8.sb.rpc(rpcName, rpcArgs)
       .then(function (rows) {
         if (seq !== rankSeq) return;   // 切了 tab，别把旧结果画上去
         rankCache[game] = Array.isArray(rows) ? rows : [];
@@ -1345,7 +1432,13 @@
         rankFailed[game] = err && err.message ? err.message : '未知错误';
         renderRank(game, [], false);
         if (empty) {
-          empty.textContent = '排行榜没读到：' + rankFailed[game];
+          var msg = rankFailed[game];
+          if (game === 'piano' && /Could not find the function|schema cache|does not exist/i.test(msg)) {
+            msg = '钢琴辉排行要更新数据库：请在 Supabase SQL Editor 里跑一遍 supabase/install-all.sql（只需一次）。';
+          } else {
+            msg = '排行榜没读到：' + msg;
+          }
+          empty.textContent = msg;
           empty.hidden = false;
         }
       });

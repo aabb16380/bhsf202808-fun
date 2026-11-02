@@ -1034,6 +1034,92 @@
   white-space: nowrap;
 }
 
+/* 钢琴辉：一行里列出三首歌 + 加权总分 */
+.rank-row.rank-piano {
+  grid-template-columns: 42px minmax(0, 1fr) 88px;
+  align-items: start;
+  min-height: 76px;
+}
+
+.rank-piano-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rank-piano-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rank-piano-total {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--seal);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rank-piano-songs {
+  display: grid;
+  gap: 2px;
+  margin: 1px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rank-piano-song {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px 76px 44px 84px;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.rps-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--serif);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.rps-score,
+.rps-mult,
+.rps-weight { text-align: right; white-space: nowrap; }
+
+.rps-mult { color: var(--ink-3); }
+.rps-weight { color: var(--seal); }
+
+@media (max-width: 620px) {
+  .rank-row.rank-piano {
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px 2px 12px;
+  }
+
+  .rank-row.rank-piano .rank-date {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .rank-piano-song {
+    grid-template-columns: minmax(0, 1fr) 36px 64px 76px;
+  }
+
+  .rps-mult { display: none; }
+}
+
 .rank-note {
   margin-top: 14px;
   font-size: 12px;

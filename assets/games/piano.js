@@ -30,6 +30,7 @@
   var LANE_KEYS = ['D', 'F', 'J', 'K'];
   var KEY_BEST = 'b8.piano.best';
   var KEY_PREFS = 'b8.piano.prefs';
+  var KEY_MY_SCORES = 'b8.piano.songs';
 
   var LEAD_BEATS = 4;          // 曲首留 4 拍空拍，第一个音符才有下落时间
   var COUNT_MS = 1400;         // 3 / 2 / 1
@@ -173,10 +174,10 @@
      travel = 音符从顶部落到判定线的时间（越小越快）
      chord = 每多少拍加一个和弦音（0 = 不加） */
   var DIFFS = [
-    { id: 'easy', name: '简单', sub: 1, rate: 0.78, travel: 2200, tileMax: 116, chord: 0, chord2: 0, minStep: 0 },
-    { id: 'normal', name: '普通', sub: 2, rate: 0.92, travel: 1580, tileMax: 100, chord: 4, chord2: 0, minStep: 155 },
-    { id: 'hard', name: '困难', sub: 3, rate: 1.05, travel: 1120, tileMax: 80, chord: 2, chord2: 0, minStep: 132 },
-    { id: 'extreme', name: '极难', sub: 4, rate: 1.18, travel: 790, tileMax: 62, chord: 0.5, chord2: 4, minStep: 112 }
+    { id: 'easy', name: '简单', sub: 1, rate: 0.78, travel: 2200, tileMax: 116, chord: 0, chord2: 0, minStep: 0, coef: 1.00 },
+    { id: 'normal', name: '普通', sub: 2, rate: 0.92, travel: 1580, tileMax: 100, chord: 4, chord2: 0, minStep: 155, coef: 1.20 },
+    { id: 'hard', name: '困难', sub: 3, rate: 1.05, travel: 1120, tileMax: 80, chord: 2, chord2: 0, minStep: 132, coef: 1.45 },
+    { id: 'extreme', name: '极难', sub: 4, rate: 1.18, travel: 790, tileMax: 62, chord: 0.5, chord2: 4, minStep: 112, coef: 1.75 }
   ];
 
   /* ============================================================
@@ -374,6 +375,8 @@
   var submitted = 0;
   var bassOn = true;
   var muted = false;
+  var myScores = {};
+  var scoresLoadedFor = '';
 
   var stage, lanesEl, keysEl, judgeEl, countdownEl, cdNum, overlay, panel;
   var scoreEl, comboEl, accEl, bestEl, livesEl, progEl;
@@ -406,6 +409,110 @@
 
   function readJson(key) {
     try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; }
+  }
+
+  /* ------------------------------------------------------------
+     每首歌成绩：本地存一份、登录后和服务器合并
+     ------------------------------------------------------------
+     本地键按人分开：游客是 b8.piano.songs.guest，登录后是
+     b8.piano.songs.<学号>，换人登录不会串成绩。
+     服务器只存 game = piano:<song>:<diff>，本地也用同一个键。
+     ------------------------------------------------------------ */
+
+  function gameKey(songId, diffId) {
+    return 'piano:' + songId + ':' + diffId;
+  }
+
+  function scoreOwner() {
+    return (B8.auth && B8.auth.isLogged()) ? B8.auth.no() : 'guest';
+  }
+
+  function localScoreKey() {
+    return KEY_MY_SCORES + '.' + (scoreOwner() || 'guest');
+  }
+
+  function readScoreMap() {
+    var obj = readJson(localScoreKey());
+    var out = {};
+    if (!obj || typeof obj !== 'object') return out;
+    for (var k in obj) {
+      if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+      var v = Number(obj[k]) || 0;
+      if (v > 0 && v <= MAX_SCORE) out[k] = v;
+    }
+    return out;
+  }
+
+  function writeScoreMap() {
+    try { localStorage.setItem(localScoreKey(), JSON.stringify(myScores)); } catch (e) {}
+  }
+
+  function mergeMyScore(songId, diffId, score) {
+    if (!score || score <= 0) return;
+    var k = gameKey(songId, diffId);
+    if (!(myScores[k] >= score)) {
+      myScores[k] = score;
+      writeScoreMap();
+    }
+  }
+
+  function bestScoreOfSong(song) {
+    var best = null;
+    for (var i = 0; i < DIFFS.length; i++) {
+      var d = DIFFS[i];
+      var sc = myScores[gameKey(song.id, d.id)] || 0;
+      if (!sc) continue;
+      var weighted = Math.round(sc * d.coef);
+      if (!best || weighted > best.weighted) {
+        best = { song: song, diff: d, score: sc, coef: d.coef, weighted: weighted };
+      }
+    }
+    return best;
+  }
+
+  function myTopThree() {
+    var list = [];
+    for (var i = 0; i < SONGS.length; i++) {
+      var b = bestScoreOfSong(SONGS[i]);
+      if (b) list.push(b);
+    }
+    list.sort(function (a, b) { return b.weighted - a.weighted; });
+    return list.slice(0, 3);
+  }
+
+  function fmtInt(n) {
+    return Number(n || 0).toLocaleString('en-US');
+  }
+
+  /** 登录后把服务器上自己的每首歌成绩拉回来，和本地取较大值 */
+  function fetchServerScores() {
+    if (!B8.auth || !B8.auth.isLogged() || B8.auth.kind() === 'preview' ||
+        !B8.sb || !B8.sb.ready) return;
+    var tok = B8.auth.token();
+    if (!tok || tok === scoresLoadedFor) return;
+    scoresLoadedFor = tok;
+    B8.sb.rpc('b8_piano_mine', { p_token: tok }).then(function (rows) {
+      if (!Array.isArray(rows)) return;
+      var changed = false;
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        if (!r || !r.song || !r.diff) continue;
+        var k = gameKey(r.song, r.diff);
+        var sc = Number(r.score) || 0;
+        if (sc > (myScores[k] || 0)) { myScores[k] = sc; changed = true; }
+      }
+      if (changed) writeScoreMap();
+      if (mode === 'menu') showMenu();
+    }).catch(function () {
+      scoresLoadedFor = '';
+    });
+  }
+
+  function reloadMyScores() {
+    myScores = readScoreMap();
+    scoresLoadedFor = '';
+    fetchServerScores();
+    if (mode === 'menu') showMenu();
   }
 
   /* ============================================================
@@ -653,6 +760,9 @@
     fullCombo = counts.miss === 0 && counts.perfect + counts.good === total;
     score = scoreOf(counts, maxCombo, total);
 
+    // 这首歌的成绩先落到本机，再尝试传服务器
+    mergeMyScore(song.id, diff.id, score);
+
     var best = readNum(KEY_BEST);
     var isNew = score > best;
     if (isNew) store(KEY_BEST, String(score));
@@ -705,7 +815,9 @@
         if (y > H + 8) {
           if (n.el.parentNode) n.el.parentNode.removeChild(n.el);
           n.el = null;
-          n.state = 'gone';
+          // 注意：还没判定的音符不能标成 gone，否则下面的 MISS 循环会跳过它，
+          // 进度条永远走不完（v2.63 修的就是这个「不打就卡住」）。
+          if (n.state !== 'idle') n.state = 'gone';
         }
       }
     }
@@ -729,7 +841,9 @@
         if (now - lastMissSfx > 70) { lastMissSfx = now; playMiss(); }
       }
       updateBass(el);
-      if (counts.perfect + counts.good + counts.miss >= total && el > chart.len + 500) {
+      // 到了曲子末尾就收尾；finish 会把还没判定的音符补成 MISS。
+      // 不再只靠 judged >= total，避免漏算导致进度条卡在最后。
+      if (el > chart.len + 500) {
         finish();
         return;
       }
@@ -851,6 +965,47 @@
     return out + '</tbody></table></details>';
   }
 
+  function myScoresHtml() {
+    var top = myTopThree();
+    var total = 0;
+    var parts = [];
+    for (var i = 0; i < top.length; i++) {
+      total += top[i].weighted;
+      parts.push(top[i].song.name + '·' + top[i].diff.name + ' ' +
+        fmtInt(top[i].score) + '×' + top[i].coef.toFixed(2) + '=' + fmtInt(top[i].weighted));
+    }
+
+    var count = 0;
+    for (var s0 = 0; s0 < SONGS.length; s0++) {
+      if (bestScoreOfSong(SONGS[s0])) count++;
+    }
+
+    var head = count
+      ? '排行计入：' + parts.join(' + ') + ' = <b>' + fmtInt(total) + '</b>（只取前三首）'
+      : '还没有成绩。打一首就会存在本机；登录后自动同步到排行榜。';
+
+    var rows = '';
+    for (i = 0; i < SONGS.length; i++) {
+      var s = SONGS[i];
+      var b = bestScoreOfSong(s);
+      rows += '<tr' + (s.id === song.id ? ' class="is-on"' : '') + '>' +
+        '<td>' + s.name + '</td>' +
+        '<td>' + (b ? (b.diff.name + ' Lv ' + s.lv[b.diff.id]) : '—') + '</td>' +
+        '<td>' + (b ? fmtInt(b.score) : '—') + '</td>' +
+        '<td>' + (b ? ('×' + b.coef.toFixed(2) + ' = ' + fmtInt(b.weighted)) : '—') + '</td>' +
+        '</tr>';
+    }
+
+    return '<details class="my-scores"><summary>我的成绩 · 每首歌取最高一档（' + count + ' 首有成绩）</summary>' +
+      '<p class="my-top">' + head + '</p>' +
+      (count ? '<table class="my-table"><thead><tr>' +
+        '<th>曲目</th><th>最高难度</th><th>成绩</th><th>加权分</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>' : '') +
+      '<p class="my-note">同一首歌的四档成绩都会存，表里只显示最高的一档；' +
+      '排行在歌与歌之间取「成绩 × 难度系数」最高的三首，不足三首就按实际首数算。</p>' +
+      '</details>';
+  }
+
   function showMenu() {
     mode = 'menu';
     countdownEl.hidden = true;
@@ -871,19 +1026,21 @@
         '<div class="chips">' + diffsHtml + '</div>' +
         '<p class="tip" style="margin:8px 0 0">' + song.desc + '<br>' +
           '<b>Lv ' + song.lv[diff.id] + '</b> · 音符 ' + noteCount +
-          ' 个 · 滚动 ' + diff.travel + 'ms</p></div>' +
+          ' 个 · 滚动 ' + diff.travel + 'ms · 难度系数 <b>×' + diff.coef.toFixed(2) + '</b></p></div>' +
       '<p class="tip score-rule">' +
         '判定分 <b>900000</b> 按音符平分（PERFECT 100%、GOOD 65%）；' +
         '连击分 <b>100000</b> × 最大连击 / 音符数；空击每个 <b>−5000</b>。' +
-        'EX+ 1000000 · EX 950000+ · S 850000+ · A 750000+ · B 650000+ · C 600000+ · F。</p>' +
+        'EX+ 1000000 · EX 950000+ · S 850000+ · A 750000+ · B 650000+ · C 600000+ · F。<br>' +
+        '排行：每首歌只算最高的一档，<b>成绩 × 难度系数</b> 取最高的三首相加；不足三首也能上榜。</p>' +
       levelTable() +
+      myScoresHtml() +
       '<button class="btn-main" type="button" data-act="go">开始</button>' +
       '<button class="btn-2nd" type="button" data-act="bass">伴奏：' +
         (bassOn ? '开' : '关') + '（不影响判定）</button>' +
       '<p class="tip">键盘 <b>D F J K</b> · 手机直接点四道琴键 · 空格开始<br>' +
         (B8.auth && B8.auth.isLogged()
-          ? '成绩会记到排行榜（本机最高 ' + readNum(KEY_BEST) + '）'
-          : '没登录，成绩只存在这台设备 · <a href="index.html">回游乐场登录</a>') +
+          ? '每首歌分别保存成绩；本机最高 ' + readNum(KEY_BEST) + ' 分'
+          : '没登录，每首歌的成绩只存在这台设备 · <a href="index.html">回游乐场登录</a>') +
         '</p>' +
       '<p class="tip"><a href="index.html">← 回游乐场</a></p>';
 
@@ -907,10 +1064,13 @@
     var pct = judged ? Math.round((counts.perfect + counts.good * 0.65) / judged * 100) : 0;
     var g = gradeOf(score);
     var p = partsOf(counts, maxCombo, total);
+    var songBest = myScores[gameKey(song.id, diff.id)] || score;
+    var weighted = Math.round(score * diff.coef);
 
     panel.innerHTML =
       '<h1>' + (g === 'EX+' ? '全部 PERFECT' : (fullCombo ? '全连！' : (isNew ? '新纪录' : '弹完了'))) + '</h1>' +
-      '<p class="sub">' + song.name + ' · ' + diff.name + ' Lv ' + song.lv[diff.id] + ' · ' + total + ' 个音符</p>' +
+      '<p class="sub">' + song.name + ' · ' + diff.name + ' Lv ' + song.lv[diff.id] +
+        ' · 难度系数 ×' + diff.coef.toFixed(2) + ' · ' + total + ' 个音符</p>' +
       '<div class="result">' +
         '<div><span class="big">' + score + '</span><span class="big-unit">分</span></div>' +
         '<p class="rank-line">评级 <b>' + g + '</b> · 准确率 ' + pct + '% · 最高连击 ×' + maxCombo + ' / ' + total + '</p>' +
@@ -922,10 +1082,12 @@
         '</dl>' +
         '<p class="score-parts">判定分 ' + p.judge + ' + 连击分 ' + p.combo +
           (p.penalty ? ' − 空击 ' + p.penalty : '') + ' = <b>' + score + '</b></p>' +
+        '<p class="score-parts">本曲最好 <b>' + songBest + '</b> · 排行权重 ' +
+          songBest + ' × ' + diff.coef.toFixed(2) + ' = <b>' + Math.round(songBest * diff.coef) + '</b>' +
+          '（这一把 ' + weighted + '）</p>' +
       '</div>' +
       '<p class="note-line" id="piano-note">' +
-        (isNew ? '本机新纪录，上一版是 ' + oldBest + ' 分。'
-               : '本机最高 ' + readNum(KEY_BEST) + ' 分。') +
+        (isNew ? '本机新纪录，上一版是 ' + oldBest + ' 分。' : '本机最高 ' + readNum(KEY_BEST) + ' 分。') +
       '</p>' +
       '<button class="btn-main" type="button" data-act="again">再来一次</button>' +
       '<button class="btn-2nd" type="button" data-act="menu">换一首 / 换难度</button>' +
@@ -946,16 +1108,22 @@
      ============================================================ */
 
   function submitScore(v) {
+    if (!v || v > MAX_SCORE) return;
+    // 本地先记下这首歌的成绩（没登录也能在菜单里看到）
+    mergeMyScore(song.id, diff.id, v);
+
     if (!writable || !B8.auth || !B8.sb) return;
-    // 满分就是 1000000，服务端也正好卡在这个上限
-    if (!v || v <= submitted || v > MAX_SCORE) return;
+    // 同一局不重复提交；服务器按 (game, 学号) 取较大值
+    if (v <= submitted) return;
     submitted = v;
     B8.sb.rpc('b8_score_add', {
       p_token: B8.auth.token(),
-      p_game: 'piano',
+      p_game: gameKey(song.id, diff.id),
       p_score: Math.floor(v)
     }).then(function () {
-      setNote('成绩已记到排行榜：' + v + ' 分（' + song.name + ' · ' + diff.name + ' Lv ' + song.lv[diff.id] + '）。');
+      var best = myScores[gameKey(song.id, diff.id)] || v;
+      setNote('成绩已存：' + song.name + ' · ' + diff.name + ' Lv ' + song.lv[diff.id] +
+        '。本曲最好 ' + best + ' 分（每首歌分开记，排行取前三首）。');
     }).catch(function (err) {
       submitted = 0;
       setNote('成绩没传上去：' + (err && err.message ? err.message : '网络异常'), true);
@@ -1099,6 +1267,7 @@
     if (!lanesEl || !panel) return;
 
     loadPrefs();
+    myScores = readScoreMap();
     buildStage();
     paint();
     paintSound();
@@ -1128,13 +1297,13 @@
 
     document.addEventListener('b8:auth', function () {
       writable = !!(B8.sb && B8.sb.ready) && B8.auth.isLogged() && B8.auth.kind() !== 'preview';
-      if (mode === 'menu') showMenu();
+      reloadMyScores();
     });
 
     if (B8.auth) {
       B8.auth.ready(function (st) {
         writable = !!(B8.sb && B8.sb.ready) && st.kind !== 'preview' && B8.auth.isLogged();
-        if (mode === 'menu') showMenu();
+        reloadMyScores();
       });
     }
   }
@@ -1216,6 +1385,9 @@
       }
       return out;
     };
+    api.myScores = function () { return myScores; };
+    api.topThree = function () { return myTopThree(); };
+    api.gameKey = gameKey;
   }
 
   B8.games.piano = api;

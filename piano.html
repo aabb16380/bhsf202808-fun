@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>钢琴辉 · 八班游乐场</title>
-<meta name="description" content="钢琴辉：辉辉踩着拍子往下掉，落在判定线的一瞬点中它。四道琴键 D F J K，十首曲子，四档难度，Phi+Mil 计分满分 1000000。">
+<meta name="description" content="钢琴辉：辉辉踩着拍子往下掉，落在判定线的一瞬点中它。四道琴键 D F J K，十首曲子，四档难度，Phi+Mil 计分满分 1000000；每首歌分别存成绩，排行取成绩×难度最高的三首。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light">
-<link rel="icon" href="assets/favicon.png?v=20261101g21" type="image/png">
+<link rel="icon" href="assets/favicon.png?v=20261101g22" type="image/png">
 <script>
-window.B8_BUILD = '20261101g21';
+window.B8_BUILD = '20261101g22';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
@@ -604,6 +604,75 @@ window.B8_TEST = !!window.B8_T;
 
   .score-parts b { color: var(--seal); }
 
+  /* 我的成绩：每首歌只列最高一档，四档原始分都存着 */
+  .my-scores {
+    margin: 0 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    text-align: left;
+  }
+
+  .my-scores summary {
+    padding: 9px 12px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+
+  .my-top {
+    margin: 0;
+    padding: 8px 12px 9px;
+    border-top: 1px solid var(--line);
+    font-size: 11.5px;
+    line-height: 1.75;
+    color: var(--ink-3);
+  }
+
+  .my-top b { color: var(--seal); }
+
+  .my-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .my-table th,
+  .my-table td {
+    padding: 5px 6px;
+    border-top: 1px solid var(--line);
+    text-align: center;
+  }
+
+  .my-table th:first-child,
+  .my-table td:first-child { text-align: left; }
+
+  .my-table th {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    color: var(--ink-3);
+  }
+
+  .my-table tr.is-on td {
+    color: var(--seal);
+    font-weight: 700;
+    background: rgba(193, 82, 47, 0.05);
+  }
+
+  .my-note {
+    margin: 0;
+    padding: 8px 12px 10px;
+    border-top: 1px dashed var(--line);
+    font-size: 10px;
+    line-height: 1.7;
+    color: var(--ink-3);
+  }
+
   /* ---------- 结算 ---------- */
   .result {
     margin: 4px 0 18px;
@@ -762,7 +831,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g21' + T;
+  var V = '?v=20261101g22' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
