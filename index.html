@@ -17,20 +17,20 @@
 <meta property="og:locale" content="zh_CN">
 <meta name="twitter:card" content="summary">
 
-<link rel="icon" href="assets/favicon.png?v=20261101g32" type="image/png">
-<link rel="apple-touch-icon" href="assets/icon.png?v=20261101g32">
+<link rel="icon" href="assets/favicon.png?v=20261101g35" type="image/png">
+<link rel="apple-touch-icon" href="assets/icon.png?v=20261101g35">
 <script>
-window.B8_BUILD = '20261101g32';
+window.B8_BUILD = '20261101g35';
 // ?t=<时间戳> 透传到每个资源，绕开 GitHub Pages 缓存
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
-document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g32' + window.B8_T + '">');
+document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g35' + window.B8_T + '">');
 </script>
-<script src="assets/theme.js?v=20261101g32"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g32">
+<script src="assets/theme.js?v=20261101g35"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g35">
 <script>document.documentElement.classList.add('js');</script>
 </head>
 
@@ -45,7 +45,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g32' + 
 <header class="site-header" id="site-header">
   <div class="wrap header-inner">
     <a class="brand" href="#top" aria-label="回到顶部">
-      <img class="brand-mark" src="assets/icon.png?v=20261101g32" alt="" width="30" height="30">
+      <img class="brand-mark" src="assets/icon.png?v=20261101g35" alt="" width="30" height="30">
       <span class="brand-text">
         <span class="brand-name">八班游乐场</span>
         <span class="brand-ver" id="brand-ver">v1.0</span>
@@ -107,7 +107,15 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g32' + 
         <div class="hero-actions">
           <a class="btn" href="#games">玩一局</a>
           <a class="btn ghost" href="#photos">看合影</a>
-          <button class="btn starry" id="mo-open" type="button" aria-haspopup="dialog">膜宙金</button>
+          <span class="hero-break" aria-hidden="true"></span>
+          <button class="btn starry" id="mo-open" type="button" aria-expanded="false">膜宙金</button>
+          <div class="mo-inline" id="mo-inline" hidden>
+            <button class="mo-cat" id="mo-cat-m" type="button" aria-label="点一下膜拜一次"></button>
+            <div class="mo-inline-counts">
+              <span>共已膜 <b id="mo-total-m">—</b></span>
+              <span>本机 <b id="mo-local-m">0</b></span>
+            </div>
+          </div>
         </div>
 
         <dl class="stat-strip">
@@ -130,10 +138,20 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g32' + 
         </div>
       </div>
 
-      <div class="hero-play" aria-hidden="true">
-        <span class="play-ring"></span>
-        <img class="play-logo" src="assets/logo.webp?v=20261101g32" alt="" width="200" height="160">
-        <span class="play-note">下课<br>十分钟</span>
+      <div class="hero-play" id="mo-play">
+        <div class="mo-badge">
+          <span class="play-ring" aria-hidden="true"></span>
+          <img class="play-logo" id="mo-logo" src="assets/logo.webp?v=20261101g35" alt="八班班徽" width="200" height="160">
+          <span class="mo-zj" id="mo-zj">宙金</span>
+        </div>
+        <div class="mo-cat-wrap" id="mo-cat-wrap" hidden>
+          <button class="mo-cat" id="mo-cat" type="button" aria-label="点一下膜拜一次"></button>
+          <div class="mo-counts">
+            <p>共已膜<b id="mo-total">—</b></p>
+            <p>本机<b id="mo-local">0</b></p>
+          </div>
+          <button class="mo-super" id="mo-super" type="button">超级模式</button>
+        </div>
       </div>
     </div>
   </section>
@@ -424,7 +442,8 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g32' + 
 
       <div class="rank-toolbar">
         <div class="chip-row rank-tabs" role="group" aria-label="选择排行榜">
-          <button class="chip rank-tab" type="button" data-rank="2048" aria-pressed="true">2048</button>
+          <button class="chip rank-tab" type="button" data-rank="worship" aria-pressed="true">膜宙金</button>
+          <button class="chip rank-tab" type="button" data-rank="2048" aria-pressed="false">2048</button>
           <button class="chip rank-tab" type="button" data-rank="memory" aria-pressed="false">记忆翻牌</button>
           <button class="chip rank-tab" type="button" data-rank="schulte" aria-pressed="false">专注方格</button>
           <button class="chip rank-tab" type="button" data-rank="piano" aria-pressed="false">钢琴辉</button>
@@ -440,6 +459,8 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g32' + 
       <ol class="rank-list" id="rank-list" aria-live="polite"></ol>
       <p class="rank-empty" id="rank-empty" hidden>这一栏还没有人上榜，去玩一局把名字留在这里。</p>
       <p class="rank-note">
+        膜宙金按每个人累计的 <b>膜拜总次数</b> 排名；每膜一次同时得到点数，
+        点数可以在超级模式的「商店」里升级膜速、小猫数量和每次获得的点数。
         记忆翻牌上传的是 <b>1000 − 步数</b>，专注方格上传的是 <b>60000 − 毫秒</b>，
         反应速度上传的是 <b>1000000 − 平均毫秒 × 1000</b>，手速上传的是 <b>点击数</b>（1 次 = 1 分），
         所以数字越大越靠前；列表里显示的是换算回来的成绩。
@@ -465,6 +486,47 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g32' + 
 
 </main>
 
+<div class="mo-super-layer" id="mo-super-layer" hidden>
+  <div class="mo-super-cats" id="mo-super-cats" aria-hidden="true"></div>
+  <div class="mo-super-word" id="mo-super-word">宙金</div>
+  <div class="mo-super-counts">
+    <span>共已膜 <b id="mo-super-total">—</b></span>
+    <span>本机 <b id="mo-super-local">0</b></span>
+  </div>
+  <button class="mo-super-core" id="mo-super-core" type="button" aria-label="点一下膜拜一次"></button>
+  <button class="mo-shop-btn" id="mo-shop-btn" type="button">商店</button>
+  <button class="mo-super-exit" id="mo-super-exit" type="button">退出</button>
+</div>
+<div class="mo-plus-layer" id="mo-plus-layer" aria-hidden="true"></div>
+
+<div class="mo-shop" id="mo-shop" hidden>
+  <div class="mo-shop-card" role="dialog" aria-modal="true" aria-labelledby="mo-shop-title">
+    <div class="mo-shop-head">
+      <h3 id="mo-shop-title">膜宙金商店</h3>
+      <button class="mo-shop-close" id="mo-shop-close" type="button" aria-label="关闭商店">×</button>
+    </div>
+    <p class="mo-shop-points">可用点数 <b id="mo-shop-points">0</b></p>
+    <div class="mo-shop-list">
+      <button class="mo-shop-item" type="button" data-buy="speed">
+        <span class="msi-name">升级膜速</span>
+        <span class="msi-desc" id="shop-speed-desc">每轮 1.6s</span>
+        <span class="msi-cost" id="shop-speed-cost">200 点</span>
+      </button>
+      <button class="mo-shop-item" type="button" data-buy="cat">
+        <span class="msi-name">多买一只猫</span>
+        <span class="msi-desc" id="shop-cat-desc">当前 36 只</span>
+        <span class="msi-cost" id="shop-cat-cost">1000 点</span>
+      </button>
+      <button class="mo-shop-item" type="button" data-buy="point">
+        <span class="msi-name">每次膜的点数</span>
+        <span class="msi-desc" id="shop-point-desc">每次 1 点</span>
+        <span class="msi-cost" id="shop-point-cost">10000 点</span>
+      </button>
+    </div>
+    <p class="mo-shop-note" id="mo-shop-note"></p>
+  </div>
+</div>
+
 <footer class="site-footer">
   <div class="wrap footer-inner">
     <div>
@@ -483,7 +545,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g32' + 
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g32' + T;
+  var V = '?v=20261101g35' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

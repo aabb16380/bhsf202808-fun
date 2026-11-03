@@ -260,6 +260,11 @@
   }
 
   var SAMPLE_RANK = {
+    worship: [
+      { nick: '膜拜委员', score: 2026, created_at: '2026-11-03T20:30:00+08:00' },
+      { nick: '后排靠窗', score: 1288, created_at: '2026-11-02T12:18:00+08:00' },
+      { nick: '数学课代表', score: 888, created_at: '2026-11-01T18:02:00+08:00' }
+    ],
     '2048': [
       { nick: '后排靠窗', score: 8420, created_at: '2026-10-28T20:12:00+08:00' },
       { nick: '数学课代表', score: 5160, created_at: '2026-10-24T12:40:00+08:00' },
@@ -1261,7 +1266,7 @@
      排行榜
      ============================================================ */
 
-  var rankGame = '2048';
+  var rankGame = 'worship';
   var rankCache = {};        // game -> 行数组（只在成功时缓存）
   var rankFailed = {};       // game -> 错误信息
   var rankSeq = 0;
@@ -1294,8 +1299,8 @@
       var rt = 1000000 - n;
       return rt > 0 ? { text: (rt / 1000).toFixed(0), unit: 'ms' } : { text: String(n), unit: '分' };
     }
-    if (game === 'clickspeed') {
-      return { text: String(n), unit: '次' };
+    if (game === 'clickspeed' || game === 'worship') {
+      return { text: rankInt(n), unit: '次' };
     }
     if (game === 'memnum') {
       return { text: (n / 10000).toFixed(2), unit: '分' };
@@ -1468,9 +1473,10 @@
 
     rankSkeleton();
     var rpcName = game === 'piano' ? 'b8_piano_top'
-      : (game === 'sudoku' ? 'b8_sudoku_top' : 'b8_score_top');
+      : (game === 'sudoku' ? 'b8_sudoku_top'
+      : (game === 'worship' ? 'b8_worship_top' : 'b8_score_top'));
     var rpcGame = game === 'clickspeed' ? 'clickspeed2' : game;
-    var rpcArgs = (game === 'piano' || game === 'sudoku')
+    var rpcArgs = (game === 'piano' || game === 'sudoku' || game === 'worship')
       ? { p_token: B8.auth.token(), p_limit: 10 }
       : { p_token: B8.auth.token(), p_game: rpcGame, p_limit: 10 };
     B8.sb.rpc(rpcName, rpcArgs)
@@ -1485,9 +1491,9 @@
         renderRank(game, [], false);
         if (empty) {
           var msg = rankFailed[game];
-          if ((game === 'piano' || game === 'sudoku') &&
+          if ((game === 'piano' || game === 'sudoku' || game === 'worship') &&
               /Could not find the function|schema cache|does not exist/i.test(msg)) {
-            msg = (game === 'piano' ? '钢琴辉' : '数独') +
+            msg = (game === 'piano' ? '钢琴辉' : (game === 'sudoku' ? '数独' : '膜宙金')) +
               '排行要更新数据库：请在 Supabase SQL Editor 里跑一遍 supabase/install-all.sql（只需一次）。';
           } else {
             msg = '排行榜没读到：' + msg;

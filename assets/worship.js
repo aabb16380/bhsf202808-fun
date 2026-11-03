@@ -1,16 +1,14 @@
 /* ============================================================
-   膜宙金 · 八班游乐场
+   膜宙金 · 八班游乐场（v2.75 首页内联版）
    ------------------------------------------------------------
-   点「膜宙金」：
-     · 班徽上先弹一次数字，然后班徽淡出；
-     · 动画人每点一下弯一次腰，本机计数 +1；
-     · 下面显示「共已膜 / 本机已膜」；
-     · 「超级模式」进入全屏宇宙：班徽平滑移到中间、化成「宙金」，
-       周围三圈膜拜动画，一圈顺时针、一圈逆时针。
-
-   全局计数走 Supabase RPC b8_worship_get / b8_worship_bump；
-   短时间内的连点合并成一次 p_n，避免每一下都发一个请求。
-   数据库没接 / SQL 没跑时，本机计数照常，全站计数显示 — 并给提示。
+   · 点「膜宙金」不弹窗：电脑右侧班徽变「宙金」，下面 6 帧猫猫动图 +
+     两个计数 +「超级模式」；手机版按钮右边直接出动图和计数。
+   · 猫猫每循环完一次，头顶 +1 并计数；点猫猫/按钮也 +1。
+   · 超级模式分三步：先只剩宙金 → 宙金飞到中间并变色 → 再出现两圈
+     反向旋转的猫猫（10 秒一圈），每个猫猫每转完一轮也 +1 计数。
+   · 超级模式：点中间大圆计数，点圆外或「退出」离开。
+   猫猫素材：assets/mo-cat-sprite.webp（6 帧横向雪碧图）。
+   计数：本机 localStorage + RPC b8_worship_get / b8_worship_bump。
    ============================================================ */
 (function () {
   'use strict';
@@ -24,33 +22,34 @@
   var local = readNum(KEY_LOCAL);
   var total = readNum(KEY_TOTAL);
   var totalKnown = total > 0;
+
+  var points = 0;
+  var speedLv = 1;
+  var catLv = 0;
+  var pointLv = 1;
+  var userKnown = false;
+  var loggedIn = false;
+  var catDur = 1.6;
   var pending = 0;
   var bumpTimer = 0;
   var flushing = false;
   var bumpBroken = false;
 
-  var modal = null;
-  var space = null;
-  var els = {};
-  var badgeRect = null;
-  var bowed = false;
-  var bowTimer = 0;
+  var active = false;
+  var superOpen = false;
+  var superBuilt = false;
+  var superTimers = [];
   var popTimer = 0;
-  var plusTimer = 0;
+  var homeTimer = 0;
+  var homeDelay = 0;
+  var catTimeouts = [];
+  var catIntervals = [];
+  var ringEls = [];
+  var ringCatEls = [];
+  var superRaf = 0;
+  var ringStart = 0;
 
-  var starRaf = 0;
-  var starRunning = false;
-  var starCanvas = null;
-  var starCtx = null;
-  var stars = [];
-  var starW = 0;
-  var starH = 0;
-  var starDpr = 1;
-
-  var reduced = false;
-  try {
-    reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  } catch (e) {}
+  var els = {};
 
   function $(id) { return document.getElementById(id); }
 
@@ -66,25 +65,52 @@
     return Number(n || 0).toLocaleString('zh-CN');
   }
 
-  function iconSrc() {
-    return 'assets/icon.png?v=' + encodeURIComponent(window.B8_BUILD || '0');
+  function authToken() {
+    try {
+      if (!B8.auth || !B8.auth.isLogged || !B8.auth.isLogged()) return '';
+      return B8.auth.token() || '';
+    } catch (e) { return ''; }
   }
 
-  function personHTML() {
-    return '<span class="mo-upper">' +
-        '<span class="mo-head"></span>' +
-        '<span class="mo-torso"></span>' +
-        '<span class="mo-arm a"></span>' +
-        '<span class="mo-arm b"></span>' +
-      '</span>' +
-      '<span class="mo-leg a"></span>' +
-      '<span class="mo-leg b"></span>';
+  function speedSeconds() {
+    return Math.max(0.4, 1.6 - (speedLv - 1) * 0.1);
   }
 
-  function ringPersonHTML() {
-    return '<span class="mo-ring-head"></span>' +
-      '<span class="mo-ring-body"></span>' +
-      '<span class="mo-ring-hands"></span>';
+  function applyUserState(s) {
+    if (!s) return;
+    if (s.points != null) points = Math.max(0, Number(s.points) || 0);
+    if (s.speed_lv != null) speedLv = Math.max(1, Number(s.speed_lv) || 1);
+    if (s.cat_lv != null) catLv = Math.max(0, Number(s.cat_lv) || 0);
+    if (s.point_lv != null) pointLv = Math.max(1, Number(s.point_lv) || 1);
+
+    catDur = speedSeconds();
+    document.documentElement.style.setProperty('--cat-dur', catDur.toFixed(2) + 's');
+    userKnown = true;
+
+    if (active) {
+      restartCat(els.cat);
+      restartCat(els.catM);
+      restartHomeAuto();
+      if (superOpen) {
+        buildSuperRings();
+        startRings();
+      }
+    }
+    renderShop();
+  }
+
+  function loadUserState() {
+    var t = authToken();
+    if (!t) { loggedIn = false; renderShop(); return; }
+    loggedIn = true;
+    B8.sb.rpc('b8_worship_state', { p_token: t }).then(function (s) {
+      applyUserState(s);
+    }).catch(function (err) {
+      var msg = err && err.message ? err.message : '';
+      if (/Could not find the function|schema cache|does not exist/i.test(msg)) {
+        setShopNote('膜宙金商店要更新数据库：请先跑一遍 supabase/install-all.sql。', true);
+      }
+    });
   }
 
   function whenReady(fn) {
@@ -92,201 +118,136 @@
     else fn();
   }
 
-  /* ============================================================
-     面板
-     ============================================================ */
-
-  function build() {
-    if (modal) return;
-
-    var wrap = document.createElement('div');
-    wrap.className = 'worship-modal';
-    wrap.id = 'mo-modal';
-    wrap.hidden = true;
-    wrap.innerHTML =
-      '<div class="mo-backdrop" data-mo-close></div>' +
-      '<section class="mo-card" role="dialog" aria-modal="true" aria-labelledby="mo-title">' +
-        '<button class="mo-x" type="button" data-mo-close aria-label="关闭">×</button>' +
-        '<div class="mo-badge" id="mo-badge">' +
-          '<img src="' + iconSrc() + '" alt="八班班徽" width="96" height="96">' +
-          '<span class="mo-badge-num" id="mo-badge-num">0</span>' +
-        '</div>' +
-        '<h2 class="mo-title" id="mo-title">膜宙金</h2>' +
-        '<p class="mo-sub">点一下 · 膜拜一次</p>' +
-        '<div class="mo-stage" id="mo-stage" role="button" tabindex="0" aria-label="点一下膜拜一次">' +
-          '<span class="mo-halo" aria-hidden="true"></span>' +
-          '<span class="mo-person" id="mo-person">' + personHTML() + '</span>' +
-          '<span class="mo-plus" id="mo-plus" aria-hidden="true">+1</span>' +
-        '</div>' +
-        '<div class="mo-counts">' +
-          '<p>共已膜<b id="mo-total">—</b>次</p>' +
-          '<p>本机已膜<b id="mo-local">0</b>次</p>' +
-        '</div>' +
-        '<button class="mo-super" id="mo-super" type="button">超级模式</button>' +
-        '<p class="mo-note" id="mo-note"></p>' +
-      '</section>';
-
-    document.body.appendChild(wrap);
-    modal = wrap;
-
-    var sp = document.createElement('div');
-    sp.className = 'mo-space';
-    sp.id = 'mo-space';
-    sp.hidden = true;
-    sp.innerHTML =
-      '<canvas id="mo-stars" aria-hidden="true"></canvas>' +
-      '<div class="mo-space-badge" id="mo-space-badge">' +
-        '<img src="' + iconSrc() + '" alt="" width="96" height="96">' +
-        '<span class="mo-badge-num" id="mo-space-num">0</span>' +
-      '</div>' +
-      '<div class="mo-zhoujin" id="mo-zhoujin">宙金</div>' +
-      '<div class="mo-rings" id="mo-rings" aria-hidden="true"></div>' +
-      '<p class="mo-space-foot">' +
-        '<span>共已膜 <b id="mo-space-total">—</b> 次</span>' +
-        '<span>本机 <b id="mo-space-local">0</b> 次</span>' +
-      '</p>' +
-      '<button class="mo-exit" id="mo-exit" type="button">离开宇宙</button>';
-
-    document.body.appendChild(sp);
-    space = sp;
-
-    els = {
-      badge: $('mo-badge'),
-      badgeNum: $('mo-badge-num'),
-      stage: $('mo-stage'),
-      person: $('mo-person'),
-      plus: $('mo-plus'),
-      total: $('mo-total'),
-      local: $('mo-local'),
-      note: $('mo-note'),
-      super: $('mo-super'),
-      spaceBadge: $('mo-space-badge'),
-      spaceNum: $('mo-space-num'),
-      zhoujin: $('mo-zhoujin'),
-      rings: $('mo-rings'),
-      spaceTotal: $('mo-space-total'),
-      spaceLocal: $('mo-space-local'),
-      exit: $('mo-exit')
-    };
-
-    B8.qsa('[data-mo-close]', modal).forEach(function (el) {
-      B8.on(el, 'click', closeModal);
-    });
-    B8.on(els.stage, 'click', worship);
-    B8.on(els.stage, 'keydown', function (ev) {
-      if (ev.key === 'Enter' || ev.key === ' ') {
-        ev.preventDefault();
-        worship();
-      }
-    });
-    B8.on(els.badge, 'click', worship);
-    B8.on(els.super, 'click', openSpace);
-    B8.on(els.exit, 'click', closeSpace);
-    B8.on(space, 'click', function (ev) {
-      if (ev.target === space) closeSpace();
-    });
-
-    B8.on(document, 'keydown', function (ev) {
-      if (ev.key !== 'Escape') return;
-      if (space && !space.hidden) { closeSpace(); return; }
-      if (modal && !modal.hidden) closeModal();
-    });
-
-    B8.on(window, 'resize', function () {
-      if (space && !space.hidden) resizeStars();
-    });
+  function visible(el) {
+    if (!el) return false;
+    var r = el.getBoundingClientRect();
+    return r.width > 4 && r.height > 4 && el.offsetParent !== null;
   }
 
-  function setNote(msg) {
-    if (els.note) els.note.textContent = msg || '';
+  function restartCat(el) {
+    if (!el) return;
+    try {
+      el.style.animation = 'none';
+      void el.offsetWidth;
+      el.style.animation = '';
+    } catch (e) {}
   }
 
-  function render() {
-    if (!els.local) return;
-    // 全站计数 + 还没确认的本地点击；这样每点一下班徽上的数字立刻 +1。
-    var shown = (totalKnown || total > 0) ? total + pending : null;
-    els.local.textContent = fmt(local);
-    els.badgeNum.textContent = fmt(shown != null ? shown : local);
-    els.total.textContent = shown != null ? fmt(shown) : '—';
-    if (els.spaceLocal) els.spaceLocal.textContent = fmt(local);
-    if (els.spaceTotal) els.spaceTotal.textContent = shown != null ? fmt(shown) : '—';
-    if (els.spaceNum) els.spaceNum.textContent = fmt(shown != null ? shown : local);
+  function stopHomeAuto() {
+    if (homeTimer) { clearInterval(homeTimer); homeTimer = 0; }
+    if (homeDelay) { clearTimeout(homeDelay); homeDelay = 0; }
   }
 
-  function openModal() {
-    build();
-    bowed = false;
-    els.badge.classList.remove('is-gone');
-    modal.hidden = false;
-    document.body.classList.add('mo-lock');
-    render();
+  /* 首页猫猫：动画走到「趴下」那一帧时 +1；速度升级后 DUR 会变短 */
+  function startHomeAuto() {
+    if (homeTimer || homeDelay) return;
+    var DUR = Math.round(catDur * 1000);
+    var FLAT = Math.round(DUR * 2 / 6);   // 第 3 帧开始 = 趴下
 
-    // 量一下班徽位置，超级模式从它现在的位置飞到中间
-    requestAnimationFrame(function () {
-      var r = els.badge.getBoundingClientRect();
-      if (r.width > 0) {
-        badgeRect = { left: r.left, top: r.top, width: r.width, height: r.height };
-      }
-    });
-
-    if (!B8.sb || !B8.sb.ready) {
-      setNote('数据库没接，全站计数暂不可用；本机计数正常。');
-    } else {
-      loadTotal();
+    function tick() {
+      if (!active || superOpen || document.hidden) return;
+      var el = visible(els.cat) ? els.cat : (visible(els.catM) ? els.catM : null);
+      if (el) worship(el);
     }
 
-    if (pending) scheduleBump(0);
+    homeDelay = setTimeout(function () {
+      homeDelay = 0;
+      if (!active) return;
+      tick();
+      homeTimer = setInterval(tick, DUR);
+    }, FLAT);
   }
 
-  function closeModal() {
-    if (!modal) return;
-    modal.hidden = true;
-    document.body.classList.remove('mo-lock');
-    if (pending) flushBump();
+  function restartHomeAuto() {
+    stopHomeAuto();
+    if (active) startHomeAuto();
   }
 
-  function worship() {
-    if (!modal || modal.hidden) return;
+  /* ============================================================
+     首页内联面板
+     ============================================================ */
+
+  function render() {
+    var shown = (totalKnown || total > 0) ? total + pending : null;
+    var totalText = shown != null ? fmt(shown) : '—';
+
+    if (els.total) els.total.textContent = totalText;
+    if (els.local) els.local.textContent = fmt(local);
+    if (els.totalM) els.totalM.textContent = totalText;
+    if (els.localM) els.localM.textContent = fmt(local);
+    if (els.superTotal) els.superTotal.textContent = totalText;
+    if (els.superLocal) els.superLocal.textContent = fmt(local);
+
+    [els.total, els.totalM, els.superTotal].forEach(function (el) {
+      if (!el) return;
+      el.title = totalKnown || total > 0
+        ? '全站共已膜次数'
+        : '全站计数还没接上：先把 supabase/install-all.sql 在 Supabase 跑一遍';
+    });
+  }
+
+  function activate() {
+    if (active) return;
+    active = true;
+
+    if (els.play) els.play.classList.add('is-on');
+    if (els.catWrap) els.catWrap.hidden = false;
+    if (els.inline) els.inline.hidden = false;
+    if (els.open) els.open.setAttribute('aria-expanded', 'true');
+
+    restartCat(els.cat);
+    restartCat(els.catM);
+    startHomeAuto();
+    render();
+
+    loggedIn = !!authToken();
+    if (loggedIn) loadUserState();
+    else renderShop();
+
+    if (B8.sb && B8.sb.ready) loadTotal();
+    worship(els.cat);               // 点「膜宙金」本身也算第一次膜拜
+  }
+
+  function worship(fromEl) {
+    if (!active) { activate(); return; }
 
     local += 1;
     pending += 1;
     store(KEY_LOCAL, local);
+    if (loggedIn) {
+      points += pointLv;
+      renderShop();
+    }
     render();
 
-    if (els.badgeNum) {
-      els.badgeNum.classList.remove('is-pop');
-      void els.badgeNum.offsetWidth;
-      els.badgeNum.classList.add('is-pop');
+    showPlus(fromEl || els.cat);
+
+    if (els.zj && !superOpen) {
+      els.zj.classList.remove('is-pop');
+      void els.zj.offsetWidth;
+      els.zj.classList.add('is-pop');
       clearTimeout(popTimer);
-      popTimer = setTimeout(function () { els.badgeNum.classList.remove('is-pop'); }, 320);
-    }
-
-    if (!bowed) {
-      bowed = true;
-      setTimeout(function () {
-        if (modal && !modal.hidden) els.badge.classList.add('is-gone');
-      }, 260);
-    }
-
-    if (els.person) {
-      els.person.classList.remove('is-bow');
-      void els.person.offsetWidth;
-      els.person.classList.add('is-bow');
-      clearTimeout(bowTimer);
-      bowTimer = setTimeout(function () {
-        if (els.person) els.person.classList.remove('is-bow');
-      }, 430);
-    }
-
-    if (els.plus) {
-      els.plus.classList.remove('is-on');
-      void els.plus.offsetWidth;
-      els.plus.classList.add('is-on');
-      clearTimeout(plusTimer);
-      plusTimer = setTimeout(function () { els.plus.classList.remove('is-on'); }, 600);
+      popTimer = setTimeout(function () { els.zj.classList.remove('is-pop'); }, 320);
     }
 
     scheduleBump(450);
+  }
+
+  /* 在某个元素头顶冒 +1（首页猫猫、超级模式里的猫猫、中间大圆都用这个） */
+  function showPlus(el) {
+    if (!el || !els.plusLayer) return;
+    var r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return;
+
+    var s = document.createElement('span');
+    s.className = 'mo-float-plus';
+    s.textContent = '+1';
+    s.style.left = (r.left + r.width / 2) + 'px';
+    s.style.top = (r.top + 2) + 'px';
+    els.plusLayer.appendChild(s);
+    setTimeout(function () {
+      if (s.parentNode) s.parentNode.removeChild(s);
+    }, 800);
   }
 
   /* ---------- 全站计数 ---------- */
@@ -294,21 +255,16 @@
     if (!B8.sb || !B8.sb.ready) return;
     B8.sb.rpc('b8_worship_get', {}).then(function (v) {
       var n = Number(v);
-      // 全站计数只会涨；如果 bump 的响应比 get 先回来，别让旧值把它盖回去
       if (!isNaN(n) && n >= total) {
         total = n;
         totalKnown = true;
         store(KEY_TOTAL, total);
         render();
       }
-      setNote('');
     }).catch(function (err) {
       var msg = err && err.message ? err.message : '网络异常';
       if (/Could not find the function|schema cache|does not exist/i.test(msg)) {
         bumpBroken = true;
-        setNote('全站计数要更新数据库：请在 Supabase SQL Editor 跑一遍 supabase/install-all.sql。');
-      } else {
-        setNote('全站计数暂时没连上，本机计数正常。');
       }
     });
   }
@@ -321,16 +277,16 @@
   function flushBump() {
     bumpTimer = 0;
     if (flushing || !pending || bumpBroken) return;
-    if (!B8.sb || !B8.sb.ready) {
-      setNote('数据库没接，全站计数暂不可用；本机计数正常。');
-      return;
-    }
+    if (!B8.sb || !B8.sb.ready) { scheduleBump(700); return; }
 
     flushing = true;
-    // pending 在请求成功前不扣，班徽上的数字才不会先掉一下；成功后再减掉这一批。
     var n = Math.min(pending, 1000);
 
-    B8.sb.rpc('b8_worship_bump', { p_n: n }).then(function (res) {
+    var args = { p_n: n };
+    var t = authToken();
+    if (t) args.p_token = t;
+
+    B8.sb.rpc('b8_worship_bump', args).then(function (res) {
       pending -= n;
       var v = res && res.total != null ? res.total : res;
       var num = Number(v);
@@ -340,14 +296,16 @@
         store(KEY_TOTAL, total);
         render();
       }
-      setNote('');
+      if (res && res.points != null) {
+        points = Math.max(0, Number(res.points) || 0);
+        userKnown = true;
+      }
+      if (res && res.point_lv != null) pointLv = Math.max(1, Number(res.point_lv) || 1);
+      renderShop();
     }).catch(function (err) {
       var msg = err && err.message ? err.message : '网络异常';
       if (/Could not find the function|schema cache|does not exist/i.test(msg)) {
         bumpBroken = true;
-        setNote('全站计数要更新数据库：请在 Supabase SQL Editor 跑一遍 supabase/install-all.sql。');
-      } else {
-        setNote('全站计数暂时没连上，本机计数正常；本机次数已经记下。');
       }
     }).then(function () {
       flushing = false;
@@ -356,156 +314,324 @@
   }
 
   /* ============================================================
-     超级模式
+     超级模式：三步出现 + 两圈反向旋转
      ============================================================ */
 
-  function openSpace() {
-    build();
-    if (!space) return;
-    modal.hidden = true;
-    space.hidden = false;
-    document.body.classList.add('mo-lock', 'mo-space-open');
-    render();
-
-    els.spaceBadge.classList.remove('is-vanish');
-    els.zhoujin.classList.remove('is-on');
-    els.rings.classList.remove('is-on');
-    buildRings();
-    startStars();
-
-    var r = badgeRect || {
-      left: window.innerWidth / 2 - 48,
-      top: window.innerHeight / 2 - 120,
-      width: 96,
-      height: 96
-    };
-
-    els.spaceBadge.style.transition = 'none';
-    els.spaceBadge.style.left = r.left + 'px';
-    els.spaceBadge.style.top = r.top + 'px';
-    els.spaceBadge.style.width = r.width + 'px';
-    els.spaceBadge.style.height = r.height + 'px';
-    els.spaceBadge.style.transform = 'translate(0, 0) scale(1)';
-    els.spaceBadge.style.opacity = '1';
-    void els.spaceBadge.offsetWidth;
-    els.spaceBadge.style.transition = '';
-
-    requestAnimationFrame(function () {
-      var cx = window.innerWidth / 2;
-      var cy = window.innerHeight / 2;
-      var dx = cx - (r.left + r.width / 2);
-      var dy = cy - (r.top + r.height / 2);
-      els.spaceBadge.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(1.15)';
-    });
-
-    var delay = reduced ? 30 : 980;
-    setTimeout(function () {
-      els.spaceBadge.style.opacity = '';
-      els.spaceBadge.classList.add('is-vanish');
-      els.zhoujin.classList.add('is-on');
-    }, delay);
-    setTimeout(function () {
-      els.rings.classList.add('is-on');
-    }, delay + (reduced ? 20 : 180));
+  function clearSuperTimers() {
+    superTimers.forEach(function (t) { clearTimeout(t); });
+    superTimers = [];
   }
 
-  function closeSpace() {
-    if (!space || space.hidden) return;
-    space.hidden = true;
-    document.body.classList.remove('mo-space-open');
-    stopStars();
-    if (modal) {
-      modal.hidden = false;
-      document.body.classList.add('mo-lock');
-      bowed = false;
-      if (els.badge) els.badge.classList.remove('is-gone');
-      render();
-    }
-  }
+  function ensureSuper() {
+    if (superBuilt) return;
+    superBuilt = true;
 
-  function addRing(count, radius, dir, duration) {
-    var ring = document.createElement('div');
-    ring.className = 'mo-ring ' + dir;
-    ring.style.animationDuration = duration + 's';
-    ring.style.setProperty('--r', radius + 'vmin');
+    els.superLayer = $('mo-super-layer');
+    els.superWord = $('mo-super-word');
+    els.superCats = $('mo-super-cats');
+    els.superTotal = $('mo-super-total');
+    els.superLocal = $('mo-super-local');
+    els.superCore = $('mo-super-core');
+    els.superExit = $('mo-super-exit');
+    els.plusLayer = $('mo-plus-layer');
 
-    for (var i = 0; i < count; i++) {
-      var item = document.createElement('span');
-      item.className = 'mo-ring-item';
-      item.style.setProperty('--a', (360 / count * i) + 'deg');
-      item.style.setProperty('--r', radius + 'vmin');
-      item.style.setProperty('--d', (-(i * 0.37)).toFixed(2) + 's');
-      item.innerHTML = '<span class="mo-ring-person">' + ringPersonHTML() + '</span>';
-      ring.appendChild(item);
-    }
-    els.rings.appendChild(ring);
-  }
-
-  function buildRings() {
-    if (!els.rings || els.rings.childNodes.length) return;
-    addRing(6, 20, 'cw', 46);
-    addRing(9, 33, 'ccw', 62);
-    addRing(12, 45, 'cw', 78);
-  }
-
-  /* ---------- 星空 canvas ---------- */
-  function makeStars() {
-    stars = [];
-    var n = window.innerWidth < 600 ? 150 : 240;
-    for (var i = 0; i < n; i++) {
-      stars.push({
-        x: Math.random(),
-        y: Math.random(),
-        r: Math.random() * 1.5 + 0.35,
-        p: Math.random() * Math.PI * 2,
-        s: Math.random() * 0.8 + 0.35,
-        warm: Math.random() < 0.12
+    if (els.superLayer) B8.on(els.superLayer, 'click', closeSuper);
+    if (els.superExit) {
+      B8.on(els.superExit, 'click', function (ev) {
+        ev.stopPropagation();
+        closeSuper();
       });
     }
-  }
-
-  function resizeStars() {
-    if (!starCanvas) return;
-    starW = window.innerWidth;
-    starH = window.innerHeight;
-    starDpr = Math.min(2, window.devicePixelRatio || 1);
-    starCanvas.width = Math.round(starW * starDpr);
-    starCanvas.height = Math.round(starH * starDpr);
-    starCtx.setTransform(starDpr, 0, 0, starDpr, 0, 0);
-  }
-
-  function startStars() {
-    if (!starCanvas) starCanvas = $('mo-stars');
-    if (!starCanvas) return;
-    starCtx = starCanvas.getContext('2d');
-    if (!starCtx) return;
-    if (!stars.length) makeStars();
-    resizeStars();
-    starRunning = true;
-    drawStars(0);
-  }
-
-  function stopStars() {
-    starRunning = false;
-    if (starRaf) { cancelAnimationFrame(starRaf); starRaf = 0; }
-  }
-
-  function drawStars(ts) {
-    if (!starRunning || !starCtx) return;
-    var t = (ts || 0) / 1000;
-    starCtx.clearRect(0, 0, starW, starH);
-    for (var i = 0; i < stars.length; i++) {
-      var s = stars[i];
-      var a = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * s.s + s.p));
-      starCtx.beginPath();
-      starCtx.fillStyle = s.warm
-        ? 'rgba(246, 217, 143, ' + a.toFixed(3) + ')'
-        : 'rgba(224, 232, 255, ' + a.toFixed(3) + ')';
-      starCtx.arc(s.x * starW, s.y * starH, s.r, 0, Math.PI * 2);
-      starCtx.fill();
+    if (els.superCore) {
+      B8.on(els.superCore, 'click', function (ev) {
+        ev.stopPropagation();
+        if (superOpen) worship(els.superWord);
+      });
     }
-    if (reduced) return;
-    starRaf = requestAnimationFrame(drawStars);
+
+    els.shopBtn = $('mo-shop-btn');
+    els.shop = $('mo-shop');
+    els.shopClose = $('mo-shop-close');
+    els.shopPoints = $('mo-shop-points');
+    els.shopNote = $('mo-shop-note');
+    els.shopSpeedDesc = $('shop-speed-desc');
+    els.shopSpeedCost = $('shop-speed-cost');
+    els.shopCatDesc = $('shop-cat-desc');
+    els.shopCatCost = $('shop-cat-cost');
+    els.shopPointDesc = $('shop-point-desc');
+    els.shopPointCost = $('shop-point-cost');
+
+    if (els.shopBtn) {
+      B8.on(els.shopBtn, 'click', function (ev) {
+        ev.stopPropagation();
+        openShop();
+      });
+    }
+    if (els.shopClose) B8.on(els.shopClose, 'click', closeShop);
+    if (els.shop) {
+      B8.on(els.shop, 'click', function (ev) {
+        if (ev.target === els.shop) closeShop();
+      });
+    }
+    B8.qsa('.mo-shop-item', els.shop || document).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        buyUpgrade(btn.getAttribute('data-buy'), btn);
+      });
+    });
+  }
+
+  function buildSuperRings() {
+    if (!els.superCats) return;
+    ringEls = [];
+    ringCatEls = [];
+    els.superCats.innerHTML = '';
+
+    // 三圈：顺、逆、顺，10 秒一圈；基础 36 只，每买一只就多加一只。
+    var counts = [8, 12, 16];
+    for (var k = 0; k < catLv; k++) counts[k % 3] += 1;
+
+    var rings = [
+      { n: counts[0], r: 30, s: 13, dir: 'cw' },
+      { n: counts[1], r: 38, s: 10, dir: 'ccw' },
+      { n: counts[2], r: 45, s: 8, dir: 'cw' }
+    ];
+
+    var frag = document.createDocumentFragment();
+    rings.forEach(function (ring, ri) {
+      var dir = ring.dir === 'ccw' ? -1 : 1;
+      var ringEl = document.createElement('div');
+      ringEl.className = 'mo-ring ' + ring.dir;
+      ringEls.push({ el: ringEl, dir: dir });
+
+      for (var i = 0; i < ring.n; i++) {
+        var a = (Math.PI * 2 * i / ring.n) + (ri * 0.18);
+        var d = -(i * 0.27 + ri * 0.4);
+        var item = document.createElement('span');
+        item.className = 'mo-ring-cat';
+        item.style.setProperty('--x', (Math.cos(a) * ring.r).toFixed(2) + 'vmin');
+        item.style.setProperty('--y', (Math.sin(a) * ring.r).toFixed(2) + 'vmin');
+        item.style.setProperty('--s', ring.s + 'vmin');
+        item.style.setProperty('--d', d.toFixed(2) + 's');
+
+        var cat = document.createElement('span');
+        cat.className = 'mo-cat';
+        item.appendChild(cat);
+        ringEl.appendChild(item);
+        ringCatEls.push({ cat: cat, dir: dir, delay: d });
+      }
+      frag.appendChild(ringEl);
+    });
+    els.superCats.appendChild(frag);
+  }
+
+  function upgradeCost(kind) {
+    if (kind === 'speed') return 200 * Math.pow(2, speedLv - 1);
+    if (kind === 'cat') return 1000 * Math.pow(2, catLv);
+    if (kind === 'point') return 10000 * Math.pow(2, pointLv - 1);
+    return 0;
+  }
+
+  function setShopNote(msg, kind) {
+    if (!els.shopNote) return;
+    els.shopNote.textContent = msg || '';
+    els.shopNote.className = 'mo-shop-note' + (kind === 'err' ? ' is-err' : (kind === 'ok' ? ' is-ok' : ''));
+  }
+
+  function renderShop() {
+    if (!els.shopPoints) return;
+    els.shopPoints.textContent = fmt(points);
+
+    var speedCost = upgradeCost('speed');
+    var catCost = upgradeCost('cat');
+    var pointCost = upgradeCost('point');
+
+    if (els.shopSpeedDesc) {
+      els.shopSpeedDesc.textContent = speedLv >= 13
+        ? '已满级 · 每轮 ' + catDur.toFixed(1) + 's'
+        : '每轮 ' + catDur.toFixed(1) + 's（升级 −0.1s）';
+    }
+    if (els.shopSpeedCost) els.shopSpeedCost.textContent = speedLv >= 13 ? '满级' : fmt(speedCost) + ' 点';
+
+    if (els.shopCatDesc) els.shopCatDesc.textContent = '当前 ' + (36 + catLv) + ' 只';
+    if (els.shopCatCost) els.shopCatCost.textContent = catLv >= 20 ? '满级' : fmt(catCost) + ' 点';
+
+    if (els.shopPointDesc) els.shopPointDesc.textContent = '每次 ' + pointLv + ' 点';
+    if (els.shopPointCost) els.shopPointCost.textContent = pointLv >= 10 ? '满级' : fmt(pointCost) + ' 点';
+
+    var can = loggedIn && userKnown;
+    B8.qsa('.mo-shop-item', els.shop || document).forEach(function (btn) {
+      var kind = btn.getAttribute('data-buy');
+      var maxed = (kind === 'speed' && speedLv >= 13) ||
+                  (kind === 'cat' && catLv >= 20) ||
+                  (kind === 'point' && pointLv >= 10);
+      btn.disabled = !can || maxed || points < upgradeCost(kind);
+    });
+
+    if (!loggedIn) setShopNote('登录后才能用点数升级；现在膜拜只记全站次数。');
+  }
+
+  function openShop() {
+    if (!superOpen || !els.shop) return;
+    els.shop.hidden = false;
+    setShopNote('');
+    renderShop();
+    if (els.shopClose) {
+      try { els.shopClose.focus({ preventScroll: true }); } catch (e) { try { els.shopClose.focus(); } catch (e2) {} }
+    }
+  }
+
+  function closeShop() {
+    if (els.shop) els.shop.hidden = true;
+  }
+
+  function buyUpgrade(kind, btn) {
+    if (!loggedIn) { setShopNote('登录后才能升级。', 'err'); return; }
+    var t = authToken();
+    if (!t) { setShopNote('登录状态失效，刷新后再试。', 'err'); return; }
+
+    btn.disabled = true;
+    setShopNote('正在升级…');
+    B8.sb.rpc('b8_worship_upgrade', { p_token: t, p_kind: kind }).then(function (res) {
+      applyUserState(res);
+      var label = kind === 'speed' ? '膜速' : (kind === 'cat' ? '小猫数量' : '每次点数');
+      setShopNote('升级成功：' + label + '。', 'ok');
+      renderShop();
+    }).catch(function (err) {
+      var msg = err && err.message ? err.message : '升级失败';
+      if (/Could not find the function|schema cache|does not exist/i.test(msg)) {
+        msg = '商店要更新数据库：请先跑一遍 supabase/install-all.sql。';
+      }
+      setShopNote(msg, 'err');
+      renderShop();
+    });
+  }
+
+  function stopRings() {
+    if (superRaf) {
+      cancelAnimationFrame(superRaf);
+      superRaf = 0;
+    }
+    catTimeouts.forEach(function (t) { clearTimeout(t); });
+    catIntervals.forEach(function (t) { clearInterval(t); });
+    catTimeouts = [];
+    catIntervals = [];
+  }
+
+  function startRings() {
+    stopRings();
+    ringStart = (window.performance && performance.now) ? performance.now() : Date.now();
+
+    function tick(now) {
+      if (!superOpen || !els.superLayer || !els.superLayer.classList.contains('is-rings')) {
+        superRaf = 0;
+        return;
+      }
+      var t = ((now - ringStart) % 10000) / 10000;   // 10 秒一圈
+      var angle = t * Math.PI * 2;
+
+      ringEls.forEach(function (r) {
+        r.el.style.transform = 'rotate(' + (r.dir * angle) + 'rad)';
+      });
+      ringCatEls.forEach(function (r) {
+        // 猫猫自己反向转，保持头朝上
+        r.cat.style.transform = 'rotate(' + (-r.dir * angle) + 'rad)';
+      });
+
+      superRaf = requestAnimationFrame(tick);
+    }
+    superRaf = requestAnimationFrame(tick);
+
+    // 每只猫猫单独计时：动画走到「趴下」那一帧（每轮 2/6 处）才 +1。
+    var DUR = Math.round(catDur * 1000);
+    var FLAT = DUR * 2 / 6;
+
+    ringCatEls.forEach(function (item) {
+      var phase = ((-item.delay) % DUR + DUR) % DUR;   // 负 delay = 已经走了这么远
+      var first = (FLAT - phase) % DUR;
+      if (first < 0) first += DUR;
+
+      var to = setTimeout(function () {
+        if (!superOpen) return;
+        worship(item.cat);
+        var iv = setInterval(function () {
+          if (!superOpen || document.hidden) return;
+          if (!els.superLayer || !els.superLayer.classList.contains('is-rings')) return;
+          worship(item.cat);
+        }, DUR);
+        catIntervals.push(iv);
+      }, first * 1000);
+      catTimeouts.push(to);
+    });
+  }
+
+  function openSuper() {
+    if (!active) activate();
+    ensureSuper();
+    if (!els.superLayer) return;
+    buildSuperRings();
+
+    clearSuperTimers();
+    stopRings();
+    superOpen = true;
+    render();
+
+    var layer = els.superLayer;
+    layer.hidden = false;
+    layer.classList.remove('is-bg', 'is-center', 'is-rings');
+    document.body.classList.add('mo-super-open');
+
+    var word = els.superWord;
+    var zr = els.zj ? els.zj.getBoundingClientRect() : null;
+    var cx = window.innerWidth / 2;
+    var cy = window.innerHeight / 2;
+
+    if (word) {
+      word.style.transition = 'none';
+      word.style.opacity = '0';
+      if (zr && zr.width > 0) {
+        var dx = zr.left + zr.width / 2 - cx;
+        var dy = zr.top + zr.height / 2 - cy;
+        word.style.transform = 'translate(-50%,-50%) translate(' + dx + 'px,' + dy + 'px) scale(0.55)';
+      } else {
+        word.style.transform = 'translate(-50%,-50%) scale(0.55)';
+      }
+      void word.offsetWidth;
+      word.style.transition = '';
+    }
+
+    // 第一步：背景暗下来，其他东西全没了，只剩右边那个「宙金」
+    requestAnimationFrame(function () {
+      if (!superOpen) return;
+      layer.classList.add('is-bg');
+      if (word) word.style.opacity = '1';
+    });
+
+    // 第二步：宙金平滑移到中间，同时从印章红变成金色
+    superTimers.push(setTimeout(function () {
+      if (!superOpen) return;
+      layer.classList.add('is-center');
+      if (word) word.style.transform = 'translate(-50%,-50%) scale(1)';
+    }, 360));
+
+    // 第三步：移动完成后，两圈猫猫才出现并开始旋转
+    superTimers.push(setTimeout(function () {
+      if (!superOpen) return;
+      layer.classList.add('is-rings');
+      startRings();
+    }, 1500));
+  }
+
+  function closeSuper() {
+    if (!superOpen) return;
+    superOpen = false;
+    clearSuperTimers();
+    stopRings();
+    closeShop();
+    if (els.superLayer) {
+      els.superLayer.classList.remove('is-bg', 'is-center', 'is-rings');
+      els.superLayer.hidden = true;
+    }
+    document.body.classList.remove('mo-super-open');
   }
 
   /* ============================================================
@@ -513,38 +639,77 @@
      ============================================================ */
 
   function boot() {
-    var btn = document.getElementById('mo-open');
-    if (!btn) return;
-    build();
+    els.open = $('mo-open');
+    els.play = $('mo-play');
+    els.logo = $('mo-logo');
+    els.zj = $('mo-zj');
+    els.catWrap = $('mo-cat-wrap');
+    els.cat = $('mo-cat');
+    els.total = $('mo-total');
+    els.local = $('mo-local');
+    els.super = $('mo-super');
+    els.inline = $('mo-inline');
+    els.catM = $('mo-cat-m');
+    els.totalM = $('mo-total-m');
+    els.localM = $('mo-local-m');
+    els.plusLayer = $('mo-plus-layer');
+
+    if (!els.open || !els.play) return;
+
+    B8.on(els.open, 'click', function () {
+      if (!active) activate();
+      else worship(els.cat);
+    });
+    B8.on(els.cat, 'click', function () { worship(els.cat); });
+    B8.on(els.catM, 'click', function () { worship(els.catM); });
+    B8.on(els.super, 'click', openSuper);
+
+    document.addEventListener('b8:auth', function () {
+      if (!active) return;
+      loggedIn = !!authToken();
+      if (loggedIn) loadUserState();
+      else renderShop();
+    });
+
+    B8.on(document, 'keydown', function (ev) {
+      if (ev.key !== 'Escape') return;
+      if (els.shop && !els.shop.hidden) {
+        ev.preventDefault();
+        closeShop();
+        return;
+      }
+      if (superOpen) {
+        ev.preventDefault();
+        closeSuper();
+      }
+    });
+
     render();
-    B8.on(btn, 'click', openModal);
 
     B8.worship = {
-      open: openModal,
-      close: closeModal,
-      superMode: openSpace,
-      leave: closeSpace
+      activate: activate,
+      worship: worship,
+      superMode: openSuper,
+      leave: closeSuper
     };
 
     if (window.B8_TEST) {
-      // 截图 / 自检入口：?t=1&mo=open 或 ?t=1&mo=space
-      if (/[?&]mo=open\b/.test(location.search)) openModal();
-      if (/[?&]mo=space\b/.test(location.search)) {
-        openModal();
-        openSpace();
+      B8.worship.applyUser = applyUserState;
+      B8.worship.shop = openShop;
+      if (/[?&]mo=cat\b/.test(location.search)) activate();
+      if (/[?&]mo=super\b/.test(location.search)) {
+        activate();
+        setTimeout(openSuper, 60);
       }
       B8.worship.state = function () {
         return {
-          local: local, total: total, totalKnown: totalKnown,
-          pending: pending, modalOpen: !!(modal && !modal.hidden),
-          spaceOpen: !!(space && !space.hidden), bowed: bowed,
-          rings: els.rings ? els.rings.querySelectorAll('.mo-ring-item').length : 0
+          active: active, local: local, total: total, totalKnown: totalKnown,
+          pending: pending, superOpen: superOpen,
+          points: points, speedLv: speedLv, catLv: catLv, pointLv: pointLv,
+          catDur: catDur, shopOpen: !!(els.shop && !els.shop.hidden),
+          rings: els.superCats ? els.superCats.querySelectorAll('.mo-ring').length : 0,
+          cats: els.superCats ? els.superCats.querySelectorAll('.mo-cat').length : 0
         };
-      };
-      B8.worship.click = worship;
-      B8.worship.flush = function () {
-        if (bumpTimer) { clearTimeout(bumpTimer); bumpTimer = 0; }
-        flushBump();
       };
     }
   }
