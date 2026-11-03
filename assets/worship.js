@@ -41,6 +41,7 @@
   var superTimers = [];
   var popTimer = 0;
   var homeTimer = 0;
+  var userSyncTimer = 0;
   var homeDelay = 0;
   var catTimeouts = [];
   var catIntervals = [];
@@ -76,8 +77,11 @@
     return Math.max(0.4, 1.6 - (speedLv - 1) * 0.1);
   }
 
-  function applyUserState(s) {
+  function applyUserState(s, soft) {
     if (!s) return;
+    var oldSpeed = speedLv;
+    var oldCat = catLv;
+
     if (s.points != null) points = Math.max(0, Number(s.points) || 0);
     if (s.speed_lv != null) speedLv = Math.max(1, Number(s.speed_lv) || 1);
     if (s.cat_lv != null) catLv = Math.max(0, Number(s.cat_lv) || 0);
@@ -88,15 +92,28 @@
     userKnown = true;
 
     if (active) {
-      restartCat(els.cat);
-      restartCat(els.catM);
-      restartHomeAuto();
-      if (superOpen) {
+      if (!soft || oldSpeed !== speedLv) {
+        restartCat(els.cat);
+        restartCat(els.catM);
+        restartHomeAuto();
+      }
+      if (superOpen && (!soft || oldCat !== catLv || oldSpeed !== speedLv)) {
         buildSuperRings();
         startRings();
       }
     }
+    render();
     renderShop();
+  }
+
+  function syncUserState() {
+    if (!active || !loggedIn || document.hidden) return;
+    var t = authToken();
+    if (!t) return;
+    B8.sb.rpc('b8_worship_state', { p_token: t }).then(function (s) {
+      applyUserState(s, true);
+      loadTotal();
+    }).catch(function () {});
   }
 
   function loadUserState() {
@@ -177,6 +194,10 @@
     if (els.localM) els.localM.textContent = fmt(local);
     if (els.superTotal) els.superTotal.textContent = totalText;
     if (els.superLocal) els.superLocal.textContent = fmt(local);
+    if (els.superSpeed) {
+      els.superSpeed.textContent = '当前速度：每 ' + catDur.toFixed(1) + ' 秒一次 · ' +
+        (1 / catDur).toFixed(2) + ' 次/秒';
+    }
 
     [els.total, els.totalM, els.superTotal].forEach(function (el) {
       if (!el) return;
@@ -186,7 +207,7 @@
     });
   }
 
-  function activate() {
+  function activate(fromEl) {
     if (active) return;
     active = true;
 
@@ -203,9 +224,10 @@
     loggedIn = !!authToken();
     if (loggedIn) loadUserState();
     else renderShop();
+    if (!userSyncTimer) userSyncTimer = setInterval(syncUserState, 6000);
 
     if (B8.sb && B8.sb.ready) loadTotal();
-    worship(els.cat);               // 点「膜宙金」本身也算第一次膜拜
+    worship(fromEl || els.cat);     // 点「膜宙金」本身也算第一次膜拜
   }
 
   function worship(fromEl) {
@@ -331,6 +353,7 @@
     els.superCats = $('mo-super-cats');
     els.superTotal = $('mo-super-total');
     els.superLocal = $('mo-super-local');
+    els.superSpeed = $('mo-super-speed');
     els.superCore = $('mo-super-core');
     els.superExit = $('mo-super-exit');
     els.plusLayer = $('mo-plus-layer');
@@ -660,8 +683,8 @@
     if (!els.open || !els.play) return;
 
     B8.on(els.open, 'click', function () {
-      if (!active) activate();
-      else worship(els.cat);
+      if (!active) activate(els.open);
+      else worship(els.open);
     });
     B8.on(els.cat, 'click', function () { worship(els.cat); });
     B8.on(els.catM, 'click', function () { worship(els.catM); });
