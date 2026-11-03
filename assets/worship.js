@@ -73,6 +73,10 @@
     } catch (e) { return ''; }
   }
 
+  function pointGain() {
+    return Math.pow(2, pointLv - 1);
+  }
+
   function speedSeconds() {
     return Math.max(0.4, 1.6 - (speedLv - 1) * 0.1);
   }
@@ -198,7 +202,7 @@
     if (els.superLocal) els.superLocal.textContent = fmt(local);
     if (els.superSpeed) {
       els.superSpeed.textContent = '当前速度：每 ' + catDur.toFixed(1) + ' 秒一次 · ' +
-        (1 / catDur).toFixed(2) + ' 次/秒';
+        (1 / catDur).toFixed(2) + ' 次/秒 · 每次 +' + fmt(pointGain()) + ' 点';
     }
 
     [els.total, els.totalM, els.superTotal].forEach(function (el) {
@@ -239,7 +243,7 @@
     pending += 1;
     store(KEY_LOCAL, local);
     if (loggedIn) {
-      points += pointLv;
+      points += pointGain();
       renderShop();
     }
     render();
@@ -468,7 +472,7 @@
   function upgradeCost(kind) {
     if (kind === 'speed') return 200 * Math.pow(2, speedLv - 1);
     if (kind === 'cat') return 1000 * Math.pow(2, catLv);
-    if (kind === 'point') return 10000 * Math.pow(2, pointLv - 1);
+    if (kind === 'point') return 50000 * Math.pow(4, pointLv - 1);
     return 0;
   }
 
@@ -496,7 +500,7 @@
     if (els.shopCatDesc) els.shopCatDesc.textContent = '当前 ' + (36 + catLv) + ' 只';
     if (els.shopCatCost) els.shopCatCost.textContent = catLv >= 20 ? '满级' : fmt(catCost) + ' 点';
 
-    if (els.shopPointDesc) els.shopPointDesc.textContent = '每次 ' + pointLv + ' 点';
+    if (els.shopPointDesc) els.shopPointDesc.textContent = '每次 ' + fmt(pointGain()) + ' 点';
     if (els.shopPointCost) els.shopPointCost.textContent = pointLv >= 10 ? '满级' : fmt(pointCost) + ' 点';
 
     var can = loggedIn && userKnown;
@@ -753,6 +757,7 @@
       B8.worship.shop = openShop;
       B8.worship.startRings = startRings;
       B8.worship.plus = showPlus;
+      B8.worship._setLogged = function (v) { loggedIn = !!v; };
       if (/[?&]mo=cat\b/.test(location.search)) activate();
       if (/[?&]mo=super\b/.test(location.search)) {
         activate();

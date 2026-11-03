@@ -4,7 +4,7 @@
    · 四档难度：简单 / 普通 / 困难 / 极难，各自有难度系数
    · 输入只靠屏幕上的 1–9 按键，不要求键盘
    · 辅助：笔记（免费）、候选模式（算提示）、提示推演、撤销
-   · 填错立刻标红并扣 500 分；填满 81 格时还有错 → 0 分
+   · 填错立刻标红并扣 500 分；填满后还有错也只按错误扣，不额外清零
    · 计时从「开始」那一刻走，不是从第一次填数才开始
    · 计分：最终分 =（5000 − 秒数）× 难度系数 − 错误次数 × 500（最低 0）
    · 提示/候选：第一次打开会确认「用了就不进排行榜」，之后本局只算本机成绩
@@ -82,6 +82,7 @@
   var candidateWarned = false;
   var candidateUsed = false;
   var wrongAnswer = false;
+  var wrongCells = 0;
   var filled = 0;
   var started = false;
   var finished = false;
@@ -626,7 +627,7 @@
     var base = Math.max(0, 5000 - sec);
     var raw = Math.round(base * d.coef);
     var penalty = mistakes * 500;
-    var final = failed ? 0 : Math.max(0, raw - penalty);
+    var final = Math.max(0, raw - penalty);
     return {
       sec: sec, base: base, coef: d.coef, raw: raw,
       penalty: penalty, final: final, failed: !!failed
@@ -640,15 +641,17 @@
     startAt = 0;
     stopClock();
     recountFilled();
-    // mistakes 是「填错次数」，不在这里重置；最后答案仍要全对才计分。
+    // mistakes 是「填错次数」，不在这里重置；填满后还有错只按错误扣分，不再额外清零。
     wrong = [];
+    wrongCells = 0;
     for (var i = 0; i < 81; i++) {
       wrong[i] = grid[i] !== solution[i];
+      if (wrong[i]) wrongCells += 1;
     }
     paintAll();
     scoreInfo = calcScore(wrongAnswer);
-    // 用了提示 / 答案有错 / 超过 5000 秒的局不刷本机最高
-    if (!wrongAnswer && hints === 0 && !demoUsed && scoreInfo.final > 0) {
+    // 用了提示 / 演示 / 超过 5000 秒的局不刷本机最高；答案有错只扣分，仍可上榜。
+    if (hints === 0 && !demoUsed && scoreInfo.final > 0) {
       saveBest(diff, scoreInfo.final);
     }
     renderResult();
@@ -667,7 +670,11 @@
 
     var note;
     if (wrongAnswer) {
-      note = '最后答案有错（填错 ' + mistakes + ' 次），本局 0 分，没有进排行榜。';
+      note = '最后还有 ' + wrongCells + ' 格错；本局按错误扣了 ' + s.penalty +
+        ' 分，不再额外清零。';
+      if (hints > 0) note += '用了提示/候选，不加入排行榜。';
+      else if (s.final <= 0) note += '分数被扣到 0，没有进排行榜。';
+      else note += '按扣分后的成绩上榜。';
     } else if (hints > 0) {
       note = (candidateUsed
         ? '本局用了候选模式' + (hints > 1 ? '和提示' : '')
@@ -715,7 +722,7 @@
   }
 
   function submitScore(final) {
-    if (wrongAnswer || hints > 0 || demoUsed || final <= 0) return;
+    if (hints > 0 || demoUsed || final <= 0) return;
     if (!writable || submitted || !B8.auth || !B8.auth.token()) return;
     submitted = true;
     B8.sb.rpc('b8_score_add', {
@@ -750,7 +757,7 @@
       '<button class="btn-main" type="button" id="sd-start">开始</button>' +
       '<button class="btn-2nd" type="button" id="sd-close">' + (started && !finished ? '继续这一局' : '先看看') + '</button>' +
       '<p class="tip">开始后计时立刻走：<b>分数 =（5000 − 秒数）× 难度系数 − 错误 × 500</b>；' +
-      '填错立刻标红并扣 500 分，填满 81 格时只要还有错就是 <b>0 分</b>。<br>' +
+      '填错立刻标红并扣 500 分；填满 81 格时如果还有错，只按错误继续扣，不再额外清零。<br>' +
       '<b>简单 ×1.00 / 普通 ×1.50 / 困难 ×2.20 / 极难 ×3.00</b>。' +
       '提示/候选：第一次打开会弹确认，<b>用了提示或候选的局都不加入排行榜</b>。' +
       '<b>演示模式</b>：填任何数字都不判对错；退出时可选保留当前填数（本局不排行）或回到进入前。</p>';
@@ -965,6 +972,7 @@
     candidateUsed = false;
     showCand = false;
     wrongAnswer = false;
+    wrongCells = 0;
     demoMode = false;
     demoUsed = false;
     demoSnapshot = null;
@@ -1161,7 +1169,7 @@
           diff: diff, grid: grid.slice(), solution: solution.slice(),
           given: given.slice(), mistakes: mistakes, hints: hints,
           finished: finished, elapsed: elapsed(), score: scoreInfo,
-          selected: selected, writable: writable,
+          selected: selected, writable: writable, wrongAnswer: wrongAnswer, wrongCells: wrongCells,
           demoMode: demoMode, demoUsed: demoUsed
         };
       };
