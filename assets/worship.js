@@ -559,7 +559,7 @@
           worship(item.cat);
         }, DUR);
         catIntervals.push(iv);
-      }, first * 1000);
+      }, first);
       catTimeouts.push(to);
     });
   }
@@ -696,6 +696,7 @@
     if (window.B8_TEST) {
       B8.worship.applyUser = applyUserState;
       B8.worship.shop = openShop;
+      B8.worship.startRings = startRings;
       if (/[?&]mo=cat\b/.test(location.search)) activate();
       if (/[?&]mo=super\b/.test(location.search)) {
         activate();
@@ -707,6 +708,7 @@
           pending: pending, superOpen: superOpen,
           points: points, speedLv: speedLv, catLv: catLv, pointLv: pointLv,
           catDur: catDur, shopOpen: !!(els.shop && !els.shop.hidden),
+          ringCats: ringCatEls.length, timers: catTimeouts.length,
           rings: els.superCats ? els.superCats.querySelectorAll('.mo-ring').length : 0,
           cats: els.superCats ? els.superCats.querySelectorAll('.mo-cat').length : 0
         };
