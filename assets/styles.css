@@ -3192,9 +3192,10 @@ body.menu-merged .nav-toggle { display: none !important; }
 }
 
 @keyframes mo-plus-up {
-  0% { opacity: 0; transform: translate(-50%, -100%) translateY(8px) scale(0.7); }
-  18% { opacity: 1; }
-  100% { opacity: 0; transform: translate(-50%, -100%) translateY(-34px) scale(1.15); }
+  0% { opacity: 1; transform: translate(-50%, -100%) translateY(6px) scale(0.85); }
+  25% { opacity: 1; transform: translate(-50%, -100%) translateY(-6px) scale(1.15); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -100%) translateY(-38px) scale(1.2); }
 }
 
 .mo-counts {

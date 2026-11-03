@@ -697,6 +697,7 @@
       B8.worship.applyUser = applyUserState;
       B8.worship.shop = openShop;
       B8.worship.startRings = startRings;
+      B8.worship.plus = showPlus;
       if (/[?&]mo=cat\b/.test(location.search)) activate();
       if (/[?&]mo=super\b/.test(location.search)) {
         activate();
