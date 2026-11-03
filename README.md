@@ -37,6 +37,7 @@ fun/
    ├─ styles.css           ✗ 生成物，别手改（sync.ps1 拼出来的）
    ├─ main.js / sb.js / auth.js  ✗ 共用件副本，别手改
    ├─ photos.js            合影墙 + 排行榜 + 页面装配
+   ├─ worship.js           膜宙金：膜拜面板 + 全站计数 + 超级宇宙模式
    ├─ games/2048.js
    ├─ games/memory.js
    ├─ games/reaction.js    专注方格（文件名是历史遗留，内容是 schulte）
@@ -119,6 +120,8 @@ supabase: {
 | 交成绩 | `b8_score_add(p_token, p_game, p_score)` |
 | 排行榜 | `b8_score_top(p_token, p_game, p_limit)` |
 | 数独排行（四档取最高） | `b8_sudoku_top(p_token, p_limit)` |
+| 膜宙金全站次数 | `b8_worship_get()` |
+| 膜宙金 +N | `b8_worship_bump(p_n)` |
 | 钢琴辉排行（三首加权） | `b8_piano_top(p_token, p_limit)` |
 | 钢琴辉我的每首歌成绩 | `b8_piano_mine(p_token)` |
 
@@ -171,6 +174,7 @@ select id, kind, label, active, created_at, used_at
 | 反应速度 | `b8.reflex.best`（最高分） | `1000000 − 五次平均毫秒 × 1000` | `1000000 − 分数`（ms） |
 | 手速测试 | `b8.clickspeed.best.v2`（最高点击数） | `点击数`（1 次 = 1 分，上限 100000） | 点击数（次） |
 | 数独 | `b8.sudoku.best.<难度>`（每档最高分，只有干净局才记） | `sudoku:<easy/normal/hard/expert>`，服务端取较大值 | 每人四档里最高的一行（分 + 难度） |
+| 膜宙金 | `b8.worship.local`（本机次数） | 不交成绩；`b8_worship_bump` 加全站计数 | 「共已膜」全站次数，面板里另有本机次数 |
 
 排行榜的数据库列是「越大越好」，所以中间几个游戏做了换算，界面上也写清楚了。
 手速 v2.68 起改用新键 `clickspeed2`，旧版按「点击数 ×1000」存的成绩不会混进新榜。
@@ -192,6 +196,12 @@ v2.70 修了高点击率下的计时器卡顿：结算看绝对 deadline，10 �
 填满 81 格时只要有一格答案错，整局 0 分。
 提示优先找裸单 / 隐性唯一，找不到才直接给答案；**每局第一次点提示会弹确认框**，
 用了提示的局不加入排行榜，也不刷本机最高。每人四档取最高一行进 `b8_sudoku_top`。
+
+**膜宙金**（`assets/worship.js`）是首页的互动彩蛋，不是游戏：
+点按钮开班徽膜拜面板，本机次数存 `b8.worship.local`，全站次数由 `b8_worship_get` /
+`b8_worship_bump` 维护（短时间连点合并成一次 `p_n`）。「超级模式」用 CSS 星云 +
+canvas 星空铺满全屏，班徽平移到中心后化成「宙金」，三圈膜拜小人分别顺/逆时针旋转。
+没有外部 GIF 或图片；数据库没接时本机计数照常，全站计数显示 `—`。
 
 2048 的牌面也换成了这八张脸：每块牌一张照片，上面压暗角、白字压在上面；
 512 / 1024 / 2048 / 4096+ 分别多一层红 / 金 / 朱印 / 玄色罩，数字越大越"压手"。
