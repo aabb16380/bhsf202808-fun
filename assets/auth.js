@@ -306,6 +306,10 @@
   function showGate() {
     var gate = $('gate');
     if (!gate) return;
+    // 公开站的门平时是 hidden 的。以前 <img> 在 DOM 里就直接下载 528 KB 的 logo，
+    // 现在只留 data-logo，真正要弹门时才补 src。
+    var logo = gate.querySelector('.gate-logo[data-logo]');
+    if (logo && !logo.getAttribute('src')) logo.src = logo.getAttribute('data-logo');
     gate.hidden = false;
     gate.classList.remove('is-done');
     setTimeout(function () {
@@ -335,7 +339,7 @@
     el.hidden = true;
     el.innerHTML =
       '<div class="gate-card">' +
-        '<img class="gate-logo" src="assets/logo.png" alt="" aria-hidden="true" width="84" height="68">' +
+        '<img class="gate-logo" data-logo="assets/logo.webp" alt="" aria-hidden="true" width="84" height="68">' +
         '<h2>登录八班</h2>' +
         '<p class="gate-sub">用学号登录。第一次进来核对姓名后给自己设个密码。</p>' +
         '<form id="gate-form" novalidate>' +

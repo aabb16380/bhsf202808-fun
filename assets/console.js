@@ -19,12 +19,14 @@
   var keys = [];
   var scores = [];
   var scoreGame = '';
+  var deletions = [];
 
   var GAMES = [
     { key: '', name: '全部' },
     { key: '2048', name: '2048' },
     { key: 'memory', name: '记忆翻牌' },
-    { key: 'schulte', name: '专注方格' }
+    { key: 'schulte', name: '专注方格' },
+    { key: 'sudoku', name: '数独' }
   ];
 
   function tok() { return B8.auth.token(); }
@@ -59,7 +61,8 @@
     var tabs = [
       { key: 'members', name: '成员' },
       { key: 'keys', name: '密钥' },
-      { key: 'scores', name: '排行' }
+      { key: 'scores', name: '排行' },
+      { key: 'deletions', name: '最近删除' }
     ];
 
     // 永久管理员没有提权会话（auth.state().elev 是 null），
@@ -97,6 +100,7 @@
 
     if (tab === 'members') loadMembers();
     else if (tab === 'keys') loadKeys();
+    else if (tab === 'deletions') loadDeletions();
     else loadScores();
   }
 
@@ -316,6 +320,79 @@
     });
   }
 
+  /* ---------- 最近删除 ---------- */
+  function loadDeletions() {
+    B8.sb.rpc('b8_super_photo_deletions', { p_token: tok(), p_limit: 40 })
+      .then(function (rows) {
+        deletions = rows || [];
+        paintDeletions();
+      }, function (err) {
+        var b = body();
+        if (!b) return;
+        var msg = err && err.message ? err.message : '网络异常';
+        if (/Could not find the function|schema cache|does not exist/i.test(msg)) {
+          msg = '「最近删除」要更新数据库：请在 Supabase SQL Editor 里跑一遍 supabase/install-all.sql（只需一次）。';
+        }
+        b.innerHTML = '<p class="form-status err">读取失败：' + esc(msg) + '</p>';
+      });
+  }
+
+  function kindName(k) {
+    if (k === 'super') return '超管';
+    if (k === 'admin') return '管理员';
+    return '本人';
+  }
+
+  function gameLabel(g) {
+    var map = { easy: '简单', normal: '普通', hard: '困难', expert: '极难' };
+    if (String(g).indexOf('sudoku:') === 0) return '数独 · ' + (map[String(g).slice(7)] || '');
+    return g;
+  }
+
+  function paintDeletions() {
+    var b = body();
+    if (!b) return;
+
+    if (!deletions.length) {
+      b.innerHTML = '<p class="form-note">还没有删除记录。管理员在照片墙上删掉的合影会出现在这里。</p>';
+      return;
+    }
+
+    var html = '<p class="form-note">最近 ' + deletions.length +
+      ' 条。记录保留照片、原上传者、删除者和时间；照片文件仍在 Storage 里，没有一起删。</p>' +
+      '<div class="console-list">';
+
+    deletions.forEach(function (d) {
+      var thumb = d.url
+        ? '<img class="console-thumb" src="' + esc(d.url) + '" alt="" loading="lazy" decoding="async">'
+        : '<span class="console-thumb is-empty" aria-hidden="true">无图</span>';
+      var title = d.caption ? esc(d.caption) : '（没写说明）';
+      var link = d.url
+        ? ' · <a href="' + esc(d.url) + '" target="_blank" rel="noopener noreferrer">看原图 ↗</a>'
+        : '';
+      html += '<div class="console-row is-del">' +
+        thumb +
+        '<div class="console-main">' +
+          '<div class="console-title">' + title +
+            ' <span class="console-dim">#' + esc(d.photo_id) + ' · ' + esc(d.category || '合影') + '</span>' +
+          '</div>' +
+          '<div class="console-meta">' +
+            '原上传：' + esc(d.uploader || d.uploader_no || '同学') +
+            ' · 删除：<b>' + esc(d.deleted_by_name || d.deleted_by_no || '未知') + '</b>' +
+            '（' + kindName(d.deleted_by_kind) + '）' +
+            ' · ' + esc(B8.dateTime(d.deleted_at)) +
+          '</div>' +
+          '<div class="console-meta">' +
+            '原上传时间 ' + esc(B8.dateTime(d.photo_created_at) || '—') +
+            ' · 点赞 ' + esc(d.likes || 0) + link +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    b.innerHTML = html;
+  }
+
   /* ---------- 排行 ---------- */
   function loadScores() {
     B8.sb.rpc('b8_super_scores', { p_token: tok(), p_game: scoreGame || null, p_limit: 100 })
@@ -344,7 +421,7 @@
       html += '<div class="console-row">' +
         '<div class="console-main">' +
           '<div class="console-title">' + (i + 1) + '. ' + esc(s.nick || '匿名') +
-            ' <span class="console-dim">' + esc(s.score) + ' 分 · ' + esc(s.game) + '</span></div>' +
+            ' <span class="console-dim">' + esc(s.score) + ' 分 · ' + esc(gameLabel(s.game)) + '</span></div>' +
           '<div class="console-meta">' + esc(B8.dateTime(s.created_at)) +
             (s.member_no ? ' · ' + esc(s.member_no) : '') + '</div>' +
         '</div>' +

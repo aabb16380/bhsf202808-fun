@@ -1,6 +1,6 @@
 # 八班游乐场 · bhsf202808.fun
 
-北京四中 2028 届 8 班的第三个站：**八个小游戏 + 一面合影墙 + 一个排行榜**。
+北京四中 2028 届 8 班的第三个站：**九个小游戏 + 一面合影墙 + 一个排行榜**。
 需要班级口令才能进；数据库没接的时候，点登录门上的「先看看界面」可以用示例数据看完整版式。
 
 三个站共用一套设计系统和同一个 Supabase 项目：
@@ -25,8 +25,8 @@ fun/
 ├─ memorynum.html          记忆数字：11 级 × 5 轮，等级系数折算标准分
 ├─ reaction.html           反应速度：等屏幕变红，5 轮全部计入平均
 ├─ clickspeed.html         手速测试：10 秒点击区
+├─ sudoku.html             数独：四档难度 + 屏幕 1–9 按键 + 提示推演
 ├─ 404.html                找不到页面时的落地页
-├─ test/index.html         调试入口：?to=<站内路径>，自动加 ?t=<时间戳> 绕缓存
 ├─ robots.txt              允许全站抓取
 ├─ .nojekyll               GitHub Pages 别走 Jekyll
 ├─ CNAME                   bhsf202808.fun
@@ -45,10 +45,13 @@ fun/
    ├─ games/memnum.js      记忆数字
    ├─ games/reflex.js      反应速度
    ├─ games/clickspeed.js  手速测试
-   ├─ games/lab.css        上面三个独立页的公共样式
+   ├─ games/sudoku.js      数独（题池 + 笔记 / 候选 / 提示 + 按难度计分）
+   ├─ games/lab.css        独立游戏页的公共样式
    ├─ theme.js / theme.css 夜间模式（自动 / 常开 / 常关）
-   ├─ games/hui/1–12.jpg   辉辉的十二张脸：记忆翻牌、合成的水果、钢琴琴块都用它们
+   ├─ games/hui/1–12.jpg   辉辉的十二张脸：合成的水果、钢琴琴块用完整图
+   ├─ games/hui/t1–t8.jpg  256px 缩略图：记忆翻牌、2048 牌面用（省 ~240 KB）
    ├─ games/hui.jpg        最早那张脸（v2.46 起不再被页面引用，留着当素材）
+   ├─ logo.webp            页面用的 logo（54 KB；logo.png 是旧引用兜底）
    ├─ icon.png / favicon.png
    └─ ...
 ```
@@ -78,7 +81,7 @@ python -m http.server 8802 -d bhsf202808/fun
 - 登录表单会变成一段说明，下面出现「先看看界面」；
 - 点进去是 `preview` 身份：合影墙、排行榜显示 **3 条示例数据**（带「示例」标签），
   上传 / 点赞 / 删除 / 成绩上传全部 `disabled`；
-- 八个小游戏本身可以正常玩，最高分只存在浏览器 `localStorage` 里。
+- 九个小游戏本身可以正常玩，最高分只存在浏览器 `localStorage` 里。
 
 ---
 
@@ -111,9 +114,11 @@ supabase: {
 | 合影列表 | `b8_photos_list(p_token, p_limit)` |
 | 新增合影 | `b8_photo_add(p_token, p_path, p_url, p_caption, p_taken_on)` |
 | 点赞 | `b8_photo_like(p_token, p_id)` |
-| 删自己的 / 管理员删任意 | `b8_photo_del(p_token, p_id)` |
+| 删自己的 / 管理员删任意 | `b8_photo_del(p_token, p_id)`（会写 `b8_photo_deleted` 删除记录） |
+| 超管看最近删除 | `b8_super_photo_deletions(p_token, p_limit)` |
 | 交成绩 | `b8_score_add(p_token, p_game, p_score)` |
 | 排行榜 | `b8_score_top(p_token, p_game, p_limit)` |
+| 数独排行（四档取最高） | `b8_sudoku_top(p_token, p_limit)` |
 | 钢琴辉排行（三首加权） | `b8_piano_top(p_token, p_limit)` |
 | 钢琴辉我的每首歌成绩 | `b8_piano_mine(p_token)` |
 
@@ -153,7 +158,7 @@ select id, kind, label, active, created_at, used_at
 
 ---
 
-## 5. 八个游戏怎么记分
+## 5. 九个游戏怎么记分
 
 | 游戏 | 本地最高分 | 上传分数 | 排行榜显示 |
 |---|---|---|---|
@@ -165,6 +170,7 @@ select id, kind, label, active, created_at, used_at
 | 记忆数字 | `b8.memnum.best`（最高标准分） | `平均准确率 × 等级系数 × 400000` | 标准分 ÷10000（满分 100.00） |
 | 反应速度 | `b8.reflex.best`（最高分） | `1000000 − 五次平均毫秒 × 1000` | `1000000 − 分数`（ms） |
 | 手速测试 | `b8.clickspeed.best.v2`（最高点击数） | `点击数`（1 次 = 1 分，上限 100000） | 点击数（次） |
+| 数独 | `b8.sudoku.best.<难度>`（每档最高分） | `sudoku:<easy/normal/hard/expert>`，服务端取较大值 | 每人四档里最高的一行（分 + 难度） |
 
 排行榜的数据库列是「越大越好」，所以中间几个游戏做了换算，界面上也写清楚了。
 手速 v2.68 起改用新键 `clickspeed2`，旧版按「点击数 ×1000」存的成绩不会混进新榜。
@@ -176,12 +182,19 @@ select id, kind, label, active, created_at, used_at
 记忆翻牌有**图片版（默认）和文字版**两种牌面，`b8.memory.mode` 记着上次的选择，
 切换会重开一局；两种版本共用同一个成绩。
 
+数独的题池在 `assets/games/sudoku.js` 的 `POOL`（离线生成，`_shared/gen-sudoku.py`），
+运行时只做数字置换和行 / 列 / 宫互换。计分：
+`基础 = max(600, 1000 − min(400, 用时 / 目标时长 × 400) − 提示 × 60 − 错误 × 30)`，
+`最终 = 基础 × 难度系数`（1.00 / 1.20 / 1.45 / 1.75），每人四档取最高一行进 `b8_sudoku_top`。
+提示优先找裸单 / 隐性唯一，找不到才直接给答案；每个提示都扣 60 分。
+
 2048 的牌面也换成了这八张脸：每块牌一张照片，上面压暗角、白字压在上面；
 512 / 1024 / 2048 / 4096+ 分别多一层红 / 金 / 朱印 / 玄色罩，数字越大越"压手"。
 右上角「**有图版 / 无图版**」一键切（默认有图，选择记在 `b8.2048.mode`）；
 无图版走 `.b2048.is-plain`，回到最早那套暖色阶，数字用深色。
-照片写在 `assets/site.css` 的 `.b2048-in.vN` 里——**注意 `url()` 要相对 `assets/` 写**（`url("games/hui/1.jpg")`），
-写成 `url("assets/games/hui/1.jpg")` 会 404 且不报错。
+2048 牌面用 256px 缩略图 `assets/games/hui/tN.jpg`（记忆翻牌也一样），完整 640px 图留给合成和钢琴辉。
+照片写在 `assets/site.css` 的 `.b2048-in.vN` 里——**注意 `url()` 要相对 `assets/` 写**（`url("games/hui/t1.jpg")`），
+写成 `url("assets/games/hui/t1.jpg")` 会 404 且不报错。
 
 **作弊模式会把这整局作废**：只要开过一次，之后即使关掉作弊，这一局也不再更新排行榜、
 也不再刷本机最高分（`cheated` 标记粘在局内，`reset()` 才清）；开作弊之前已经传上去的分数保留。
@@ -278,9 +291,8 @@ DNS（域名商那边）：`bhsf202808.fun` 一条 `CNAME` 指到 `aabb16380.git
 
 1. 构建号：`index.html` / `404.html` 里的 `?v=20261101a1` 与 `window.B8_BUILD`。
    每次改动**递增构建号**（例：`20261101a2`），所有资源 URL 一起换，缓存自然失效。
-2. 调试入口：`/test/?to=/` 会在目标地址后面加 `?t=<当前时间戳>`，
-   页面里所有资源都会继承这个时间戳。手机上和同学说「打开这个链接」即可。
-   页头出现红色 `TEST` 角标说明当前就是绕缓存的调试模式。
+2. 绕缓存：在任意页面 URL 后面加 `?t=<当前时间戳>`，页面里所有资源都会继承这个时间戳。
+   手机上和同学说「打开这个链接」即可；有 `?t=` 时页头会出现红色 `TEST` 角标。
 
 改了 `assets/site.css` 一定要重新跑 `_shared/sync.ps1`，
 否则 `styles.css` 还是旧的（这是最常见的「改了没生效」）。

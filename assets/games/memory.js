@@ -18,15 +18,17 @@
   var KEY_BEST = 'b8.memory.best';
   var KEY_MODE = 'b8.memory.mode';
   var CHARS = ['八', '四', '届', '班', '课', '考', '球', '歌'];
+  // 牌面只有 ~90px，用 256px 的缩略图就够了：8 张合计 ~88 KB，
+  // 原图 640px 合计 ~330 KB。完整尺寸留给合成和钢琴辉。
   var IMAGES = [
-    'assets/games/hui/1.jpg',
-    'assets/games/hui/2.jpg',
-    'assets/games/hui/3.jpg',
-    'assets/games/hui/4.jpg',
-    'assets/games/hui/5.jpg',
-    'assets/games/hui/6.jpg',
-    'assets/games/hui/7.jpg',
-    'assets/games/hui/8.jpg'
+    'assets/games/hui/t1.jpg',
+    'assets/games/hui/t2.jpg',
+    'assets/games/hui/t3.jpg',
+    'assets/games/hui/t4.jpg',
+    'assets/games/hui/t5.jpg',
+    'assets/games/hui/t6.jpg',
+    'assets/games/hui/t7.jpg',
+    'assets/games/hui/t8.jpg'
   ];
 
   var grid, stepsEl, timeEl, bestEl, stateEl, noteEl, restartBtn, modeBtn;
@@ -45,6 +47,7 @@
   var writable = false;
   var submitted = false;
   var gen = 0;          // 重开代数：旧局留下的 setTimeout 不许动新局
+  var started = false;  // 第一次切到「记忆翻牌」才发牌，进页面时不下载 8 张牌面
 
   function whenReady(fn) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
@@ -284,6 +287,12 @@
     reset();
   }
 
+  function refreshNote() {
+    setNote(writable
+      ? '完成后自动上传：上榜分 = 1000 − 步数（步数越少越靠前）。'
+      : '成绩只存在这台设备：数据库还没接，暂时不上传排行榜。');
+  }
+
   /* ---------- 重开 ---------- */
   function reset() {
     gen++;
@@ -302,9 +311,18 @@
     if (timeEl) timeEl.textContent = '0:00';
     if (bestEl) bestEl.textContent = best ? best + ' 步' : '—';
     setState(mode === 'img' ? '翻开两张牌，找同一个人。' : '翻开两张牌，找一样的字。', false);
-    setNote(writable
-      ? '完成后自动上传：上榜分 = 1000 − 步数（步数越少越靠前）。'
-      : '成绩只存在这台设备：数据库还没接，暂时不上传排行榜。');
+    refreshNote();
+  }
+
+  function panelVisible() {
+    var panel = document.getElementById('game-panel-memory');
+    return !!(panel && !panel.hidden);
+  }
+
+  function ensureStarted() {
+    if (started) return;
+    started = true;
+    reset();
   }
 
   /* ---------- 启动 ---------- */
@@ -331,10 +349,14 @@
     });
     paintMode();
 
+    var tab = B8.qs('.game-tab[data-game="memory"]');
+    B8.on(tab, 'click', ensureStarted);
+
     if (!B8.auth) return;
     B8.auth.ready(function (st) {
       writable = !!B8.sb.ready && st.kind !== 'preview';
-      reset();
+      if (panelVisible()) ensureStarted();
+      else refreshNote();
     });
   }
 

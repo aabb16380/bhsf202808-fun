@@ -6,8 +6,8 @@
    tab、模式标签、数据库未接提示）就集中在这里，别再开第五个文件。
 
    两条硬规则（踩过坑）：
-   1. 图片先离屏 new Image() 预检，全部回来再渲染，且不加
-      loading="lazy"、不放进 display:none 的容器——否则永远不加载。
+   1. 每张图自己 load / error，谁坏了只影响那一张；不要一次性预检几十张，
+      慢网 10 秒兜底会把没下完的全判成“打不开”。
    2. 上传前自己校验 HEIC 与大小；>10MB 用 canvas 压到 1600px。
    ============================================================ */
 (function () {
@@ -75,6 +75,33 @@
      页面装配：模式标签 / 游戏 tab / 退出
      ============================================================ */
 
+  /**
+   * 只有点开对应 tab 才下载游戏脚本：
+   * 2048 是默认面板，随页面加载；记忆翻牌 / 专注方格等用户点了再说。
+   * 这样首屏少下 ~18 KB，也少解析两个暂时用不到的游戏模块。
+   */
+  var GAME_SCRIPTS = {
+    memory: 'assets/games/memory.js',
+    schulte: 'assets/games/reaction.js'
+  };
+  var gameScripts = {};
+
+  function loadGameScript(g) {
+    var src = GAME_SCRIPTS[g];
+    if (!src || gameScripts[g]) return;
+    gameScripts[g] = true;
+    var s = document.createElement('script');
+    var v = encodeURIComponent(window.B8_BUILD || '0');
+    s.src = src + '?v=' + v + (window.B8_T || '');
+    s.async = true;
+    s.onerror = function () {
+      gameScripts[g] = false;
+      if (window.console) console.warn('[fun] 游戏模块没加载上：', src);
+      B8.toast('这个游戏没加载上，刷新再试一次');
+    };
+    document.head.appendChild(s);
+  }
+
   function bindGameTabs() {
     var tabs = B8.qsa('.game-tab');
     var panels = B8.qsa('.game-panel');
@@ -86,6 +113,7 @@
       if (!btn.getAttribute('data-game')) return;
       B8.on(btn, 'click', function () {
         var g = btn.getAttribute('data-game');
+        loadGameScript(g);
         tabs.forEach(function (b) {
           b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
         });
@@ -247,6 +275,11 @@
       { nick: '后排靠窗', score: 36210, created_at: '2026-10-23T18:44:00+08:00' },
       { nick: '数学课代表', score: 33480, created_at: '2026-10-20T11:20:00+08:00' }
     ],
+    sudoku: [
+      { nick: '数学课代表', score: 1420, diff: 'hard', created_at: '2026-11-03T19:20:00+08:00' },
+      { nick: '文艺委员', score: 1380, diff: 'hard', created_at: '2026-11-01T18:32:00+08:00' },
+      { nick: '后排靠窗', score: 1200, diff: 'normal', created_at: '2026-11-02T21:08:00+08:00' }
+    ],
     piano: [
       {
         nick: '文艺委员', total: 3990000, created_at: '2026-11-02T20:15:00+08:00',
@@ -407,42 +440,6 @@
         setStatus('合影没读到：' + (err && err.message ? err.message : '未知错误'), true);
         paintStats();
       });
-  }
-
-  /**
-   * 离屏预检：全部图片都 load/error 之后再一次性挂进 DOM。
-   * 为什么不用 loading="lazy"：容器如果被藏起来（display:none）或
-   * 页面还没滚动到，lazy 图不会加载，预检就永远等不到结果。
-   * 这里给一个 10 秒兜底，慢网也不至于一直空白。
-   */
-  function preloadAll(urls, cb) {
-    var ok = {};
-    var left = urls.length;
-    var done = false;
-    var timer = 0;
-
-    function finish() {
-      if (done) return;
-      done = true;
-      if (timer) clearTimeout(timer);
-      cb(ok);
-    }
-
-    if (!left) { finish(); return; }
-
-    function one() {
-      left--;
-      if (left <= 0) finish();
-    }
-
-    urls.forEach(function (u, i) {
-      var img = new Image();      // 离屏对象，不 append，不走懒加载
-      img.onload = function () { ok[i] = true; one(); };
-      img.onerror = function () { ok[i] = false; one(); };
-      img.src = u;
-    });
-
-    timer = setTimeout(finish, 10000);
   }
 
   /* ---------- 评分 ---------- */
@@ -824,7 +821,11 @@
 
   function removePhoto(p, card, btn) {
     if (!writable) return;
-    if (!window.confirm('删掉这张合影？删了就找不回来了。')) return;
+    var msg = '删掉这张合影？删了就找不回来了。';
+    if (B8.auth && B8.auth.isAdmin && B8.auth.isAdmin()) {
+      msg += '\n管理员删除会留下记录，超管可以在控制台「最近删除」里看到。';
+    }
+    if (!window.confirm(msg)) return;
     btn.disabled = true;
     B8.sb.rpc('b8_photo_del', { p_token: B8.auth.token(), p_id: p.id })
       .then(function () {
@@ -1350,6 +1351,34 @@
     });
   }
 
+  var SUDOKU_DIFFS = { easy: '简单', normal: '普通', hard: '困难', expert: '极难' };
+
+  /** 数独：每人一行，带难度标签；分数已经按难度系数折算过 */
+  function renderSudokuRows(rows, isSample) {
+    var listEl = B8.qs('#rank-list');
+    if (!listEl) return;
+
+    rows.forEach(function (r, i) {
+      var li = el('li', 'rank-row' + (i < 3 ? ' is-podium' : ''));
+      li.appendChild(rankAppend('span', 'rank-no', (i + 1 < 10 ? '0' : '') + (i + 1)));
+
+      var nickWrap = el('span', 'rank-nick');
+      nickWrap.appendChild(rankAppend('span', 'nick-name', r.nick || '同学'));
+      nickWrap.appendChild(rankAppend('span', 'tag plain', SUDOKU_DIFFS[r.diff] || r.diff || '数独'));
+      if (isSample) nickWrap.appendChild(rankAppend('span', 'tag plain', '示例'));
+      li.appendChild(nickWrap);
+
+      var scoreWrap = el('span', 'rank-score');
+      scoreWrap.appendChild(rankAppend('span', null, rankInt(r.score)));
+      scoreWrap.appendChild(rankAppend('span', 'rank-unit', '分'));
+      li.appendChild(scoreWrap);
+
+      li.appendChild(rankAppend('span', 'rank-date',
+        B8.date(r.updated_at || r.created_at) || '—'));
+      listEl.appendChild(li);
+    });
+  }
+
   function renderRank(game, rows, isSample) {
     var listEl = B8.qs('#rank-list');
     var empty = B8.qs('#rank-empty');
@@ -1370,6 +1399,11 @@
 
     if (game === 'piano') {
       renderPianoRows(rows, isSample);
+      return;
+    }
+
+    if (game === 'sudoku') {
+      renderSudokuRows(rows, isSample);
       return;
     }
 
@@ -1429,9 +1463,10 @@
     }
 
     rankSkeleton();
-    var rpcName = game === 'piano' ? 'b8_piano_top' : 'b8_score_top';
+    var rpcName = game === 'piano' ? 'b8_piano_top'
+      : (game === 'sudoku' ? 'b8_sudoku_top' : 'b8_score_top');
     var rpcGame = game === 'clickspeed' ? 'clickspeed2' : game;
-    var rpcArgs = game === 'piano'
+    var rpcArgs = (game === 'piano' || game === 'sudoku')
       ? { p_token: B8.auth.token(), p_limit: 10 }
       : { p_token: B8.auth.token(), p_game: rpcGame, p_limit: 10 };
     B8.sb.rpc(rpcName, rpcArgs)
@@ -1446,8 +1481,10 @@
         renderRank(game, [], false);
         if (empty) {
           var msg = rankFailed[game];
-          if (game === 'piano' && /Could not find the function|schema cache|does not exist/i.test(msg)) {
-            msg = '钢琴辉排行要更新数据库：请在 Supabase SQL Editor 里跑一遍 supabase/install-all.sql（只需一次）。';
+          if ((game === 'piano' || game === 'sudoku') &&
+              /Could not find the function|schema cache|does not exist/i.test(msg)) {
+            msg = (game === 'piano' ? '钢琴辉' : '数独') +
+              '排行要更新数据库：请在 Supabase SQL Editor 里跑一遍 supabase/install-all.sql（只需一次）。';
           } else {
             msg = '排行榜没读到：' + msg;
           }

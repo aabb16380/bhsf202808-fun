@@ -146,7 +146,7 @@
 
   /* ---------- 把「主导航」和「⋯ 菜单」合成一个 ----------
      页头只留一个 ⋯ 按钮：站点内导航、跨站链接、日/夜、管理入口、
-     调试入口全在同一个面板里。原来的 ▤ 抽屉不再出现。 */
+     调试相关入口全在同一个面板里。原来的 ▤ 抽屉不再出现。 */
   function initMergeMenus() {
     var nav = B8.qs('#nav');
     var menu = B8.qs('#more-menu');
@@ -256,7 +256,7 @@
       var badge = document.createElement('span');
       badge.className = 'build-test';
       badge.textContent = 'TEST';
-      badge.title = '调试入口：本次加载已绕过缓存';
+      badge.title = '本次加载已绕过缓存';
       var host = B8.qs('.header-tools') || B8.qs('.brand-text');
       if (host) host.appendChild(badge);
       var banner = B8.qs('#build-banner');
@@ -271,6 +271,28 @@
     });
   }
 
+  /* ---------- 超管控制台：只有超管才下载 ----------
+     以前三个站都在首屏 document.write 里加载 console.js（17 KB），
+     99% 的同学永远用不到。现在等 auth 解析完，确认是超管再补进来。 */
+  var consoleLoading = false;
+
+  function loadConsole() {
+    if (consoleLoading || document.getElementById('console-js')) return;
+    if (!B8.auth || !B8.auth.isSuper || !B8.auth.isSuper()) return;
+    consoleLoading = true;
+
+    var s = document.createElement('script');
+    s.id = 'console-js';
+    s.async = true;
+    s.src = 'assets/console.js?v=' + encodeURIComponent(window.B8_BUILD || '0') + (window.B8_T || '');
+    s.onerror = function () {
+      consoleLoading = false;
+      if (s.parentNode) s.parentNode.removeChild(s);
+      if (window.console) console.warn('[b8] 控制台模块没加载上');
+    };
+    document.head.appendChild(s);
+  }
+
   /* ---------- 启动 ---------- */
   function boot() {
     initNav();
@@ -280,6 +302,8 @@
     initYear();
     initBuild();
     initLinks();
+    loadConsole();
+    document.addEventListener('b8:auth', loadConsole);
   }
 
   if (document.readyState === 'loading') {
