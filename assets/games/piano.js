@@ -174,11 +174,18 @@
      travel = 音符从顶部落到判定线的时间（越小越快）
      chord = 每多少拍加一个和弦音（0 = 不加） */
   var DIFFS = [
-    { id: 'easy', name: '简单', sub: 1, rate: 0.78, travel: 2200, tileMax: 116, chord: 0, chord2: 0, minStep: 0, coef: 1.00 },
-    { id: 'normal', name: '普通', sub: 2, rate: 0.92, travel: 1580, tileMax: 100, chord: 4, chord2: 0, minStep: 155, coef: 1.20 },
-    { id: 'hard', name: '困难', sub: 3, rate: 1.05, travel: 1120, tileMax: 80, chord: 2, chord2: 0, minStep: 132, coef: 1.45 },
-    { id: 'extreme', name: '极难', sub: 4, rate: 1.18, travel: 790, tileMax: 62, chord: 0.5, chord2: 4, minStep: 112, coef: 1.75 }
+    { id: 'easy', name: '简单', sub: 1, rate: 0.78, travel: 2200, tileMax: 116, chord: 0, chord2: 0, minStep: 0 },
+    { id: 'normal', name: '普通', sub: 2, rate: 0.92, travel: 1580, tileMax: 100, chord: 4, chord2: 0, minStep: 155 },
+    { id: 'hard', name: '困难', sub: 3, rate: 1.05, travel: 1120, tileMax: 80, chord: 2, chord2: 0, minStep: 132 },
+    { id: 'extreme', name: '极难', sub: 4, rate: 1.18, travel: 790, tileMax: 62, chord: 0.5, chord2: 4, minStep: 112 }
   ];
+
+  // v2.70：排行系数 = 该曲该档的定数 Lv ÷ 8，而不是四档各一个固定值。
+  // 必须和 SQL 的 b8_piano_levels 表一致（Lv 8 → ×1.00，Lv 16 → ×2.00）。
+  function coefOf(s, d) {
+    var lv = Number(s && s.lv && s.lv[d.id]) || 8;
+    return lv / 8;
+  }
 
   /* ============================================================
      谱面解析 / 生成
@@ -462,9 +469,10 @@
       var d = DIFFS[i];
       var sc = myScores[gameKey(song.id, d.id)] || 0;
       if (!sc) continue;
-      var weighted = Math.round(sc * d.coef);
+      var coef = coefOf(song, d);
+      var weighted = Math.round(sc * coef);
       if (!best || weighted > best.weighted) {
-        best = { song: song, diff: d, score: sc, coef: d.coef, weighted: weighted };
+        best = { song: song, diff: d, score: sc, coef: coef, weighted: weighted };
       }
     }
     return best;
@@ -1026,12 +1034,14 @@
         '<div class="chips">' + diffsHtml + '</div>' +
         '<p class="tip" style="margin:8px 0 0">' + song.desc + '<br>' +
           '<b>Lv ' + song.lv[diff.id] + '</b> · 音符 ' + noteCount +
-          ' 个 · 滚动 ' + diff.travel + 'ms · 难度系数 <b>×' + diff.coef.toFixed(2) + '</b></p></div>' +
+          ' 个 · 滚动 ' + diff.travel + 'ms · 难度系数 <b>×' + coefOf(song, diff).toFixed(2) + '</b>' +
+          '（Lv ' + song.lv[diff.id] + ' ÷ 8）</p></div>' +
       '<p class="tip score-rule">' +
         '判定分 <b>900000</b> 按音符平分（PERFECT 100%、GOOD 65%）；' +
         '连击分 <b>100000</b> × 最大连击 / 音符数；空击每个 <b>−5000</b>。' +
         'EX+ 1000000 · EX 950000+ · S 850000+ · A 750000+ · B 650000+ · C 600000+ · F。<br>' +
-        '排行：每首歌只算最高的一档，<b>成绩 × 难度系数</b> 取最高的三首相加；不足三首也能上榜。</p>' +
+        '排行：每首歌只算最高的一档，<b>成绩 ×（该曲该档 Lv ÷ 8）</b> 取最高的三首相加；' +
+        '不足三首也能上榜。Lv 越高系数越大，不再按四档固定。</p>' +
       levelTable() +
       myScoresHtml() +
       '<button class="btn-main" type="button" data-act="go">开始</button>' +
@@ -1065,12 +1075,13 @@
     var g = gradeOf(score);
     var p = partsOf(counts, maxCombo, total);
     var songBest = myScores[gameKey(song.id, diff.id)] || score;
-    var weighted = Math.round(score * diff.coef);
+    var coef = coefOf(song, diff);
+    var weighted = Math.round(score * coef);
 
     panel.innerHTML =
       '<h1>' + (g === 'EX+' ? '全部 PERFECT' : (fullCombo ? '全连！' : (isNew ? '新纪录' : '弹完了'))) + '</h1>' +
       '<p class="sub">' + song.name + ' · ' + diff.name + ' Lv ' + song.lv[diff.id] +
-        ' · 难度系数 ×' + diff.coef.toFixed(2) + ' · ' + total + ' 个音符</p>' +
+        ' · 难度系数 ×' + coef.toFixed(2) + '（Lv ÷ 8） · ' + total + ' 个音符</p>' +
       '<div class="result">' +
         '<div><span class="big">' + score + '</span><span class="big-unit">分</span></div>' +
         '<p class="rank-line">评级 <b>' + g + '</b> · 准确率 ' + pct + '% · 最高连击 ×' + maxCombo + ' / ' + total + '</p>' +
@@ -1083,7 +1094,7 @@
         '<p class="score-parts">判定分 ' + p.judge + ' + 连击分 ' + p.combo +
           (p.penalty ? ' − 空击 ' + p.penalty : '') + ' = <b>' + score + '</b></p>' +
         '<p class="score-parts">本曲最好 <b>' + songBest + '</b> · 排行权重 ' +
-          songBest + ' × ' + diff.coef.toFixed(2) + ' = <b>' + Math.round(songBest * diff.coef) + '</b>' +
+          songBest + ' × ' + coef.toFixed(2) + ' = <b>' + Math.round(songBest * coef) + '</b>' +
           '（这一把 ' + weighted + '）</p>' +
       '</div>' +
       '<p class="note-line" id="piano-note">' +
@@ -1388,6 +1399,17 @@
     api.myScores = function () { return myScores; };
     api.topThree = function () { return myTopThree(); };
     api.gameKey = gameKey;
+    api.coefFor = function (songId, diffId) {
+      var s = null;
+      var d = null;
+      for (var i = 0; i < SONGS.length; i++) if (SONGS[i].id === songId) s = SONGS[i];
+      for (var j = 0; j < DIFFS.length; j++) if (DIFFS[j].id === diffId) d = DIFFS[j];
+      return s && d ? coefOf(s, d) : 0;
+    };
+    api.setScore = function (songId, diffId, v) {
+      mergeMyScore(songId, diffId, v);
+      return myScores[gameKey(songId, diffId)] || 0;
+    };
   }
 
   B8.games.piano = api;

@@ -4,8 +4,9 @@
    · 四档难度：简单 / 普通 / 困难 / 极难，各自有难度系数
    · 输入只靠屏幕上的 1–9 按键，不要求键盘
    · 辅助：笔记、自动候选、提示推演、撤销、错误提示
-   · 计分：基础 1000，按用时扣（最多 400）、提示每个 −60、
-     错误每个 −30，最低 600；再乘难度系数（1.00–1.75）
+   · 计时从「开始」那一刻走，不是从第一次填数才开始
+   · 计分：最终分 =（5000 − 秒数）× 难度系数；填满 81 格时答案有错 → 0 分
+   · 提示：第一次点提示会确认「用了就不进排行榜」；用了提示的局只算本机成绩
    · 排行：game = sudoku:<难度>，每人每档一行；b8_sudoku_top
      取每个人所有档里最高的一行，所以挑战高难度永远更划算
 
@@ -19,10 +20,10 @@
   if (!B8) return;
 
   var DIFFS = [
-    { id: 'easy',   name: '简单', coef: 1.00, target: 300, clues: 40, desc: '40 个已知数 · 先热身' },
-    { id: 'normal', name: '普通', coef: 1.20, target: 480, clues: 34, desc: '34 个已知数起 · 日常难度' },
-    { id: 'hard',   name: '困难', coef: 1.45, target: 720, clues: 28, desc: '28 个已知数起 · 要推几步' },
-    { id: 'expert', name: '极难', coef: 1.75, target: 900, clues: 24, desc: '24 个已知数起 · 慢慢来' }
+    { id: 'easy',   name: '简单', coef: 1.00, clues: 40, desc: '40 个已知数 · 先热身' },
+    { id: 'normal', name: '普通', coef: 1.50, clues: 34, desc: '34 个已知数起 · 日常难度' },
+    { id: 'hard',   name: '困难', coef: 2.20, clues: 28, desc: '28 个已知数起 · 要推几步' },
+    { id: 'expert', name: '极难', coef: 3.00, clues: 24, desc: '24 个已知数起 · 慢慢来' }
   ];
   var DIFF_BY_ID = {};
   DIFFS.forEach(function (d) { DIFF_BY_ID[d.id] = d; });
@@ -75,6 +76,8 @@
   var showCand = false;
   var mistakes = 0;
   var hints = 0;
+  var hintWarned = false;
+  var wrongAnswer = false;
   var filled = 0;
   var started = false;
   var finished = false;
@@ -451,7 +454,7 @@
     if (String(d) !== solution[selected]) {
       mistakes++;
       wrong[selected] = true;
-      setStatus('这个数不对（错误 +1）。不扣寿命，只扣分；擦掉重填就行。', true);
+      setStatus('这个数不对（错误 +1）。最后答案有错整局 0 分，擦掉重填就行。', true);
     } else {
       wrong[selected] = false;
       clearNotesPeers(selected, String(d));
@@ -459,7 +462,8 @@
     }
     recountFilled();
     paintAll();
-    if (!wrong[selected] && isSolved()) finish();
+    // 填满 81 格就交卷：全对按用时给分；只要有一格错，整局 0 分。
+    if (filled === 81) finish(!isSolved());
   }
 
   function eraseCell() {
@@ -493,6 +497,11 @@
   /* ---------- 提示 / 推演 ---------- */
   function hint() {
     if (finished) return;
+    // 本局第一次点提示先确认：用了提示就不进排行榜。
+    if (hints === 0 && !hintWarned) {
+      if (!window.confirm('用提示后，这一局不加入排行榜。\n确定要看提示吗？')) return;
+      hintWarned = true;
+    }
     startClock();
 
     var target = -1;
@@ -567,34 +576,34 @@
     recountFilled();
     selected = target;
     paintAll();
-    setStatus('提示：' + reason + '（提示 +1，每个 −60 分）', false);
-    if (isSolved()) finish();
+    setStatus('提示：' + reason + '（本局已使用提示，不加入排行榜）', false);
+    if (filled === 81) finish(!isSolved());
   }
 
   /* ---------- 计分 / 结算 ---------- */
-  function calcScore() {
+  function calcScore(failed) {
     var d = diffOf(diff);
-    var sec = Math.max(1, elapsedMs / 1000);
-    var timePen = Math.min(400, Math.round(sec / d.target * 400));
-    var hintPen = hints * 60;
-    var missPen = mistakes * 30;
-    var base = Math.max(600, 1000 - timePen - hintPen - missPen);
-    var final = Math.round(base * d.coef);
+    var sec = Math.max(0, Math.round(elapsedMs / 1000));
+    var base = Math.max(0, 5000 - sec);
+    var final = failed ? 0 : Math.round(base * d.coef);
     return {
-      sec: sec, timePen: timePen, hintPen: hintPen, missPen: missPen,
-      base: base, coef: d.coef, final: final
+      sec: sec, base: base, coef: d.coef, final: final, failed: !!failed
     };
   }
 
-  function finish() {
+  function finish(failed) {
     elapsedMs = elapsed();
     finished = true;
+    wrongAnswer = !!failed;
     startAt = 0;
     stopClock();
     recountFilled();
     paintAll();
-    scoreInfo = calcScore();
-    saveBest(diff, scoreInfo.final);
+    scoreInfo = calcScore(wrongAnswer);
+    // 用了提示 / 答案有错 / 超过 5000 秒的局不刷本机最高
+    if (!wrongAnswer && hints === 0 && scoreInfo.final > 0) {
+      saveBest(diff, scoreInfo.final);
+    }
     renderResult();
     submitScore(scoreInfo.final);
   }
@@ -603,25 +612,38 @@
     if (!panelEl || !overlayEl) return;
     var d = diffOf(diff);
     var best = readBest(diff);
-    var s = scoreInfo || calcScore();
+    var s = scoreInfo || calcScore(wrongAnswer);
+    var title = wrongAnswer ? '答案有错' : (s.final <= 0 ? '超时' : '完成了');
+
+    var note;
+    if (wrongAnswer) {
+      note = '最后答案有错，本局 0 分，没有进排行榜。';
+    } else if (hints > 0) {
+      note = '本局用了 ' + hints + ' 次提示，按规则不加入排行榜。';
+    } else if (s.final <= 0) {
+      note = '超过 5000 秒，本局 0 分，没有进排行榜。';
+    } else if (!writable) {
+      note = '没登录，成绩只留在本机。回游乐场登录后再玩一局才会进榜。';
+    } else {
+      note = '正在把成绩记到排行榜…';
+    }
+
     var html =
-      '<h1>完成了</h1>' +
+      '<h1>' + title + '</h1>' +
       '<p class="sub">' + d.name + '难度 · 用时 ' + fmt(elapsedMs) + ' · 错误 ' + mistakes +
         ' · 提示 ' + hints + '</p>' +
       '<div class="result"><div class="big">' + s.final +
         '<span class="big-unit">分</span></div>' +
         '<p class="rank-line">难度系数 <b>×' + d.coef.toFixed(2) + '</b> · 本机最高 <b>' + best + '</b> 分</p>' +
       '<dl>' +
-        '<div><dt>基础</dt><dd>1000</dd></div>' +
-        '<div><dt>用时扣</dt><dd>−' + s.timePen + '</dd></div>' +
-        '<div><dt>提示扣</dt><dd>−' + s.hintPen + '</dd></div>' +
-        '<div><dt>错误扣</dt><dd>−' + s.missPen + '</dd></div>' +
+        '<div><dt>基础</dt><dd>5000</dd></div>' +
+        '<div><dt>用时</dt><dd>−' + s.sec + '</dd></div>' +
         '<div><dt>基础分</dt><dd>' + s.base + '</dd></div>' +
+        '<div><dt>难度系数</dt><dd>×' + s.coef.toFixed(2) + '</dd></div>' +
         '<div><dt>最终</dt><dd>' + s.final + '</dd></div>' +
+        '<div><dt>规则</dt><dd>有提示不排行</dd></div>' +
       '</dl></div>' +
-      '<p class="note-line" id="sd-result-note">' +
-        (writable ? '正在把成绩记到排行榜…' : '没登录，成绩只留在本机。回游乐场登录后再玩一局才会进榜。') +
-      '</p>' +
+      '<p class="note-line" id="sd-result-note">' + note + '</p>' +
       '<button class="btn-main" type="button" id="sd-again">再来一局（' + d.name + '）</button>' +
       '<button class="btn-2nd" type="button" id="sd-change">换难度</button>' +
       '<a class="btn-2nd" href="index.html">回游乐场</a>';
@@ -632,6 +654,7 @@
   }
 
   function submitScore(final) {
+    if (wrongAnswer || hints > 0 || final <= 0) return;
     if (!writable || submitted || !B8.auth || !B8.auth.token()) return;
     submitted = true;
     B8.sb.rpc('b8_score_add', {
@@ -665,8 +688,10 @@
     html += '</div></div>' +
       '<button class="btn-main" type="button" id="sd-start">开始</button>' +
       '<button class="btn-2nd" type="button" id="sd-close">' + (started && !finished ? '继续这一局' : '先看看') + '</button>' +
-      '<p class="tip">分数 = （1000 − 用时扣分 − 提示×60 − 错误×30，最低 600）× 难度系数。<br>' +
-      '<b>简单 ×1.00 / 普通 ×1.20 / 困难 ×1.45 / 极难 ×1.75</b>，所以挑战高难度更容易上高分。</p>';
+      '<p class="tip">开始后计时立刻走：<b>分数 =（5000 − 秒数）× 难度系数</b>；' +
+      '填满 81 格时只要答案有错就是 <b>0 分</b>。<br>' +
+      '<b>简单 ×1.00 / 普通 ×1.50 / 困难 ×2.20 / 极难 ×3.00</b>。' +
+      '提示：每局第一次点会弹确认，<b>用了提示的局不加入排行榜</b>。</p>';
     panelEl.innerHTML = html;
     overlayEl.hidden = false;
 
@@ -707,6 +732,8 @@
     selected = -1;
     mistakes = 0;
     hints = 0;
+    hintWarned = false;
+    wrongAnswer = false;
     started = false;
     finished = false;
     startAt = 0;
@@ -719,7 +746,9 @@
     buildBoard();
     paintAll();
     updateHud();
-    setStatus('选中格子，点下面的 1–9 填数。先用笔记或候选推一推也可以。');
+    setStatus('开始计时了。选中格子，点下面的 1–9 填数；提示会让本局不进排行榜。');
+    // v2.70：棋盘一出现就计时，不再等第一次填数
+    startClock();
   }
 
   function buildBoard() {

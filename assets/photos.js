@@ -282,24 +282,24 @@
     ],
     piano: [
       {
-        nick: '文艺委员', total: 3990000, created_at: '2026-11-02T20:15:00+08:00',
+        nick: '文艺委员', total: 2850000, created_at: '2026-11-02T20:15:00+08:00',
         songs: [
-          { song: 'twinkle', diff: 'extreme', score: 1000000, coef: 1.75, weighted: 1750000 },
-          { song: 'birthday', diff: 'hard', score: 800000, coef: 1.45, weighted: 1160000 },
-          { song: 'joy', diff: 'normal', score: 900000, coef: 1.2, weighted: 1080000 }
+          { song: 'twinkle', diff: 'extreme', score: 1000000, coef: 1.375, weighted: 1375000 },
+          { song: 'birthday', diff: 'hard', score: 800000, coef: 1.0, weighted: 800000 },
+          { song: 'joy', diff: 'normal', score: 900000, coef: 0.75, weighted: 675000 }
         ]
       },
       {
-        nick: '后排靠窗', total: 2620000, created_at: '2026-11-01T12:32:00+08:00',
+        nick: '后排靠窗', total: 2500000, created_at: '2026-11-01T12:32:00+08:00',
         songs: [
           { song: 'bells', diff: 'extreme', score: 1000000, coef: 1.75, weighted: 1750000 },
-          { song: 'farewell', diff: 'hard', score: 600000, coef: 1.45, weighted: 870000 }
+          { song: 'farewell', diff: 'hard', score: 600000, coef: 1.25, weighted: 750000 }
         ]
       },
       {
-        nick: '体委', total: 1000000, created_at: '2026-10-25T17:48:00+08:00',
+        nick: '体委', total: 250000, created_at: '2026-10-25T17:48:00+08:00',
         songs: [
-          { song: 'twinkle', diff: 'easy', score: 1000000, coef: 1.0, weighted: 1000000 }
+          { song: 'twinkle', diff: 'easy', score: 1000000, coef: 0.25, weighted: 250000 }
         ]
       }
     ],

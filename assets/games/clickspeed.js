@@ -35,6 +35,7 @@
   var best = 0;
   var writable = false;
   var submitted = 0;
+  var lastRippleAt = 0;
 
   function $(id) { return document.getElementById(id); }
 
@@ -102,6 +103,11 @@
 
   function ripple() {
     if (!ringEl) return;
+    // 高速连点时不要每一下都强制 reflow 重启动画，否则主线程会被拖住，
+    // 计时器看起来就像卡死/走到 0 还不结束。
+    var t = now();
+    if (t - lastRippleAt < 70) return;
+    lastRippleAt = t;
     ringEl.classList.remove('is-go');
     void ringEl.offsetWidth;
     ringEl.classList.add('is-go');
@@ -158,6 +164,16 @@
 
   function finish() {
     if (state !== 'run') return;
+
+    // 定时器可能比 deadline 早几毫秒，也可能被卡顿/后台节流拖晚。
+    // 早了就补一个定时器等满 10 秒；晚了才按结束处理。
+    var remain = endAt - now();
+    if (remain > 0) {
+      if (endTimer) clearTimeout(endTimer);
+      endTimer = setTimeout(finish, remain + 10);
+      return;
+    }
+
     state = 'over';
     clearTimers();
 
@@ -268,10 +284,18 @@
 
   function hit(ev) {
     if (state !== 'run') return;
+
+    // 用事件自己的时间戳判断这一下是不是真的发生在 10 秒内。
+    // 网卡/连点把事件排队到 deadline 之后处理时，不能算进成绩。
+    var stamp = (ev && typeof ev.timeStamp === 'number' && ev.timeStamp > 0 && ev.timeStamp < 1e12)
+      ? ev.timeStamp
+      : now();
+    if (stamp > endAt) { finish(); return; }
+
     if (ev && ev.preventDefault) ev.preventDefault();
-    count++;
+    if (count < MAX_SCORE) count++;
     if (countEl) countEl.textContent = String(count);
-    paintHud(Math.max(0, endAt - now()));
+    if (clicksEl) clicksEl.textContent = String(count);
     ripple();
   }
 
@@ -313,6 +337,12 @@
 
     B8.on(pad, 'pointerdown', hit, { passive: false });
     B8.on(pad, 'contextmenu', function (ev) { ev.preventDefault(); });
+
+    // 切到后台再回来时，setInterval 可能已经被浏览器节流；
+    // 回来第一件事就是按 deadline 结算，避免停在 0.0 不结束。
+    B8.on(document, 'visibilitychange', function () {
+      if (!document.hidden && state === 'run') tick();
+    });
 
     B8.on(document, 'keydown', function (ev) {
       if (ev.key === ' ' || ev.key === 'Enter') {
@@ -376,7 +406,7 @@
       state = 'run';
       count = clamp(Number(n) || 0, 0, 100000);
       startAt = now() - DURATION;
-      endAt = now();
+      endAt = now() - 1;
       finish();
       return { score: scoreOf(count), count: count };
     };
