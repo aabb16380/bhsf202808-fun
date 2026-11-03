@@ -3234,7 +3234,7 @@ html[data-mode="night"] .b2048.is-plain .b2048-in.vbig {
     0 3px 8px rgba(0, 0, 0, 0.45);
   transform: translate(-50%, -100%);
   pointer-events: none;
-  animation: mo-plus-up 0.75s ease-out forwards;
+  animation: mo-plus-up var(--plus-dur, 0.32s) ease-out forwards;
   white-space: nowrap;
 }
 

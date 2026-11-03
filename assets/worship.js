@@ -89,6 +89,8 @@
 
     catDur = speedSeconds();
     document.documentElement.style.setProperty('--cat-dur', catDur.toFixed(2) + 's');
+    var plusDur = Math.min(0.36, Math.max(0.16, catDur * 0.28));
+    document.documentElement.style.setProperty('--plus-dur', plusDur.toFixed(2) + 's');
     userKnown = true;
 
     if (active) {
@@ -269,7 +271,7 @@
     els.plusLayer.appendChild(s);
     setTimeout(function () {
       if (s.parentNode) s.parentNode.removeChild(s);
-    }, 800);
+    }, Math.min(360, Math.max(160, catDur * 280)) + 40);
   }
 
   /* ---------- 全站计数 ---------- */
@@ -409,15 +411,32 @@
     ringCatEls = [];
     els.superCats.innerHTML = '';
 
-    // 三圈：顺、逆、顺，10 秒一圈；基础 36 只，每买一只就多加一只。
-    var counts = [8, 12, 16];
-    for (var k = 0; k < catLv; k++) counts[k % 3] += 1;
-
+    // 基础三圈 8 / 12 / 16 只；后面买的猫从第四圈开始，最多买到第七圈。
+    // 第四～七圈每圈 5 个位置，共 20 个；买满第七圈时总共 36 + 20 = 56 只。
     var rings = [
-      { n: counts[0], r: 30, s: 13, dir: 'cw' },
-      { n: counts[1], r: 38, s: 10, dir: 'ccw' },
-      { n: counts[2], r: 45, s: 8, dir: 'cw' }
+      { n: 8,  r: 24,   s: 9,   dir: 'cw' },
+      { n: 12, r: 29,   s: 8,   dir: 'ccw' },
+      { n: 16, r: 34,   s: 7,   dir: 'cw' }
     ];
+
+    var outer = [
+      { cap: 5, r: 38.5, s: 6 },
+      { cap: 5, r: 42,   s: 5.2 },
+      { cap: 5, r: 45,   s: 4.6 },
+      { cap: 5, r: 47.5, s: 4.2 }
+    ];
+    var left = Math.max(0, Math.min(20, catLv));
+    outer.forEach(function (o, oi) {
+      var n = Math.min(o.cap, left);
+      left -= n;
+      if (n > 0) {
+        var ri = rings.length;
+        rings.push({
+          n: n, r: o.r, s: o.s,
+          dir: ri % 2 === 0 ? 'cw' : 'ccw'
+        });
+      }
+    });
 
     var frag = document.createDocumentFragment();
     rings.forEach(function (ring, ri) {
@@ -446,7 +465,6 @@
     });
     els.superCats.appendChild(frag);
   }
-
   function upgradeCost(kind) {
     if (kind === 'speed') return 200 * Math.pow(2, speedLv - 1);
     if (kind === 'cat') return 1000 * Math.pow(2, catLv);
@@ -569,8 +587,17 @@
     var DUR = Math.round(catDur * 1000);
     var FLAT = DUR * 2 / 6;
 
+    if (window.B8_TEST) {
+      B8.worship._firsts = ringCatEls.map(function (it) {
+        var ph = ((-it.delay * 1000) % DUR + DUR) % DUR;
+        var f = (FLAT - ph) % DUR;
+        if (f < 0) f += DUR;
+        return { d: it.delay, f: Math.round(f) };
+      });
+    }
+
     ringCatEls.forEach(function (item) {
-      var phase = ((-item.delay) % DUR + DUR) % DUR;   // 负 delay = 已经走了这么远
+      var phase = ((-item.delay * 1000) % DUR + DUR) % DUR;   // 负 delay = 已经走了这么远
       var first = (FLAT - phase) % DUR;
       if (first < 0) first += DUR;
 
