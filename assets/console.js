@@ -178,14 +178,18 @@
       B8.on(btn, 'click', function () {
         var no = btn.getAttribute('data-reset');
         // 原密码是 sha256，取不回来，只能重置成一个新的临时密码
-        if (!window.confirm('把 ' + no + ' 的密码重置成随机临时密码？\n原密码是哈希，取不回来，只能重置。')) return;
-        btn.disabled = true;
-        B8.sb.rpc('b8_super_temp_pass', { p_token: tok(), p_no: no })
-          .then(function (res) {
-            showTemp(res.student_no, res.temp_pass);
-            loadMembers();
-          })
-          .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+        B8.confirm('把 ' + no + ' 的密码重置成随机临时密码？\n原密码是哈希，取不回来，只能重置。', {
+          title: '重置密码', okText: '重置', danger: true
+        }).then(function (ok) {
+          if (!ok) return;
+          btn.disabled = true;
+          B8.sb.rpc('b8_super_temp_pass', { p_token: tok(), p_no: no })
+            .then(function (res) {
+              showTemp(res.student_no, res.temp_pass);
+              loadMembers();
+            })
+            .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+        });
       });
     });
 
@@ -298,24 +302,32 @@
     B8.qsa('[data-reissue]', b).forEach(function (btn) {
       B8.on(btn, 'click', function () {
         var id = Number(btn.getAttribute('data-reissue'));
-        if (!window.confirm('重发之后旧密钥立刻作废（正在用它的管理员会被踢下线），确定？')) return;
-        btn.disabled = true;
-        B8.sb.rpc('b8_super_key_reissue', { p_token: tok(), p_id: id })
-          .then(function (res) {
-            showSecret('新密钥（' + (res.label || '') + '）', res.plain);
-            loadKeys();
-          })
-          .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+        B8.confirm('重发之后旧密钥立刻作废（正在用它的管理员会被踢下线），确定？', {
+          title: '重发密钥', okText: '重发', danger: true
+        }).then(function (ok) {
+          if (!ok) return;
+          btn.disabled = true;
+          B8.sb.rpc('b8_super_key_reissue', { p_token: tok(), p_id: id })
+            .then(function (res) {
+              showSecret('新密钥（' + (res.label || '') + '）', res.plain);
+              loadKeys();
+            })
+            .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+        });
       });
     });
     B8.qsa('[data-unbind]', b).forEach(function (btn) {
       B8.on(btn, 'click', function () {
         var id = Number(btn.getAttribute('data-unbind'));
-        if (!window.confirm('解绑之后这把密钥可以给别人用，确定？')) return;
-        btn.disabled = true;
-        B8.sb.rpc('b8_super_key_unbind', { p_token: tok(), p_id: id })
-          .then(function () { B8.toast('已解绑'); loadKeys(); })
-          .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+        B8.confirm('解绑之后这把密钥可以给别人用，确定？', {
+          title: '解绑密钥', okText: '解绑', danger: true
+        }).then(function (ok) {
+          if (!ok) return;
+          btn.disabled = true;
+          B8.sb.rpc('b8_super_key_unbind', { p_token: tok(), p_id: id })
+            .then(function () { B8.toast('已解绑'); loadKeys(); })
+            .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+        });
       });
     });
   }
@@ -458,11 +470,15 @@
     var clearBtn = document.getElementById('score-clear');
     if (clearBtn) {
       B8.on(clearBtn, 'click', function () {
-        if (!window.confirm('确定清空？删了就回不来了。')) return;
-        clearBtn.disabled = true;
-        B8.sb.rpc('b8_super_score_clear', { p_token: tok(), p_game: scoreGame || null })
-          .then(function (n) { B8.toast('清掉了 ' + (Number(n) || 0) + ' 条'); loadScores(); })
-          .catch(function (err) { clearBtn.disabled = false; B8.toast(errText(err)); });
+        B8.confirm('确定清空？删了就回不来了。', {
+          title: '清空排行', okText: '清空', danger: true
+        }).then(function (ok) {
+          if (!ok) return;
+          clearBtn.disabled = true;
+          B8.sb.rpc('b8_super_score_clear', { p_token: tok(), p_game: scoreGame || null })
+            .then(function (n) { B8.toast('清掉了 ' + (Number(n) || 0) + ' 条'); loadScores(); })
+            .catch(function (err) { clearBtn.disabled = false; B8.toast(errText(err)); });
+        });
       });
     }
   }

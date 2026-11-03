@@ -3,10 +3,11 @@
    ------------------------------------------------------------
    · 四档难度：简单 / 普通 / 困难 / 极难，各自有难度系数
    · 输入只靠屏幕上的 1–9 按键，不要求键盘
-   · 辅助：笔记、自动候选、提示推演、撤销、错误提示
+   · 辅助：笔记（免费）、候选模式（算提示）、提示推演、撤销
+   · 填数过程中不检查对错；填满 81 格才一次性对答案，有错 → 0 分
    · 计时从「开始」那一刻走，不是从第一次填数才开始
-   · 计分：最终分 =（5000 − 秒数）× 难度系数；填满 81 格时答案有错 → 0 分
-   · 提示：第一次点提示会确认「用了就不进排行榜」；用了提示的局只算本机成绩
+   · 计分：最终分 =（5000 − 秒数）× 难度系数
+   · 提示/候选：第一次打开会确认「用了就不进排行榜」，之后本局只算本机成绩
    · 排行：game = sudoku:<难度>，每人每档一行；b8_sudoku_top
      取每个人所有档里最高的一行，所以挑战高难度永远更划算
 
@@ -77,6 +78,8 @@
   var mistakes = 0;
   var hints = 0;
   var hintWarned = false;
+  var candidateWarned = false;
+  var candidateUsed = false;
   var wrongAnswer = false;
   var filled = 0;
   var started = false;
@@ -295,8 +298,8 @@
     if (selected >= 0 && i !== selected && grid[selected] !== '.' && grid[i] === grid[selected]) {
       cls += ' is-same';
     }
-    if (conflicts[i]) cls += ' is-conflict';
-    if (wrong[i]) cls += ' is-wrong';
+    // 填数过程中不做对错提示；只有交卷后发现答案有错，才把错的格子标红。
+    if (wrongAnswer && wrong[i]) cls += ' is-wrong';
     if (hintMark[i]) cls += ' is-hint';
     cell.className = cls;
 
@@ -308,13 +311,11 @@
     if (grid[i] !== '.') {
       cell.setAttribute('aria-label', pos + '：' + grid[i] + (given[i] ? '（题目）' : ''));
     } else {
-      var cs = candidateList(i);
-      cell.setAttribute('aria-label', pos + '：空' + (cs.length ? '，候选 ' + cs.join(' ') : ''));
+      cell.setAttribute('aria-label', pos + '：空');
     }
   }
 
   function paintAll() {
-    computeConflicts();
     for (var i = 0; i < 81; i++) paintCell(i);
     updateHud();
   }
@@ -410,10 +411,9 @@
     if (given[i]) {
       setStatus(pos + '是题目给的数字，不能改。');
     } else if (grid[i] !== '.') {
-      setStatus(pos + '：' + grid[i] + (wrong[i] ? '（这个数不对）' : '') + '。点数字可以改，点同一个数字是擦掉。');
+      setStatus(pos + '：' + grid[i] + '。点数字可以改，点同一个数字是擦掉。');
     } else {
-      var cs = candidateList(i);
-      setStatus(pos + '：' + (cs.length ? '候选 ' + cs.join(' / ') : '这一格暂时没有合法候选，检查一下别的格子。'));
+      setStatus(pos + '：空格。点 1–9 填数。');
     }
   }
 
@@ -450,19 +450,13 @@
 
     pushHistory();
     grid[selected] = String(d);
+    notes[selected] = {};
     hintMark = [];
-    if (String(d) !== solution[selected]) {
-      mistakes++;
-      wrong[selected] = true;
-      setStatus('这个数不对（错误 +1）。最后答案有错整局 0 分，擦掉重填就行。', true);
-    } else {
-      wrong[selected] = false;
-      clearNotesPeers(selected, String(d));
-      setStatus('填上了 ' + d + '。');
-    }
+    wrong[selected] = false;
+    setStatus('填入了 ' + d + '。');
     recountFilled();
     paintAll();
-    // 填满 81 格就交卷：全对按用时给分；只要有一格错，整局 0 分。
+    // 填满 81 格才交卷：全对按用时给分；只要有一格错，整局 0 分。
     if (filled === 81) finish(!isSolved());
   }
 
@@ -489,7 +483,7 @@
     filled = h.filled;
     hintMark = [];
     wrong = [];
-    for (var i = 0; i < 81; i++) wrong[i] = grid[i] !== '.' && grid[i] !== solution[i];
+    for (var i = 0; i < 81; i++) wrong[i] = false;
     paintAll();
     setStatus('撤销了一步。');
   }
@@ -499,9 +493,20 @@
     if (finished) return;
     // 本局第一次点提示先确认：用了提示就不进排行榜。
     if (hints === 0 && !hintWarned) {
-      if (!window.confirm('用提示后，这一局不加入排行榜。\n确定要看提示吗？')) return;
-      hintWarned = true;
+      B8.confirm('用提示后，这一局不加入排行榜。\n确定要看提示吗？', {
+        title: '使用提示', okText: '看提示', danger: true
+      }).then(function (ok) {
+        if (!ok) return;
+        hintWarned = true;
+        revealHint();
+      });
+      return;
     }
+    revealHint();
+  }
+
+  function revealHint() {
+    if (finished) return;
     startClock();
 
     var target = -1;
@@ -511,13 +516,7 @@
       return '第 ' + (Math.floor(i / 9) + 1) + ' 行第 ' + (i % 9 + 1) + ' 列';
     }
 
-    // 1) 选中的格子正好是错的：先把这格纠正
-    if (selected >= 0 && grid[selected] !== '.' && grid[selected] !== solution[selected]) {
-      target = selected;
-      reason = cellName(target) + ' 填错了，应该是 ' + solution[target] + '。';
-    }
-
-    // 2) 唯一候选（裸单）
+    // 1) 唯一候选（裸单）
     if (target < 0) {
       var order = [];
       if (selected >= 0 && grid[selected] === '.') order.push(selected);
@@ -598,6 +597,13 @@
     startAt = 0;
     stopClock();
     recountFilled();
+    // 到这时候才对答案：把错的格子标红，并统计错误数
+    wrong = [];
+    mistakes = 0;
+    for (var i = 0; i < 81; i++) {
+      wrong[i] = wrongAnswer && grid[i] !== solution[i];
+      if (wrong[i]) mistakes++;
+    }
     paintAll();
     scoreInfo = calcScore(wrongAnswer);
     // 用了提示 / 答案有错 / 超过 5000 秒的局不刷本机最高
@@ -617,9 +623,11 @@
 
     var note;
     if (wrongAnswer) {
-      note = '最后答案有错，本局 0 分，没有进排行榜。';
+      note = '最后答案有错（' + mistakes + ' 格），本局 0 分，没有进排行榜。';
     } else if (hints > 0) {
-      note = '本局用了 ' + hints + ' 次提示，按规则不加入排行榜。';
+      note = candidateUsed
+        ? '本局用了候选模式' + (hints > 1 ? '和提示' : '') + '，按规则不加入排行榜。'
+        : '本局用了 ' + hints + ' 次提示，按规则不加入排行榜。';
     } else if (s.final <= 0) {
       note = '超过 5000 秒，本局 0 分，没有进排行榜。';
     } else if (!writable) {
@@ -631,7 +639,7 @@
     var html =
       '<h1>' + title + '</h1>' +
       '<p class="sub">' + d.name + '难度 · 用时 ' + fmt(elapsedMs) + ' · 错误 ' + mistakes +
-        ' · 提示 ' + hints + '</p>' +
+        ' · ' + (candidateUsed ? '提示/候选' : '提示') + ' ' + hints + '</p>' +
       '<div class="result"><div class="big">' + s.final +
         '<span class="big-unit">分</span></div>' +
         '<p class="rank-line">难度系数 <b>×' + d.coef.toFixed(2) + '</b> · 本机最高 <b>' + best + '</b> 分</p>' +
@@ -691,7 +699,8 @@
       '<p class="tip">开始后计时立刻走：<b>分数 =（5000 − 秒数）× 难度系数</b>；' +
       '填满 81 格时只要答案有错就是 <b>0 分</b>。<br>' +
       '<b>简单 ×1.00 / 普通 ×1.50 / 困难 ×2.20 / 极难 ×3.00</b>。' +
-      '提示：每局第一次点会弹确认，<b>用了提示的局不加入排行榜</b>。</p>';
+      '提示/候选：第一次打开会弹确认，<b>用了提示或候选的局都不加入排行榜</b>。' +
+      '填数过程中不检查对错，填满 81 格才一次性对答案。</p>';
     panelEl.innerHTML = html;
     overlayEl.hidden = false;
 
@@ -711,7 +720,14 @@
 
   function newGame(id, skipConfirm) {
     id = DIFF_BY_ID[id] ? id : diff;
-    if (!skipConfirm && !finished && started && !window.confirm('重开一局？这一局的进度会丢掉。')) return;
+    if (!skipConfirm && !finished && started) {
+      B8.confirm('重开一局？这一局的进度会丢掉。', {
+        title: '重开一局', okText: '重开', danger: true
+      }).then(function (ok) {
+        if (ok) newGame(id, true);
+      });
+      return;
+    }
 
     diff = id;
     writeLS(KEY_DIFF, diff);
@@ -733,6 +749,9 @@
     mistakes = 0;
     hints = 0;
     hintWarned = false;
+    candidateWarned = false;
+    candidateUsed = false;
+    showCand = false;
     wrongAnswer = false;
     started = false;
     finished = false;
@@ -746,7 +765,7 @@
     buildBoard();
     paintAll();
     updateHud();
-    setStatus('开始计时了。选中格子，点下面的 1–9 填数；提示会让本局不进排行榜。');
+    setStatus('开始计时了。选中格子，点下面的 1–9 填数；提示/候选会让本局不进排行榜。');
     // v2.70：棋盘一出现就计时，不再等第一次填数
     startClock();
   }
@@ -842,9 +861,29 @@
   }
 
   function toggleCand() {
-    showCand = !showCand;
-    paintAll();
-    setStatus(showCand ? '已显示每格的合法候选数（自动推演）。' : '候选数已隐藏。');
+    if (showCand) {
+      showCand = false;
+      paintAll();
+      setStatus('候选数已隐藏；本局仍然不加入排行榜。');
+      return;
+    }
+    if (candidateUsed) {
+      showCand = true;
+      paintAll();
+      setStatus('候选模式已开：每格显示所有可填数字；本局不加入排行榜。');
+      return;
+    }
+    B8.confirm('候选模式会给出每一格所有可填的数字。\n打开后这一局不计入排行榜，确定打开吗？', {
+      title: '候选模式', okText: '打开', danger: true
+    }).then(function (ok) {
+      if (!ok) return;
+      candidateWarned = true;
+      candidateUsed = true;
+      hints++;                 // 候选也按一次提示计
+      showCand = true;
+      paintAll();
+      setStatus('候选模式已开：每格显示所有可填数字；本局不加入排行榜。');
+    });
   }
 
   /* ---------- 启动 ---------- */

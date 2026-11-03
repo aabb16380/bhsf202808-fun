@@ -825,22 +825,26 @@
     if (B8.auth && B8.auth.isAdmin && B8.auth.isAdmin()) {
       msg += '\n管理员删除会留下记录，超管可以在控制台「最近删除」里看到。';
     }
-    if (!window.confirm(msg)) return;
-    btn.disabled = true;
-    B8.sb.rpc('b8_photo_del', { p_token: B8.auth.token(), p_id: p.id })
-      .then(function () {
-        var i;
-        for (i = 0; i < photos.length; i++) if (photos[i] === p) { photos.splice(i, 1); break; }
-        for (i = 0; i < shown.length; i++) if (shown[i] === p) { shown.splice(i, 1); break; }
-        if (card.parentNode) card.parentNode.removeChild(card);
-        emptyEl.hidden = shown.length > 0;
-        paintStats();
-        B8.toast('删掉了');
-      })
-      .catch(function (err) {
-        btn.disabled = false;
-        setStatus('删除没成功：' + (err && err.message ? err.message : '未知错误'), true);
-      });
+    B8.confirm(msg, {
+      title: '删除照片', okText: '删除', danger: true
+    }).then(function (ok) {
+      if (!ok) return;
+      btn.disabled = true;
+      B8.sb.rpc('b8_photo_del', { p_token: B8.auth.token(), p_id: p.id })
+        .then(function () {
+          var i;
+          for (i = 0; i < photos.length; i++) if (photos[i] === p) { photos.splice(i, 1); break; }
+          for (i = 0; i < shown.length; i++) if (shown[i] === p) { shown.splice(i, 1); break; }
+          if (card.parentNode) card.parentNode.removeChild(card);
+          emptyEl.hidden = shown.length > 0;
+          paintStats();
+          B8.toast('删掉了');
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          setStatus('删除没成功：' + (err && err.message ? err.message : '未知错误'), true);
+        });
+    });
   }
 
   /* ---------- 上传 ---------- */

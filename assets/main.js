@@ -117,6 +117,94 @@
     document.body.removeChild(ta);
   };
 
+  /* ---------- 页面内确认框 ----------
+     所有站点统一用这个，不再用 window.confirm（浏览器会在标题栏带网址）。
+     返回 Promise<boolean>；点确定 resolve(true)，取消 / Esc / 点遮罩 resolve(false)。 */
+  var confirmLock = 0;
+
+  function ensureConfirmStyle() {
+    if (document.getElementById('b8-confirm-css')) return;
+    var s = document.createElement('style');
+    s.id = 'b8-confirm-css';
+    s.textContent =
+      '.b8-confirm{position:fixed;inset:0;z-index:4000;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(16,14,22,.52);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:1;transition:opacity .14s ease}' +
+      '.b8-confirm.is-out{opacity:0}' +
+      '.b8-confirm-card{width:min(380px,100%);max-height:calc(100vh - 36px);overflow:auto;padding:20px 18px 16px;background:var(--card,#fffdf7);color:var(--ink,#23211c);border:1px solid var(--line,#e4dcc6);border-radius:12px;box-shadow:0 26px 70px -36px rgba(0,0,0,.65);font-family:var(--sans,"PingFang SC","Microsoft YaHei",system-ui,sans-serif);text-align:left}' +
+      '.b8-confirm-title{margin:0 0 8px;font-family:var(--serif,"Songti SC","SimSun",serif);font-size:18px;font-weight:700;letter-spacing:.03em;color:var(--ink,#23211c)}' +
+      '.b8-confirm-msg{margin:0;white-space:pre-line;font-size:13px;line-height:1.85;color:var(--ink-2,#5b574d);overflow-wrap:anywhere}' +
+      '.b8-confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}' +
+      '.b8-confirm-btn{min-height:38px;padding:8px 18px;font-family:inherit;font-size:13px;border:1px solid var(--line-2,#d3c7ac);border-radius:999px;background:transparent;color:var(--ink-2,#5b574d);cursor:pointer}' +
+      '.b8-confirm-btn:active{transform:translateY(1px)}' +
+      '.b8-confirm-btn.ok{color:#fff;background:var(--seal,#c1522f);border-color:var(--seal,#c1522f)}' +
+      '.b8-confirm-btn.ok.is-danger{background:#a33228;border-color:#a33228}' +
+      '.b8-confirm-btn:focus-visible{outline:2px solid var(--seal,#c1522f);outline-offset:2px}' +
+      'body.b8-confirm-lock{overflow:hidden}';
+    document.head.appendChild(s);
+  }
+
+  B8.confirm = function (message, opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      ensureConfirmStyle();
+      confirmLock++;
+      document.body.classList.add('b8-confirm-lock');
+
+      var wrap = document.createElement('div');
+      wrap.className = 'b8-confirm';
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-modal', 'true');
+      wrap.innerHTML =
+        '<div class="b8-confirm-card">' +
+          '<h3 class="b8-confirm-title" id="b8-confirm-title">' + B8.esc(opts.title || '请确认') + '</h3>' +
+          '<p class="b8-confirm-msg" id="b8-confirm-msg"></p>' +
+          '<div class="b8-confirm-actions">' +
+            '<button class="b8-confirm-btn cancel" type="button">' + B8.esc(opts.cancelText || '取消') + '</button>' +
+            '<button class="b8-confirm-btn ok' + (opts.danger ? ' is-danger' : '') + '" type="button">' +
+              B8.esc(opts.okText || '确定') + '</button>' +
+          '</div>' +
+        '</div>';
+      wrap.setAttribute('aria-labelledby', 'b8-confirm-title');
+      wrap.setAttribute('aria-describedby', 'b8-confirm-msg');
+      wrap.querySelector('.b8-confirm-msg').textContent = String(message == null ? '' : message);
+      document.body.appendChild(wrap);
+
+      var lastFocus = document.activeElement;
+      var closed = false;
+      var okBtn = wrap.querySelector('.b8-confirm-btn.ok');
+      var cancelBtn = wrap.querySelector('.b8-confirm-btn.cancel');
+
+      function close(value) {
+        if (closed) return;
+        closed = true;
+        document.removeEventListener('keydown', onKey, true);
+        confirmLock = Math.max(0, confirmLock - 1);
+        if (!confirmLock) document.body.classList.remove('b8-confirm-lock');
+        wrap.classList.add('is-out');
+        setTimeout(function () {
+          if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+          if (lastFocus && lastFocus.focus) {
+            try { lastFocus.focus({ preventScroll: true }); } catch (e) { try { lastFocus.focus(); } catch (e2) {} }
+          }
+        }, 140);
+        resolve(!!value);
+      }
+
+      function onKey(ev) {
+        if (ev.key === 'Escape') { ev.preventDefault(); close(false); }
+        else if (ev.key === 'Enter') {
+          ev.preventDefault();
+          close(document.activeElement === cancelBtn ? false : true);
+        }
+      }
+
+      B8.on(cancelBtn, 'click', function () { close(false); });
+      B8.on(okBtn, 'click', function () { close(true); });
+      B8.on(wrap, 'click', function (ev) { if (ev.target === wrap) close(false); });
+      document.addEventListener('keydown', onKey, true);
+      setTimeout(function () { try { okBtn.focus({ preventScroll: true }); } catch (e) { try { okBtn.focus(); } catch (e2) {} } }, 40);
+    });
+  };
+
   /* ---------- 导航 ---------- */
   function initNav() {
     var toggle = B8.qs('#nav-toggle');
