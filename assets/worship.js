@@ -203,12 +203,14 @@
 
   function render() {
     if (!els.local) return;
+    // 全站计数 + 还没确认的本地点击；这样每点一下班徽上的数字立刻 +1。
+    var shown = (totalKnown || total > 0) ? total + pending : null;
     els.local.textContent = fmt(local);
-    els.badgeNum.textContent = fmt(local);
-    els.total.textContent = totalKnown ? fmt(total) : (total > 0 ? fmt(total) : '—');
+    els.badgeNum.textContent = fmt(shown != null ? shown : local);
+    els.total.textContent = shown != null ? fmt(shown) : '—';
     if (els.spaceLocal) els.spaceLocal.textContent = fmt(local);
-    if (els.spaceTotal) els.spaceTotal.textContent = totalKnown ? fmt(total) : (total > 0 ? fmt(total) : '—');
-    if (els.spaceNum) els.spaceNum.textContent = fmt(local);
+    if (els.spaceTotal) els.spaceTotal.textContent = shown != null ? fmt(shown) : '—';
+    if (els.spaceNum) els.spaceNum.textContent = fmt(shown != null ? shown : local);
   }
 
   function openModal() {
@@ -325,10 +327,11 @@
     }
 
     flushing = true;
+    // pending 在请求成功前不扣，班徽上的数字才不会先掉一下；成功后再减掉这一批。
     var n = Math.min(pending, 1000);
-    pending -= n;
 
     B8.sb.rpc('b8_worship_bump', { p_n: n }).then(function (res) {
+      pending -= n;
       var v = res && res.total != null ? res.total : res;
       var num = Number(v);
       if (!isNaN(num)) {
@@ -339,7 +342,6 @@
       }
       setNote('');
     }).catch(function (err) {
-      pending += n;
       var msg = err && err.message ? err.message : '网络异常';
       if (/Could not find the function|schema cache|does not exist/i.test(msg)) {
         bumpBroken = true;
