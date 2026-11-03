@@ -124,6 +124,16 @@
     };
   }
 
+  function pingVisit() {
+    if (!B8.sb || !B8.sb.ready || !state.member || !state.member.token) return;
+    var path = '';
+    try { path = location.pathname.split('/').pop() || 'index.html'; } catch (e) {}
+    B8.sb.rpc('b8_presence_ping', {
+      p_token: state.member.token,
+      p_path: path
+    }).catch(function () {});
+  }
+
   function settle() {
     if (resolved) return;
     resolved = true;
@@ -266,6 +276,7 @@
             exp: new Date(res.expires_at || Date.now() + 2592000000).getTime()
           };
           writeJson('local', K_MEMBER, state.member);
+          pingVisit();
           hideGate();
           broadcast();
           settle();
@@ -835,6 +846,7 @@
       }
 
       if (state.member) {
+        pingVisit();
         hideSplash();
         hideGate();
         broadcast();

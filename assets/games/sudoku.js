@@ -8,6 +8,7 @@
    · 计时从「开始」那一刻走，不是从第一次填数才开始
    · 计分：最终分 =（5000 − 秒数）× 难度系数 − 错误次数 × 500（最低 0）
    · 提示/候选：第一次打开会确认「用了就不进排行榜」，之后本局只算本机成绩
+   · 演示模式：不判对错；退出可保留当前填数（不排行）或回到进入前
    · 排行：game = sudoku:<难度>，每人每档一行；b8_sudoku_top
      取每个人所有档里最高的一行，所以挑战高难度永远更划算
 
@@ -90,6 +91,9 @@
   var submitted = false;
   var scoreInfo = null;
   var writable = false;
+  var demoMode = false;
+  var demoUsed = false;
+  var demoSnapshot = null;
 
   function $(id) { return document.getElementById(id); }
 
@@ -343,6 +347,12 @@
       candBtn.setAttribute('aria-pressed', showCand ? 'true' : 'false');
       candBtn.classList.toggle('on', showCand);
     }
+    var demoBtn = $('sd-demo-btn');
+    if (demoBtn) {
+      demoBtn.textContent = demoMode ? '退出演示' : '演示模式';
+      demoBtn.setAttribute('aria-pressed', demoMode ? 'true' : 'false');
+      demoBtn.classList.toggle('on', demoMode);
+    }
   }
 
   function setStatus(msg, bad) {
@@ -357,12 +367,14 @@
   }
 
   function startClock() {
-    if (started || finished) return;
+    if (finished) return;
     started = true;
-    startAt = Date.now();
-    ticker = setInterval(function () {
-      if (timerEl) timerEl.textContent = fmt(elapsed());
-    }, 250);
+    startAt = Date.now() - elapsedMs;
+    if (!ticker) {
+      ticker = setInterval(function () {
+        if (timerEl) timerEl.textContent = fmt(elapsed());
+      }, 250);
+    }
   }
 
   function stopClock() {
@@ -428,7 +440,7 @@
       setStatus('题目给的数字不能改。');
       return;
     }
-    startClock();
+    if (!demoMode) startClock();
 
     if (notesMode) {
       if (grid[selected] !== '.') {
@@ -455,6 +467,14 @@
     notes[selected] = {};
     hintMark = [];
 
+    if (demoMode) {
+      wrong[selected] = false;
+      recountFilled();
+      paintAll();
+      setStatus('演示模式：填入了 ' + d + '，不判对错。');
+      return;
+    }
+
     // v2.80：填错立刻标红并扣 500 分；最后答案仍然要全对才计分。
     if (String(d) !== solution[selected]) {
       mistakes += 1;
@@ -469,7 +489,7 @@
     recountFilled();
     paintAll();
     // 填满 81 格才交卷：全对按用时给分；只要有一格错，整局 0 分。
-    if (filled === 81) finish(!isSolved());
+    if (filled === 81 && !demoMode) finish(!isSolved());
   }
 
   function eraseCell() {
@@ -521,7 +541,7 @@
 
   function revealHint() {
     if (finished) return;
-    startClock();
+    if (!demoMode) startClock();
 
     var target = -1;
     var reason = '';
@@ -596,7 +616,7 @@
     selected = target;
     paintAll();
     setStatus('提示：' + reason + '（本局已使用提示，不加入排行榜）', false);
-    if (filled === 81) finish(!isSolved());
+    if (filled === 81 && !demoMode) finish(!isSolved());
   }
 
   /* ---------- 计分 / 结算 ---------- */
@@ -628,7 +648,7 @@
     paintAll();
     scoreInfo = calcScore(wrongAnswer);
     // 用了提示 / 答案有错 / 超过 5000 秒的局不刷本机最高
-    if (!wrongAnswer && hints === 0 && scoreInfo.final > 0) {
+    if (!wrongAnswer && hints === 0 && !demoUsed && scoreInfo.final > 0) {
       saveBest(diff, scoreInfo.final);
     }
     renderResult();
@@ -657,6 +677,8 @@
       note = s.sec >= 5000
         ? '超过 5000 秒，本局 0 分，没有进排行榜。'
         : (penaltyText + '分数被扣到 0，本局没有进排行榜。');
+    } else if (demoUsed) {
+      note = (penaltyText ? penaltyText : '') + '本局用过演示模式，不加入排行榜。';
     } else if (!writable) {
       note = (penaltyText ? penaltyText : '') +
         '没登录，成绩只留在本机。回游乐场登录后再玩一局才会进榜。';
@@ -693,7 +715,7 @@
   }
 
   function submitScore(final) {
-    if (wrongAnswer || hints > 0 || final <= 0) return;
+    if (wrongAnswer || hints > 0 || demoUsed || final <= 0) return;
     if (!writable || submitted || !B8.auth || !B8.auth.token()) return;
     submitted = true;
     B8.sb.rpc('b8_score_add', {
@@ -730,7 +752,8 @@
       '<p class="tip">开始后计时立刻走：<b>分数 =（5000 − 秒数）× 难度系数 − 错误 × 500</b>；' +
       '填错立刻标红并扣 500 分，填满 81 格时只要还有错就是 <b>0 分</b>。<br>' +
       '<b>简单 ×1.00 / 普通 ×1.50 / 困难 ×2.20 / 极难 ×3.00</b>。' +
-      '提示/候选：第一次打开会弹确认，<b>用了提示或候选的局都不加入排行榜</b>。</p>';
+      '提示/候选：第一次打开会弹确认，<b>用了提示或候选的局都不加入排行榜</b>。' +
+      '<b>演示模式</b>：填任何数字都不判对错；退出时可选保留当前填数（本局不排行）或回到进入前。</p>';
     panelEl.innerHTML = html;
     overlayEl.hidden = false;
 
@@ -746,6 +769,165 @@
     });
     B8.on($('sd-start'), 'click', function () { newGame(diff, false); });
     B8.on($('sd-close'), 'click', function () { overlayEl.hidden = true; });
+  }
+
+  /* ---------- 演示模式 ---------- */
+  function copyNotes(list) {
+    return list.map(function (o) {
+      var c = {};
+      for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) c[k] = o[k];
+      return c;
+    });
+  }
+
+  function snapState() {
+    return {
+      grid: grid.slice(),
+      notes: copyNotes(notes),
+      wrong: wrong.slice(),
+      hintMark: hintMark.slice(),
+      history: history.map(function (h) {
+        return {
+          grid: h.grid.slice(), notes: copyNotes(h.notes),
+          mistakes: h.mistakes, hints: h.hints, filled: h.filled
+        };
+      }),
+      selected: selected,
+      mistakes: mistakes,
+      hints: hints,
+      hintWarned: hintWarned,
+      candidateWarned: candidateWarned,
+      candidateUsed: candidateUsed,
+      wrongAnswer: wrongAnswer,
+      filled: filled,
+      started: started,
+      finished: finished,
+      elapsedMs: elapsedMs,
+      submitted: submitted,
+      scoreInfo: scoreInfo,
+      demoUsed: demoUsed,
+      notesMode: notesMode,
+      showCand: showCand
+    };
+  }
+
+  function enterDemo() {
+    if (finished) { setStatus('这一局已经结束了，开新局再演示。'); return; }
+    if (demoMode) { askExitDemo(); return; }
+
+    if (!started) startClock();
+    elapsedMs = elapsed();
+    demoSnapshot = snapState();
+    demoMode = true;
+    stopClock();
+    startAt = 0;
+    if (timerEl) timerEl.textContent = fmt(elapsedMs);
+    updateHud();
+    paintAll();
+    setStatus('演示模式：填任何数字都不判对错；退出时可以选择保留或回到进入前。');
+  }
+
+  function askExitDemo() {
+    if (!demoMode) return;
+    var old = $('sd-demo-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var wrap = document.createElement('div');
+    wrap.id = 'sd-demo-modal';
+    wrap.className = 'sd-demo-modal';
+    wrap.innerHTML =
+      '<div class="sd-demo-card" role="dialog" aria-modal="true">' +
+        '<h2>退出演示模式</h2>' +
+        '<p>当前盘面的填数要保留吗？<br>保留后这一局不加入排行榜；不保留会回到进入演示前。</p>' +
+        '<div class="sd-demo-actions">' +
+          '<button class="btn-main" type="button" data-demo="keep">保留当前填数</button>' +
+          '<button class="btn-2nd" type="button" data-demo="discard">不保留，回到进入前</button>' +
+          '<button class="btn-2nd" type="button" data-demo="cancel">继续演示</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(wrap);
+
+    function close() {
+      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      document.removeEventListener('keydown', onKey, true);
+    }
+    function onKey(ev) {
+      if (ev.key === 'Escape') { ev.preventDefault(); close(); }
+    }
+    document.addEventListener('keydown', onKey, true);
+
+    B8.qsa('[data-demo]', wrap).forEach(function (b) {
+      B8.on(b, 'click', function () {
+        var act = b.getAttribute('data-demo');
+        if (act === 'cancel') { close(); return; }
+        close();
+        if (act === 'keep') keepDemo();
+        else discardDemo();
+      });
+    });
+  }
+
+  function resumeFromDemo() {
+    started = true;
+    startAt = 0;
+    startClock();
+    if (timerEl) timerEl.textContent = fmt(elapsed());
+  }
+
+  function keepDemo() {
+    if (!demoMode) return;
+    demoMode = false;
+    demoUsed = true;
+    // 演示里没有维护 wrong；保留盘面时统一清掉红标。
+    for (var i = 0; i < 81; i++) wrong[i] = false;
+    hintMark = [];
+    elapsedMs = demoSnapshot ? demoSnapshot.elapsedMs : 0;
+    demoSnapshot = null;
+    updateHud();
+    paintAll();
+    resumeFromDemo();
+    setStatus('演示结束：已保留当前填数；本局不加入排行榜。');
+  }
+
+  function discardDemo() {
+    if (!demoMode) return;
+    var s = demoSnapshot;
+    demoSnapshot = null;
+    demoMode = false;
+    if (!s) return;
+
+    grid = s.grid.slice();
+    notes = copyNotes(s.notes);
+    wrong = s.wrong.slice();
+    hintMark = s.hintMark.slice();
+    history = s.history.map(function (h) {
+      return {
+        grid: h.grid.slice(), notes: copyNotes(h.notes),
+        mistakes: h.mistakes, hints: h.hints, filled: h.filled
+      };
+    });
+    selected = s.selected;
+    mistakes = s.mistakes;
+    hints = s.hints;
+    hintWarned = s.hintWarned;
+    candidateWarned = s.candidateWarned;
+    candidateUsed = s.candidateUsed;
+    wrongAnswer = s.wrongAnswer;
+    filled = s.filled;
+    started = s.started;
+    finished = s.finished;
+    elapsedMs = s.elapsedMs;
+    submitted = s.submitted;
+    scoreInfo = s.scoreInfo;
+    demoUsed = s.demoUsed;
+    notesMode = s.notesMode;
+    showCand = s.showCand;
+
+    updateHud();
+    paintAll();
+    if (started && !finished) resumeFromDemo();
+    else if (timerEl) timerEl.textContent = fmt(elapsedMs);
+    setStatus('已回到进入演示前的盘面。');
   }
 
   function newGame(id, skipConfirm) {
@@ -783,6 +965,9 @@
     candidateUsed = false;
     showCand = false;
     wrongAnswer = false;
+    demoMode = false;
+    demoUsed = false;
+    demoSnapshot = null;
     started = false;
     finished = false;
     startAt = 0;
@@ -950,6 +1135,10 @@
         else if (act === 'cand') toggleCand();
         else if (act === 'hint') hint();
         else if (act === 'undo') undo();
+        else if (act === 'demo') {
+          if (demoMode) askExitDemo();
+          else enterDemo();
+        }
       });
     }
 
@@ -972,7 +1161,8 @@
           diff: diff, grid: grid.slice(), solution: solution.slice(),
           given: given.slice(), mistakes: mistakes, hints: hints,
           finished: finished, elapsed: elapsed(), score: scoreInfo,
-          selected: selected, writable: writable
+          selected: selected, writable: writable,
+          demoMode: demoMode, demoUsed: demoUsed
         };
       };
       api.fill = function () {
@@ -987,6 +1177,9 @@
       };
       api.hint = hint;
       api.input = inputDigit;
+      api.demo = enterDemo;
+      api.demoKeep = keepDemo;
+      api.demoDiscard = discardDemo;
     }
     B8.games = B8.games || {};
     B8.games.sudoku = api;

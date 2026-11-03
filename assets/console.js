@@ -20,6 +20,7 @@
   var scores = [];
   var scoreGame = '';
   var deletions = [];
+  var visits = [];
 
   var GAMES = [
     { key: '', name: '全部' },
@@ -62,7 +63,8 @@
       { key: 'members', name: '成员' },
       { key: 'keys', name: '密钥' },
       { key: 'scores', name: '排行' },
-      { key: 'deletions', name: '最近删除' }
+      { key: 'deletions', name: '最近删除' },
+      { key: 'visits', name: '上线' }
     ];
 
     // 永久管理员没有提权会话（auth.state().elev 是 null），
@@ -101,6 +103,7 @@
     if (tab === 'members') loadMembers();
     else if (tab === 'keys') loadKeys();
     else if (tab === 'deletions') loadDeletions();
+    else if (tab === 'visits') loadVisits();
     else loadScores();
   }
 
@@ -122,7 +125,11 @@
   function loginState(m) {
     if (!m.has_pass) return '<span class="tag plain">还没设密码</span>';
     if (!m.last_login) return '<span class="tag">已认领 · 从未登录</span>';
-    return '<span class="tag jade">在用 · ' + esc(B8.date(m.last_login)) + '</span>';
+    var d = new Date(m.last_login);
+    var t = isNaN(d.getTime()) ? B8.date(m.last_login) : d.toLocaleString('zh-CN', {
+      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+    });
+    return '<span class="tag jade">在用 · ' + esc(t) + '</span>';
   }
 
   function paintMembers() {
@@ -244,6 +251,40 @@
     box.appendChild(cp);
     b.insertBefore(box, b.firstChild);
   }
+  /* ---------- 上线记录 ---------- */
+  function loadVisits() {
+    B8.sb.rpc('b8_super_visits', { p_token: tok(), p_limit: 200 }).then(function (rows) {
+      visits = rows || [];
+      paintVisits();
+    }, fail);
+  }
+
+  function paintVisits() {
+    var b = body();
+    if (!b) return;
+    if (!visits.length) {
+      b.innerHTML = '<p class="form-note">还没有上线记录。等大家打开一次站点就会有了。</p>';
+      return;
+    }
+
+    var html = '<p class="form-note">最近 ' + visits.length + ' 次打开记录（三站都算，时间精确到分钟）。</p>' +
+      '<div class="console-list">';
+    visits.forEach(function (v) {
+      var d = new Date(v.opened_at);
+      var t = isNaN(d.getTime()) ? '—' : d.toLocaleString('zh-CN', {
+        month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+      });
+      html += '<div class="console-row">' +
+        '<div class="console-main">' +
+          '<div class="console-title">' + esc(v.name) + ' <span class="console-dim">' + esc(v.member_no) + '</span></div>' +
+          '<div class="console-meta">' + esc(t) + ' · ' + esc(v.path || '首页') + '</div>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    b.innerHTML = html;
+  }
+
   /* ---------- 密钥 ---------- */
   function loadKeys() {
     B8.sb.rpc('b8_super_keys', { p_token: tok() }).then(function (rows) {

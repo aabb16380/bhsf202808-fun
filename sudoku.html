@@ -7,17 +7,17 @@
 <meta name="description" content="数独：简单 / 普通 / 困难 / 极难四档，屏幕 1–9 按键填数，支持笔记、候选、提示推演；按难度系数计分，成绩进排行榜。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g39" type="image/png">
-<link rel="stylesheet" href="assets/games/lab.css?v=20261101g39">
+<link rel="icon" href="assets/favicon.png?v=20261101g40" type="image/png">
+<link rel="stylesheet" href="assets/games/lab.css?v=20261101g40">
 <script>
-window.B8_BUILD = '20261101g39';
+window.B8_BUILD = '20261101g40';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g39"></script>
+<script src="assets/theme.js?v=20261101g40"></script>
 <style>
   #app { background: #efe7d5; }
 
@@ -305,8 +305,49 @@ window.B8_TEST = !!window.B8_T;
     background: var(--ink);
     color: #101014;
   }
+  /* 演示模式退出选择 */
+  .sd-demo-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(20, 18, 14, 0.58);
+    backdrop-filter: blur(6px);
+  }
+  .sd-demo-card {
+    width: min(390px, 100%);
+    padding: 22px 20px 18px;
+    background: var(--card, #fffdf7);
+    color: var(--ink, #23211c);
+    border: 1px solid var(--line, #e4dcc6);
+    border-radius: 14px;
+    box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.6);
+  }
+  .sd-demo-card h2 {
+    margin: 0 0 10px;
+    font-family: var(--serif);
+    font-size: 24px;
+  }
+  .sd-demo-card p {
+    margin: 0 0 16px;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--ink-2, #5b574d);
+  }
+  .sd-demo-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sd-demo-actions .btn-main,
+  .sd-demo-actions .btn-2nd {
+    width: 100%;
+  }
 </style>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g39">
+<link rel="stylesheet" href="assets/theme.css?v=20261101g40">
 </head>
 
 <body data-site="fun">
@@ -345,9 +386,10 @@ window.B8_TEST = !!window.B8_T;
         <button class="sd-tool" type="button" id="sd-cand-btn" data-act="cand" aria-pressed="false">候选：关</button>
         <button class="sd-tool" type="button" data-act="hint">提示</button>
         <button class="sd-tool" type="button" data-act="undo">撤销</button>
+        <button class="sd-tool" type="button" id="sd-demo-btn" data-act="demo" aria-pressed="false">演示模式</button>
       </div>
 
-      <p class="sd-foot">（5000 − 秒数）× 难度系数 − 错误 × 500 · 提示/候选不排行</p>
+      <p class="sd-foot">（5000 − 秒数）× 难度系数 − 错误 × 500 · 提示/候选/演示不排行</p>
     </div>
 
     <div class="overlay" id="sd-overlay" hidden>
@@ -365,7 +407,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g39' + T;
+  var V = '?v=20261101g40' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
