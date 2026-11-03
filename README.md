@@ -129,6 +129,11 @@ supabase: {
 | 我的点数/升级状态 | `b8_worship_state(p_token)` |
 | 花点数升级（speed / cat / point） | `b8_worship_upgrade(p_token, p_kind)` |
 | 膜宙金总量排行 | `b8_worship_top(p_token, p_limit)` |
+| 投票列表 | `b8_poll_list(p_token)` |
+| 建投票 | `b8_poll_create(...)` |
+| 投一票 | `b8_poll_vote(p_token, p_poll_id, p_candidate_id, p_weight)` |
+| 超管看投票明细 | `b8_poll_ballots(p_token, p_poll_id)` |
+| 超管全部候选人 | `b8_poll_people(p_token)` |
 | 钢琴辉排行（三首加权） | `b8_piano_top(p_token, p_limit)` |
 | 钢琴辉我的每首歌成绩 | `b8_piano_mine(p_token)` |
 
@@ -216,6 +221,8 @@ v2.70 修了高点击率下的计时器卡顿：结算看绝对 deadline，10 �
 小猫数量（+1 只/级）、每次点数（+1 点/级），价格逐级翻倍。
 猫猫是用户给的 6 张截图裁切、去白底后拼的 `assets/mo-cat-sprite.webp`（6 帧雪碧图），
 不引外链 GIF；数据库没接时本机计数照常，全站计数显示 `—`。
+
+**班级投票**（`assets/vote.js`）：管理员/超管发起，范围可选 全部 / 男生（服务端按性别挑人），超管可自定义选人；普通管理员看不到全部名单。每人最多 `max_votes` 票，`allow_repeat` 控制同一候选人能否重复投；`live_results` 控制截止前是否公开票数；超管可用 `b8_poll_ballots` 看谁投了谁。
 
 2048 的牌面也换成了这八张脸：每块牌一张照片，上面压暗角、白字压在上面；
 512 / 1024 / 2048 / 4096+ 分别多一层红 / 金 / 朱印 / 玄色罩，数字越大越"压手"。

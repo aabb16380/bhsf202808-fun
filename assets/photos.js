@@ -129,6 +129,25 @@
     });
   }
 
+  function showGame(g) {
+    var btn = B8.qs('.game-tab[data-game="' + g + '"]');
+    if (btn) btn.click();
+    var sec = B8.qs('#games');
+    if (sec) {
+      try { sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      catch (e) { sec.scrollIntoView(); }
+    }
+  }
+
+  function bindGameTickets() {
+    B8.qsa('[data-ticket-game]').forEach(function (a) {
+      B8.on(a, 'click', function (e) {
+        e.preventDefault();
+        showGame(a.getAttribute('data-ticket-game'));
+      });
+    });
+  }
+
   function bindRankTabs() {
     var tabs = B8.qsa('.rank-tab');
     tabs.forEach(function (btn) {
@@ -827,9 +846,6 @@
   function removePhoto(p, card, btn) {
     if (!writable) return;
     var msg = '删掉这张合影？删了就找不回来了。';
-    if (B8.auth && B8.auth.isAdmin && B8.auth.isAdmin()) {
-      msg += '\n管理员删除会留下记录，超管可以在控制台「最近删除」里看到。';
-    }
     B8.confirm(msg, {
       title: '删除照片', okText: '删除', danger: true
     }).then(function (ok) {
@@ -1537,6 +1553,7 @@
     statToday = B8.qs('#stat-today');
 
     bindGameTabs();
+    bindGameTickets();
     bindRankTabs();
     bindPhotoFilters();
 
@@ -1640,6 +1657,7 @@
   whenReady(init);
   // 给游戏模块用：有新成绩进库时清掉对应榜单缓存，下次切过去才是新的
   B8.fun = {
+    showGame: showGame,
     reloadPhotos: loadPhotos,
     reloadRank: loadRank,
     rankSaved: function (game) {

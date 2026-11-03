@@ -194,8 +194,23 @@
     return lines;
   }
 
+  var tilesPreloaded = false;
+
+  /* 第一次真的开始移动时，一次把 8 张牌面全下下来；
+     之后 2/4/8… 的牌面直接走缓存，不会出现「出一个新数字才下一张图」。 */
+  function preloadTiles() {
+    if (tilesPreloaded) return;
+    tilesPreloaded = true;
+    for (var i = 1; i <= 8; i++) {
+      var img = new Image();
+      img.decoding = 'async';
+      img.src = 'assets/games/hui/t' + i + '.jpg';
+    }
+  }
+
   function move(dir) {
     if (!started || over) return;
+    preloadTiles();
 
     var lines = lineIndexes(dir);
     var moved = false;

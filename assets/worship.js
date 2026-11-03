@@ -471,7 +471,8 @@
   }
 
   function openShop() {
-    if (!superOpen || !els.shop) return;
+    if (!superBuilt) ensureSuper();
+    if (!els.shop) return;
     els.shop.hidden = false;
     setShopNote('');
     renderShop();
@@ -652,6 +653,8 @@
     els.catM = $('mo-cat-m');
     els.totalM = $('mo-total-m');
     els.localM = $('mo-local-m');
+    els.superM = $('mo-super-m');
+    els.shopM = $('mo-shop-m');
     els.plusLayer = $('mo-plus-layer');
 
     if (!els.open || !els.play) return;
@@ -663,6 +666,8 @@
     B8.on(els.cat, 'click', function () { worship(els.cat); });
     B8.on(els.catM, 'click', function () { worship(els.catM); });
     B8.on(els.super, 'click', openSuper);
+    B8.on(els.superM, 'click', openSuper);
+    B8.on(els.shopM, 'click', openShop);
 
     document.addEventListener('b8:auth', function () {
       if (!active) return;
