@@ -4,9 +4,9 @@
    · 四档难度：简单 / 普通 / 困难 / 极难，各自有难度系数
    · 输入只靠屏幕上的 1–9 按键，不要求键盘
    · 辅助：笔记（免费）、候选模式（算提示）、提示推演、撤销
-   · 填数过程中不检查对错；填满 81 格才一次性对答案，有错 → 0 分
+   · 填错立刻标红并扣 500 分；填满 81 格时还有错 → 0 分
    · 计时从「开始」那一刻走，不是从第一次填数才开始
-   · 计分：最终分 =（5000 − 秒数）× 难度系数
+   · 计分：最终分 =（5000 − 秒数）× 难度系数 − 错误次数 × 500（最低 0）
    · 提示/候选：第一次打开会确认「用了就不进排行榜」，之后本局只算本机成绩
    · 排行：game = sudoku:<难度>，每人每档一行；b8_sudoku_top
      取每个人所有档里最高的一行，所以挑战高难度永远更划算
@@ -298,8 +298,8 @@
     if (selected >= 0 && i !== selected && grid[selected] !== '.' && grid[i] === grid[selected]) {
       cls += ' is-same';
     }
-    // 填数过程中不做对错提示；只有交卷后发现答案有错，才把错的格子标红。
-    if (wrongAnswer && wrong[i]) cls += ' is-wrong';
+    // 填错立刻标红；擦掉或改对后恢复。
+    if (wrong[i]) cls += ' is-wrong';
     if (hintMark[i]) cls += ' is-hint';
     cell.className = cls;
 
@@ -411,7 +411,9 @@
     if (given[i]) {
       setStatus(pos + '是题目给的数字，不能改。');
     } else if (grid[i] !== '.') {
-      setStatus(pos + '：' + grid[i] + '。点数字可以改，点同一个数字是擦掉。');
+      setStatus(pos + '：' + grid[i] +
+        (wrong[i] ? '（这个数不对，扣 500 分）' : '') +
+        '。点数字可以改，点同一个数字是擦掉。');
     } else {
       setStatus(pos + '：空格。点 1–9 填数。');
     }
@@ -452,8 +454,18 @@
     grid[selected] = String(d);
     notes[selected] = {};
     hintMark = [];
-    wrong[selected] = false;
-    setStatus('填入了 ' + d + '。');
+
+    // v2.80：填错立刻标红并扣 500 分；最后答案仍然要全对才计分。
+    if (String(d) !== solution[selected]) {
+      mistakes += 1;
+      wrong[selected] = true;
+      setStatus('这个数不对（错误 +1，扣 500 分）。擦掉重填就行。', true);
+    } else {
+      wrong[selected] = false;
+      clearNotesPeers(selected, String(d));
+      setStatus('填上了 ' + d + '。');
+    }
+
     recountFilled();
     paintAll();
     // 填满 81 格才交卷：全对按用时给分；只要有一格错，整局 0 分。
@@ -483,7 +495,9 @@
     filled = h.filled;
     hintMark = [];
     wrong = [];
-    for (var i = 0; i < 81; i++) wrong[i] = false;
+    for (var i = 0; i < 81; i++) {
+      wrong[i] = grid[i] !== '.' && grid[i] !== solution[i];
+    }
     paintAll();
     setStatus('撤销了一步。');
   }
@@ -516,7 +530,13 @@
       return '第 ' + (Math.floor(i / 9) + 1) + ' 行第 ' + (i % 9 + 1) + ' 列';
     }
 
-    // 1) 唯一候选（裸单）
+    // 1) 选中的格子已经填错了：提示先把这格改对
+    if (selected >= 0 && wrong[selected]) {
+      target = selected;
+      reason = cellName(target) + ' 填错了，应该是 ' + solution[target] + '。';
+    }
+
+    // 2) 唯一候选（裸单）
     if (target < 0) {
       var order = [];
       if (selected >= 0 && grid[selected] === '.') order.push(selected);
@@ -584,9 +604,12 @@
     var d = diffOf(diff);
     var sec = Math.max(0, Math.round(elapsedMs / 1000));
     var base = Math.max(0, 5000 - sec);
-    var final = failed ? 0 : Math.round(base * d.coef);
+    var raw = Math.round(base * d.coef);
+    var penalty = mistakes * 500;
+    var final = failed ? 0 : Math.max(0, raw - penalty);
     return {
-      sec: sec, base: base, coef: d.coef, final: final, failed: !!failed
+      sec: sec, base: base, coef: d.coef, raw: raw,
+      penalty: penalty, final: final, failed: !!failed
     };
   }
 
@@ -597,12 +620,10 @@
     startAt = 0;
     stopClock();
     recountFilled();
-    // 到这时候才对答案：把错的格子标红，并统计错误数
+    // mistakes 是「填错次数」，不在这里重置；最后答案仍要全对才计分。
     wrong = [];
-    mistakes = 0;
     for (var i = 0; i < 81; i++) {
-      wrong[i] = wrongAnswer && grid[i] !== solution[i];
-      if (wrong[i]) mistakes++;
+      wrong[i] = grid[i] !== solution[i];
     }
     paintAll();
     scoreInfo = calcScore(wrongAnswer);
@@ -619,19 +640,28 @@
     var d = diffOf(diff);
     var best = readBest(diff);
     var s = scoreInfo || calcScore(wrongAnswer);
-    var title = wrongAnswer ? '答案有错' : (s.final <= 0 ? '超时' : '完成了');
+    var title = wrongAnswer ? '答案有错'
+      : (s.final <= 0 ? (s.sec >= 5000 ? '超时' : '没分了') : '完成了');
+
+    var penaltyText = mistakes > 0 ? '填错 ' + mistakes + ' 次，扣 ' + s.penalty + ' 分。' : '';
 
     var note;
     if (wrongAnswer) {
-      note = '最后答案有错（' + mistakes + ' 格），本局 0 分，没有进排行榜。';
+      note = '最后答案有错（填错 ' + mistakes + ' 次），本局 0 分，没有进排行榜。';
     } else if (hints > 0) {
-      note = candidateUsed
-        ? '本局用了候选模式' + (hints > 1 ? '和提示' : '') + '，按规则不加入排行榜。'
-        : '本局用了 ' + hints + ' 次提示，按规则不加入排行榜。';
+      note = (candidateUsed
+        ? '本局用了候选模式' + (hints > 1 ? '和提示' : '')
+        : '本局用了 ' + hints + ' 次提示') +
+        (penaltyText ? '另外' + penaltyText : '') + '按规则不加入排行榜。';
     } else if (s.final <= 0) {
-      note = '超过 5000 秒，本局 0 分，没有进排行榜。';
+      note = s.sec >= 5000
+        ? '超过 5000 秒，本局 0 分，没有进排行榜。'
+        : (penaltyText + '分数被扣到 0，本局没有进排行榜。');
     } else if (!writable) {
-      note = '没登录，成绩只留在本机。回游乐场登录后再玩一局才会进榜。';
+      note = (penaltyText ? penaltyText : '') +
+        '没登录，成绩只留在本机。回游乐场登录后再玩一局才会进榜。';
+    } else if (penaltyText) {
+      note = penaltyText + '正在把成绩记到排行榜…';
     } else {
       note = '正在把成绩记到排行榜…';
     }
@@ -648,6 +678,7 @@
         '<div><dt>用时</dt><dd>−' + s.sec + '</dd></div>' +
         '<div><dt>基础分</dt><dd>' + s.base + '</dd></div>' +
         '<div><dt>难度系数</dt><dd>×' + s.coef.toFixed(2) + '</dd></div>' +
+        '<div><dt>错误扣分</dt><dd>−' + s.penalty + '</dd></div>' +
         '<div><dt>最终</dt><dd>' + s.final + '</dd></div>' +
         '<div><dt>规则</dt><dd>有提示不排行</dd></div>' +
       '</dl></div>' +
@@ -696,11 +727,10 @@
     html += '</div></div>' +
       '<button class="btn-main" type="button" id="sd-start">开始</button>' +
       '<button class="btn-2nd" type="button" id="sd-close">' + (started && !finished ? '继续这一局' : '先看看') + '</button>' +
-      '<p class="tip">开始后计时立刻走：<b>分数 =（5000 − 秒数）× 难度系数</b>；' +
-      '填满 81 格时只要答案有错就是 <b>0 分</b>。<br>' +
+      '<p class="tip">开始后计时立刻走：<b>分数 =（5000 − 秒数）× 难度系数 − 错误 × 500</b>；' +
+      '填错立刻标红并扣 500 分，填满 81 格时只要还有错就是 <b>0 分</b>。<br>' +
       '<b>简单 ×1.00 / 普通 ×1.50 / 困难 ×2.20 / 极难 ×3.00</b>。' +
-      '提示/候选：第一次打开会弹确认，<b>用了提示或候选的局都不加入排行榜</b>。' +
-      '填数过程中不检查对错，填满 81 格才一次性对答案。</p>';
+      '提示/候选：第一次打开会弹确认，<b>用了提示或候选的局都不加入排行榜</b>。</p>';
     panelEl.innerHTML = html;
     overlayEl.hidden = false;
 
