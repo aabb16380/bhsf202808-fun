@@ -922,6 +922,8 @@
       timed: room ? !!room.timed : false, minutes: room ? room.minutes : 0,
       seat: seat || 0, me: null, watchers: 0, presence: null, offer: null, undo: null, undoPrompted: null, undoBusy: false, anim: null,
       scoreBusy: false, pendingDead: null,
+      spectators: [], spectatorError: '',
+      uploadQueue: [], uploadBusy: false, uploadTimer: 0, uploadWarned: false,
       reviewing: false, reviewIndex: 0, reviewStates: null, reviewState: null,
       commentsHidden: false, moves: [], texts: [], moveBusy: false,
       sel: null, targets: [], drPath: null, drMoves: null,
