@@ -774,6 +774,7 @@
     S.state = ns;
     S.sel = null; S.targets = []; S.drPath = null; S.drMoves = null;
     S.score = null;
+    S.offer = null;
     renderAll();
 
     setNet('', '发送中');
@@ -1154,7 +1155,7 @@
   function renderOffer() {
     var box = $('bd-offer');
     if (!box) return;
-    if (!S || S.mode !== 'online' || !S.offer) {
+    if (!S || S.mode !== 'online' || !S.offer || S.seat === 0) {
       box.hidden = true;
       box.innerHTML = '';
       return;
