@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；6 位邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g53" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g53">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g53">
+<link rel="icon" href="assets/favicon.png?v=20261101g54" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g54">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g54">
 <script>
-window.B8_BUILD = '20261101g53';
+window.B8_BUILD = '20261101g54';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g53"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g53">
+<script src="assets/theme.js?v=20261101g54"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g54">
 </head>
 
 <body data-site="fun">
@@ -134,7 +134,8 @@ window.B8_TEST = !!window.B8_T;
           <div>
             <b>围棋</b>
             <p>中国规则数子：子 + 空，黑贴 3¾ 子（7.5 目）。打劫只能隔一手提回；两次「停一手」终局自动点目。
-              点目按盘面活子算，<b>死子请先提干净再点</b>。</p>
+              点目会<b>自动标出死子</b>并算分，判错可以点棋子改正；第二手停一手终局前会再确认，
+              <b>不用先把死子提干净</b>。</p>
           </div>
           <div>
             <b>五子棋</b>
@@ -343,7 +344,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g53' + T;
+  var V = '?v=20261101g54' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

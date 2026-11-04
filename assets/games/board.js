@@ -57,6 +57,7 @@
 
   var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, rooms: [], mine: [], history: [], historyApi: true, dbMissing: false, busy: false };
   var LS = { mode1: 'no', mode2: 'no', name1: '', name2: '', resolved1: '', resolved2: '', timer1: 0, timer2: 0, busy: false };
+  var DEADSTONES = { loading: null };
   var S = null;                 // 当前对局
   var NET = { offset: 0, lastOk: 0, fails: 0, timer: 0, inflight: false, again: false, lastPing: 0, started: 0 };
   var CHAT = { timer: 0, lastId: 0, inflight: false, items: [], hidden: false };
@@ -549,7 +550,7 @@
       clock: { 1: minutes * 60000, 2: minutes * 60000 },
       clockStart: 0, clockRunning: 0,
       sel: null, targets: [], drPath: null, drMoves: null,
-      score: null, flip: false, resultShown: false, moveBusy: false, anim: null,
+      score: null, scoreBusy: false, pendingDead: null, flip: false, resultShown: false, moveBusy: false, anim: null,
       reviewing: false, reviewIndex: 0, reviewStates: null, reviewState: null,
       room: null, code: '', playerNames: [name1 || '玩家一', name2 || '玩家二']
     };
@@ -888,6 +889,7 @@
       game: room ? room.game : '', size: room ? room.size : 0,
       timed: room ? !!room.timed : false, minutes: room ? room.minutes : 0,
       seat: seat || 0, me: null, watchers: 0, presence: null, offer: null, undo: null, undoPrompted: null, undoBusy: false, anim: null,
+      scoreBusy: false, pendingDead: null,
       reviewing: false, reviewIndex: 0, reviewStates: null, reviewState: null,
       commentsHidden: false, moves: [], texts: [], moveBusy: false,
       sel: null, targets: [], drPath: null, drMoves: null,
@@ -1035,7 +1037,11 @@
       S.moves.sort(function (a, b) { return a.seq - b.seq; });
       rebuildTexts();
     }
-    if (changed || undoBack) reviewReset();
+    if (changed || undoBack) {
+      reviewReset();
+      S.score = null;
+      S.scoreBusy = false;
+    }
     if (!undoBack && !document.hidden && added.length === 1 && prevState &&
         S.state && S.state.seq === prevState.seq + 1 &&
         S.state.status === 'play' && !added[0].move.pass) {
@@ -1140,14 +1146,85 @@
 
   function commit(mv) {
     if (S && S.moveBusy) { toast('上一步还在同步，稍等一下'); return; }
+    if (S && S.scoreBusy) { toast('正在点目，稍等一下'); return; }
     if (!myTurn()) {
       if (S.mode === 'online' && S.seat === 0) toast('观战中，不能走子');
       else if (S.mode === 'online' && S.room && S.room.status === 'wait') toast('还在等对手进来');
       else if (S.mode === 'online') toast('还没轮到你');
       return;
     }
+    if (S && S.state && S.state.game === 'go' && mv.pass && (S.state.passes || 0) === 1) {
+      // 第二手停一手：终局前自动标死子；如果刚点过目，就用用户改过的标记
+      if (S.score && S.score.seq === S.state.seq && S.score.dead) {
+        S.pendingDead = S.score.dead.slice();
+        commitNow(mv);
+        return;
+      }
+      var seq = S.state.seq;
+      S.scoreBusy = true;
+      S.score = null;
+      renderScorePanel();
+      renderActions();
+      draw();
+      estimateDead(S.state).then(function (dead) {
+        if (!S || !S.state || S.state.status !== 'play' || S.state.seq !== seq) {
+          if (S) S.scoreBusy = false;
+          return;
+        }
+        S.scoreBusy = false;
+        confirmAutoScore(mv, dead, false);
+      }).catch(function () {
+        if (!S || !S.state || S.state.status !== 'play' || S.state.seq !== seq) {
+          if (S) S.scoreBusy = false;
+          return;
+        }
+        S.scoreBusy = false;
+        confirmAutoScore(mv, [], true);
+      });
+      return;
+    }
+    commitNow(mv);
+  }
+
+  function confirmAutoScore(mv, dead, failed) {
+    if (!S || S.state.status !== 'play') return;
+    S.pendingDead = dead;
+    applyGoScore(dead, true);
+    if (failed) {
+      S.score.autoFailed = true;
+      renderScorePanel();
+    }
+    var sc = S.score;
+    B8.confirm(
+      (failed ? '自动判断死子不可用，先按没有死子算。\n\n' : '自动标出死子 ' + dead.length + ' 颗。\n\n') +
+      '黑 ' + fmtNum(sc.black) + ' : 白 ' + fmtNum(sc.white) + '\n\n' +
+      '确认终局？取消可以先点棋盘上的棋子改死子，再点「停一手」。',
+      { title: '自动点目', okText: '确认终局', cancelText: '先改死子' }
+    ).then(function (ok) {
+      if (!S || S.state.status !== 'play') return;
+      if (ok) {
+        S.pendingDead = (S.score && S.score.dead) ? S.score.dead.slice() : dead.slice();
+        commitNow(mv);
+      } else {
+        S.pendingDead = null;
+        toast('点棋子改死子；改完再点「停一手」终局');
+      }
+    });
+  }
+
+  function commitNow(mv) {
     if (isOfflineLocal()) commitLocal(mv);
     else commitOnline(mv);
+  }
+
+  function applyPendingDead(ns) {
+    if (S && S.pendingDead && ns && ns.status === 'over' && ns.reason === 'score') {
+      ns.score = E.scoreGo(ns, S.pendingDead);
+      ns.score.dead = S.pendingDead.slice();
+      ns.score.auto = true;
+      ns.winner = ns.score.winner;
+    }
+    if (S) S.pendingDead = null;
   }
 
   function commitLocal(mv) {
@@ -1164,13 +1241,16 @@
     S.stack.push(prev);
     if (S.stack.length > 80) S.stack.shift();
     var ns = E.apply(prev, mv);
+    applyPendingDead(ns);
+    var keepScore = !!(mv.pass && ns.status === 'play' && S.score && S.score.seq === prev.seq);
     S.moves.push({ seq: ns.seq, color: prev.turn, move: mv, at: Date.now() });
     S.texts.push({ seq: ns.seq, color: prev.turn, text: text });
     S.state = ns;
     reviewReset();
     animateMove(prev, mv, ns);
     S.sel = null; S.targets = []; S.drPath = null; S.drMoves = null;
-    S.score = null;
+    if (keepScore) S.score.seq = ns.seq;
+    else { S.score = null; S.scoreBusy = false; }
     if (S.timed && ns.status === 'over') S.clockRunning = 0;
     saveLocal();
     renderAll();
@@ -1182,13 +1262,16 @@
     var prev = S.state;
     var text = E.text(prev, mv);
     var ns = E.apply(prev, mv);
+    applyPendingDead(ns);
+    var keepScore = !!(mv.pass && ns.status === 'play' && S.score && S.score.seq === prev.seq);
     S.moves.push({ seq: ns.seq, color: prev.turn, move: mv, at: Date.now() });
     S.texts.push({ seq: ns.seq, color: prev.turn, text: text });
     S.state = ns;
     reviewReset();
     animateMove(prev, mv, ns);
     S.sel = null; S.targets = []; S.drPath = null; S.drMoves = null;
-    S.score = null;
+    if (keepScore) S.score.seq = ns.seq;
+    else { S.score = null; S.scoreBusy = false; }
     S.offer = null;
     S.undo = null;
     S.moveBusy = true;
@@ -1266,6 +1349,12 @@
     var py = (ev.clientY - rect.top) * (renderer.h / rect.height);
     var idx = renderer.g.hit(px, py);
     if (idx < 0) return;
+    if (S.scoreBusy) { toast('正在点目，稍等一下'); return; }
+    if (S.score && S.state.game === 'go' && S.state.status === 'play') {
+      if (S.state.board[idx]) toggleDeadChain(idx);
+      else toast('点棋子可以标死子；再点「退出点目」回到对局');
+      return;
+    }
     if (!myTurn()) {
       if (S.mode === 'local') return;
       toast(S.seat === 0 ? '观战中，不能走子' : (S.room && S.room.status === 'wait' ? '还在等对手' : '还没轮到你'));
@@ -1614,7 +1703,7 @@
     show('bd-undo', playing && canOperate);
     show('bd-end', playing && localRoom && S.seat > 0);
     show('bd-restart', playing && (offline || (localRoom && S.seat > 0)));
-    show('bd-score', st.game === 'go');
+    show('bd-score', st.game === 'go' && st.status === 'play');
     show('bd-chat', online);
     show('bd-cancel-room', !!(S.isHost && S.room && S.room.status === 'wait'));
     var passBtn = $('bd-pass');
@@ -1706,6 +1795,8 @@
       S.undo = null;
       S.undoBusy = false;
       S.anim = null;
+      S.score = null;
+      S.scoreBusy = false;
       reviewReset();
       S.resultShown = false;
       trimMovesTo(res.seq || 0);
@@ -1979,11 +2070,189 @@
     initChat();
   }
 
+  function loadDeadstones() {
+    var build = encodeURIComponent(window.B8_BUILD || '');
+    if (window.B8DeadStones) {
+      try { window.B8DeadStones.useFetch('assets/games/deadstones_bg.wasm?v=' + build); } catch (e) {}
+      return Promise.resolve(window.B8DeadStones);
+    }
+    if (DEADSTONES.loading) return DEADSTONES.loading;
+    DEADSTONES.loading = new Promise(function (resolve, reject) {
+      var done = false;
+      var timer = setTimeout(function () {
+        if (done) return;
+        done = true;
+        reject(new Error('auto-score timeout'));
+      }, 10000);
+      var sc = document.createElement('script');
+      sc.src = 'assets/games/deadstones.js?v=' + build;
+      sc.async = true;
+      sc.onload = function () {
+        if (done) return;
+        if (!window.B8DeadStones) {
+          done = true;
+          clearTimeout(timer);
+          reject(new Error('auto-score missing'));
+          return;
+        }
+        try {
+          window.B8DeadStones.useFetch('assets/games/deadstones_bg.wasm?v=' + build);
+        } catch (e) {}
+        done = true;
+        clearTimeout(timer);
+        resolve(window.B8DeadStones);
+      };
+      sc.onerror = function () {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        reject(new Error('auto-score load failed'));
+      };
+      document.head.appendChild(sc);
+    });
+    return DEADSTONES.loading;
+  }
+
+  function goMatrix(st) {
+    var n = st.size, rows = [];
+    for (var y = 0; y < n; y++) {
+      var row = [];
+      for (var x = 0; x < n; x++) {
+        var v = st.board[y * n + x];
+        row.push(v === 1 ? 1 : (v === 2 ? -1 : 0));
+      }
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function estimateDead(st) {
+    return loadDeadstones().then(function (lib) {
+      return lib.guess(goMatrix(st), { finished: true, iterations: 100 });
+    }).then(function (verts) {
+      var n = st.size, out = [], seen = {};
+      for (var i = 0; i < verts.length; i++) {
+        var v = verts[i];
+        var idx = v[1] * n + v[0];
+        if (st.board[idx] && !seen[idx]) {
+          seen[idx] = 1;
+          out.push(idx);
+        }
+      }
+      out.sort(function (a, b) { return a - b; });
+      return out;
+    });
+  }
+
+  function goChainAt(st, idx) {
+    var color = st.board[idx];
+    if (!color) return [];
+    var n = st.size, seen = {}, stack = [idx], out = [];
+    seen[idx] = 1;
+    while (stack.length) {
+      var cur = stack.pop();
+      out.push(cur);
+      var x = cur % n, y = (cur - x) / n;
+      var nb = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]];
+      for (var k = 0; k < 4; k++) {
+        var nx = nb[k][0], ny = nb[k][1];
+        if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+        var j = ny * n + nx;
+        if (st.board[j] !== color || seen[j]) continue;
+        seen[j] = 1;
+        stack.push(j);
+      }
+    }
+    return out;
+  }
+
+  function applyGoScore(dead, auto) {
+    if (!S || !S.state || S.state.game !== 'go') return;
+    dead = (dead || []).slice();
+    var sc = E.scoreGo(S.state, dead);
+    sc.dead = dead;
+    sc.seq = S.state.seq;
+    sc.auto = !!auto;
+    S.score = sc;
+    S.scoreBusy = false;
+    renderScorePanel();
+    renderActions();
+    draw();
+  }
+
+  function toggleGoScore() {
+    if (!S || !S.state || S.state.game !== 'go') return;
+    if (S.scoreBusy) { toast('正在点目，稍等一下'); return; }
+    if (S.score) {
+      S.score = null;
+      S.scoreBusy = false;
+      renderScorePanel();
+      renderActions();
+      draw();
+      return;
+    }
+    if (S.state.status !== 'play') { toast('对局已经结束'); return; }
+    var seq = S.state.seq;
+    S.scoreBusy = true;
+    S.score = null;
+    renderScorePanel();
+    renderActions();
+    draw();
+    estimateDead(S.state).then(function (dead) {
+      if (!S || !S.state || S.state.game !== 'go' || S.state.status !== 'play' || S.state.seq !== seq) return;
+      applyGoScore(dead, true);
+      toast(dead.length
+        ? '自动标出 ' + dead.length + ' 颗死子；点错的棋子可以直接点一下改正'
+        : '没有找到死子；有争议的话点棋子手动标死子');
+    }).catch(function () {
+      if (!S || !S.state || S.state.game !== 'go' || S.state.seq !== seq) return;
+      applyGoScore([], false);
+      S.score.autoFailed = true;
+      renderScorePanel();
+      toast('自动判断死子不可用：可以点棋子手动标死子');
+    });
+  }
+
+  function toggleDeadChain(idx) {
+    if (!S || !S.score || S.state.game !== 'go') return;
+    var chain = goChainAt(S.state, idx);
+    if (!chain.length) return;
+    var dead = (S.score.dead || []).slice();
+    var has = false;
+    for (var i = 0; i < chain.length; i++) {
+      if (dead.indexOf(chain[i]) >= 0) { has = true; break; }
+    }
+    if (has) {
+      dead = dead.filter(function (v) { return chain.indexOf(v) < 0; });
+    } else {
+      dead = dead.concat(chain);
+    }
+    applyGoScore(dead, false);
+  }
+
   function renderScorePanel() {
     var n = $('bd-scorepanel');
+    var btn = $('bd-score');
     if (!n) return;
-    if (!S.score) { n.hidden = true; n.innerHTML = ''; return; }
+    if (!S) {
+      n.hidden = true;
+      n.innerHTML = '';
+      return;
+    }
+    if (S.scoreBusy) {
+      n.hidden = false;
+      n.innerHTML = '<p class="bd-score-note">正在自动判断死子…</p>';
+      if (btn) { btn.disabled = true; btn.textContent = '点目中…'; }
+      return;
+    }
+    if (!S.score) {
+      n.hidden = true;
+      n.innerHTML = '';
+      if (btn) { btn.disabled = false; btn.textContent = '点目'; }
+      return;
+    }
     var sc = S.score;
+    var deadCount = sc.dead ? sc.dead.length : 0;
     n.hidden = false;
     n.innerHTML =
       '<div class="bd-score-line">' +
@@ -1992,10 +2261,15 @@
         '<span>贴目 <b>7.5</b></span>' +
         '<span>' + (sc.winner === 0 ? '和棋' : (sc.winner === 1 ? '黑胜 ' : '白胜 ') + fmtNum(Math.abs(sc.diff))) + '</span>' +
       '</div>' +
-      '<p class="bd-score-note">中国规则数子：黑 ' + sc.stones[0] + ' 子 + ' + sc.terr[0] + ' 空；白 ' +
+      '<p class="bd-score-note">' +
+        (sc.autoFailed ? '自动判断不可用，已按无死子计分；请点棋盘上的棋子手动标死子。'
+          : (sc.auto ? '自动' : '手动') + '判定死子 ' + deadCount + ' 颗；' +
+            (deadCount ? '点一下标错的棋子可以改回来。' : '有死子的话，点棋盘上的棋子标上。')) +
+        ' 中国规则数子：黑 ' + sc.stones[0] + ' 子 + ' + sc.terr[0] + ' 空；白 ' +
         sc.stones[1] + ' 子 + ' + sc.terr[1] + ' 空 + 贴 7.5。' +
         (sc.neutral ? ' 单官 / 未定 ' + sc.neutral + ' 点。' : '') +
-        ' 死子请先提干净再点目。</p>';
+      '</p>';
+    if (btn) { btn.disabled = false; btn.textContent = '退出点目'; }
   }
 
   function fmtNum(n) {
@@ -2174,10 +2448,19 @@
     var r = cell * 0.47;
     var anim = opts.anim;
     var skip = anim && anim.kind === 'drop' ? anim.to : -1;
+    var deadSet = {};
+    (opts.dead || []).forEach(function (di) { deadSet[di] = 1; });
     for (var j = 0; j < n * n; j++) {
       if (!st.board[j] || j === skip) continue;
       var pp = P(j);
-      drawStone(ctx, pp[0], pp[1], r, st.board[j], p);
+      if (deadSet[j]) {
+        ctx.globalAlpha = 0.3;
+        drawStone(ctx, pp[0], pp[1], r, st.board[j], p);
+        ctx.globalAlpha = 1;
+        deadCross(ctx, pp[0], pp[1], r);
+      } else {
+        drawStone(ctx, pp[0], pp[1], r, st.board[j], p);
+      }
     }
     if (anim && anim.kind === 'drop') {
       var dt = easeOut(animT(anim));
@@ -2212,6 +2495,17 @@
       }
     };
     this.point = P;
+  }
+
+  function deadCross(ctx, x, y, r) {
+    ctx.strokeStyle = 'rgba(193,82,47,.95)';
+    ctx.lineWidth = Math.max(1.5, r * 0.16);
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.5, y - r * 0.5);
+    ctx.lineTo(x + r * 0.5, y + r * 0.5);
+    ctx.moveTo(x + r * 0.5, y - r * 0.5);
+    ctx.lineTo(x - r * 0.5, y + r * 0.5);
+    ctx.stroke();
   }
 
   function drawGomoku(ctx, st, opts) {
@@ -2650,6 +2944,7 @@
       targets: S.reviewing ? [] : S.targets,
       flip: S.flip,
       score: S.reviewing ? null : S.score,
+      dead: S.reviewing ? [] : ((S.score && S.score.dead) ? S.score.dead : []),
       anim: S.reviewing ? null : S.anim
     });
     renderer.draw(!!S.anim && !S.reviewing);
@@ -2931,17 +3226,7 @@
     });
 
     $('bd-score').addEventListener('click', function () {
-      if (!S || S.game !== 'go') return;
-      if (S.score) {
-        S.score = null;
-        renderScorePanel();
-        draw();
-        return;
-      }
-      S.score = E.scoreGo(S.state);
-      renderScorePanel();
-      draw();
-      toast('点目：黑 ' + fmtNum(S.score.black) + '，白 ' + fmtNum(S.score.white));
+      toggleGoScore();
     });
 
     $('bd-pass').addEventListener('click', function () {

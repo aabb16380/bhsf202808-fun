@@ -86,8 +86,21 @@
     return { board: b, caps: caps, ko: ko };
   }
 
-  function goScore(st) {
-    var size = st.size, b = st.board, n = size * size;
+  function goScore(st, dead) {
+    var size = st.size, n = size * size;
+    var b = st.board.slice();
+    var deadSet = null, deadList = [];
+    if (dead && dead.length) {
+      deadSet = {};
+      for (var d = 0; d < dead.length; d++) {
+        var di = dead[d];
+        if (di >= 0 && di < n && b[di]) {
+          deadSet[di] = 1;
+          deadList.push(di);
+          b[di] = 0;
+        }
+      }
+    }
     var seen = {}, points = [], terr = [0, 0], neutral = 0, i, j;
     for (i = 0; i < n; i++) points.push(b[i] || 0);
     for (i = 0; i < n; i++) {
@@ -95,7 +108,8 @@
       var stack = [i], region = [], borders = {}, k;
       seen[i] = 1;
       while (stack.length) {
-        var cur = stack.pop(); region.push(cur);
+        var cur = stack.pop();
+        region.push(cur);
         var p = un(cur, size), x = p[0], y = p[1];
         var nb = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]];
         for (k = 0; k < 4; k++) {
@@ -122,7 +136,7 @@
     var white = stones[1] + terr[1] + komi;
     return {
       black: black, white: white, stones: stones, terr: terr, neutral: neutral,
-      komi: komi, diff: black - white, points: points,
+      komi: komi, diff: black - white, points: points, dead: deadList,
       winner: black > white ? 1 : (white > black ? 2 : 0)
     };
   }
@@ -1031,7 +1045,7 @@
     return (st.turn === 1 ? g.first : g.second) + '走棋';
   };
 
-  E.scoreGo = function (st) { return goScore(st); };
+  E.scoreGo = function (st, dead) { return goScore(st, dead); };
   E.checkIndex = function (st) {
     if (!st || st.status !== 'play') return -1;
     if (st.game === 'chess') {
