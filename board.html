@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；6 位邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g49" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g49">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g49">
+<link rel="icon" href="assets/favicon.png?v=20261101g50" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g50">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g50">
 <script>
-window.B8_BUILD = '20261101g49';
+window.B8_BUILD = '20261101g50';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g49"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g49">
+<script src="assets/theme.js?v=20261101g50"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g50">
 </head>
 
 <body data-site="fun">
@@ -33,8 +33,17 @@ window.B8_TEST = !!window.B8_T;
       <span>FIVE BOARDS</span>
     </div>
     <div class="header-tools bd-head-right">
-      <button class="bd-icon" id="theme-btn" type="button" aria-pressed="false">夜间：自动</button>
       <span class="bd-who" id="bd-who"></span>
+      <div class="more-wrap">
+        <button class="icon-btn more-btn" id="more-menu-btn" type="button" aria-haspopup="true"
+                aria-expanded="false" aria-label="更多">⋯</button>
+        <div class="more-menu" id="more-menu" hidden>
+          <button id="theme-btn" type="button" aria-pressed="false">夜间：自动</button>
+          <a href="index.html">返回游乐场</a>
+          <a href="board.html">棋类大厅</a>
+          <a href="changelog.html">更新日志</a>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -318,7 +327,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g49' + T;
+  var V = '?v=20261101g50' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

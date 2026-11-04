@@ -243,6 +243,12 @@
     var group = document.createElement('div');
     group.className = 'menu-group';
 
+    // 夜间模式放菜单第一项（它原来藏在跨站链接后面）
+    var theme = menu.querySelector('#theme-btn');
+    if (theme && theme.parentNode === menu) {
+      menu.insertBefore(theme, menu.firstChild);
+    }
+
     var links = B8.qsa('a', nav);
     links.forEach(function (a) {
       var copy = document.createElement('a');
@@ -254,7 +260,11 @@
     });
 
     if (group.childNodes.length) {
-      menu.insertBefore(group, menu.firstChild);
+      if (theme && theme.parentNode === menu) {
+        menu.insertBefore(group, theme.nextSibling);
+      } else {
+        menu.insertBefore(group, menu.firstChild);
+      }
       var sep = document.createElement('span');
       sep.className = 'menu-sep';
       menu.insertBefore(sep, group.nextSibling);

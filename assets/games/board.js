@@ -548,10 +548,11 @@
       clock: { 1: minutes * 60000, 2: minutes * 60000 },
       clockStart: 0, clockRunning: 0,
       sel: null, targets: [], drPath: null, drMoves: null,
-      score: null, flip: false, resultShown: false,
+      score: null, flip: false, resultShown: false, moveBusy: false,
       room: null, code: '', playerNames: [name1 || '玩家一', name2 || '玩家二']
     };
     writeJSON(LOCAL_KEY, null);
+    closePromo();
     showGame();
     renderAll();
     toast('本机对局：' + S.playerNames[0] + ' 对 ' + S.playerNames[1] + '，' + GAMES[g].first + '先走');
@@ -787,8 +788,8 @@
       mode: 'online', code: code, room: room || null, state: state || null,
       game: room ? room.game : '', size: room ? room.size : 0,
       timed: room ? !!room.timed : false, minutes: room ? room.minutes : 0,
-      seat: seat || 0, me: null, watchers: 0, offer: null, undo: null, undoPrompted: null,
-      commentsHidden: false, moves: [], texts: [],
+      seat: seat || 0, me: null, watchers: 0, offer: null, undo: null, undoPrompted: null, undoBusy: false,
+      commentsHidden: false, moves: [], texts: [], moveBusy: false,
       sel: null, targets: [], drPath: null, drMoves: null,
       score: null, flip: seat === 2, resultShown: false, watch: !!opts.watch,
       isHost: false
@@ -797,6 +798,7 @@
     try {
       if (history.replaceState) history.replaceState(null, '', 'board.html?code=' + code);
     } catch (e) {}
+    closePromo();
     showGame();
     renderAll();
     syncNow();
@@ -813,6 +815,7 @@
   function backToLobby() {
     stopChat();
     clearTimeout(NET.timer);
+    closePromo();
     S = null;
     show('bd-game', false);
     show('bd-lobby', true);
@@ -894,6 +897,7 @@
     S.watchers = res.watchers || 0;
     S.offer = res.offer || null;
     S.undo = res.undo || null;
+    S.undoBusy = false;
     if (!S.undo) S.undoPrompted = null;
     if (res.me && res.me.seat) S.seat = res.me.seat;
     S.commentsHidden = !!res.comments_hidden;
@@ -1010,6 +1014,7 @@
   }
 
   function commit(mv) {
+    if (S && S.moveBusy) { toast('上一步还在同步，稍等一下'); return; }
     if (!myTurn()) {
       if (S.mode === 'online' && S.seat === 0) toast('观战中，不能走子');
       else if (S.mode === 'online' && S.room && S.room.status === 'wait') toast('还在等对手进来');
@@ -1057,6 +1062,7 @@
     S.score = null;
     S.offer = null;
     S.undo = null;
+    S.moveBusy = true;
     renderAll();
 
     setNet('', '发送中');
@@ -1069,6 +1075,7 @@
       p_state: ns
     }).then(function (res) {
       if (!S || S.mode !== 'online' || S.code !== myCode) return;
+      S.moveBusy = false;
       if (res && res.timeout) {
         S.moves.pop();
         S.texts.pop();
@@ -1094,6 +1101,7 @@
     }).catch(function (err) {
       if (!S || S.mode !== 'online' || S.code !== myCode) return;
       // 回滚这一步，避免自己的棋盘和服务器越走越远
+      S.moveBusy = false;
       S.moves.pop();
       S.texts.pop();
       S.state = prev;
@@ -1443,8 +1451,8 @@
     if (drawBtn) drawBtn.disabled = !!(S.offer && !S.offer.mine);
     var undoBtn = $('bd-undo');
     if (undoBtn) {
-      if (isVsRoom()) undoBtn.disabled = !(st.turn !== S.seat) || !!S.undo;
-      else undoBtn.disabled = !playing;
+      if (isVsRoom()) undoBtn.disabled = S.undoBusy || S.moveBusy || !(st.turn !== S.seat) || !!S.undo;
+      else undoBtn.disabled = S.undoBusy || S.moveBusy || !playing;
       undoBtn.title = isVsRoom()
         ? '只有刚走完的一方能申请悔棋，要对方同意'
         : '撤回上一手';
@@ -1523,11 +1531,13 @@
       S.room = res.room;
       S.state = res.state;
       S.undo = null;
+      S.undoBusy = false;
       S.resultShown = false;
       trimMovesTo(res.seq || 0);
       renderAll();
       toast('已悔一步');
     }).catch(function (err) {
+      if (S) S.undoBusy = false;
       toast((err && err.message) || '悔棋没成功');
       syncNow();
     });
@@ -1563,9 +1573,11 @@
       if (res && res.state) S.state = res.state;
       S.undo = null;
       S.undoPrompted = null;
+      S.undoBusy = false;
       renderAll();
       toast(act === 'cancel' ? '已撤回悔棋申请' : '已拒绝悔棋');
     }).catch(function (err) {
+      if (S) S.undoBusy = false;
       toast((err && err.message) || '操作没成功');
       syncNow();
     });
@@ -1588,29 +1600,40 @@
   function requestUndo() {
     if (!S || !S.state || S.state.status !== 'play') return;
     if (isOfflineLocal()) return;
+    S.undoBusy = true;
     var btn = $('bd-undo');
     if (btn) btn.disabled = true;
     if (isLocalRoom()) {
       var prev = stateBeforeLast();
-      if (!prev) { toast('还没有可以悔的棋'); if (btn) btn.disabled = false; return; }
+      if (!prev) {
+        S.undoBusy = false;
+        toast('还没有可以悔的棋');
+        renderActions();
+        return;
+      }
       B8.confirm('悔棋？撤回上一手，棋盘回到上一步。', { title: '悔棋', okText: '悔一步' })
         .then(function (ok) {
           if (ok) acceptUndo(prev);
-          else if (btn) btn.disabled = false;
+          else { S.undoBusy = false; renderActions(); }
         });
       return;
     }
-    if (!isVsRoom()) { if (btn) btn.disabled = false; return; }
-    if (S.undo && S.undo.mine) return;
+    if (!isVsRoom()) { S.undoBusy = false; renderActions(); return; }
+    if (S.undo && S.undo.mine) { S.undoBusy = false; return; }
     B8.sb.rpc('b8_board_undo', { p_token: token(), p_code: S.code, p_accept: false })
       .then(function (res) {
+        if (!S) return;
         if (res && res.room) S.room = res.room;
+        S.undo = { mine: true, name: (B8.auth && B8.auth.nick && B8.auth.nick()) || '我' };
+        S.undoBusy = false;
+        renderAll();
         toast('悔棋请求已发给对方');
         syncNow();
       })
       .catch(function (err) {
-        if (btn) btn.disabled = false;
+        S.undoBusy = false;
         toast((err && err.message) || '申请悔棋失败');
+        renderActions();
         syncNow();
       });
   }
@@ -2453,10 +2476,7 @@
      十二、按钮
      ============================================================ */
   function bind() {
-    $('bd-back').addEventListener('click', function (e) {
-      e.preventDefault();
-      backToLobby();
-    });
+    // 「← 游乐场」是普通链接，直接回首页；「← 离开」才回大厅
     $('bd-back-lobby').addEventListener('click', backToLobby);
     $('bd-exit').addEventListener('click', backToLobby);
     $('bd-refresh').addEventListener('click', function () { loadLists(true); toast('已刷新'); });
