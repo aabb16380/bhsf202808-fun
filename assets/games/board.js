@@ -923,7 +923,6 @@
       seat: seat || 0, me: null, watchers: 0, presence: null, offer: null, undo: null, undoPrompted: null, undoBusy: false, anim: null,
       scoreBusy: false, pendingDead: null,
       spectators: [], spectatorError: '',
-      uploadQueue: [], uploadBusy: false, uploadTimer: 0, uploadWarned: false,
       reviewing: false, reviewIndex: 0, reviewStates: null, reviewState: null,
       commentsHidden: false, moves: [], texts: [], moveBusy: false,
       sel: null, targets: [], drPath: null, drMoves: null,
@@ -948,11 +947,7 @@
     setTimeout(draw, 60);
   }
 
-  function backToLobby(force) {
-    if (!force && S && S.uploadQueue && S.uploadQueue.length) {
-      toast('还有几步在上传，稍等一下再离开');
-      return;
-    }
+  function backToLobby() {
     SPECT.last = 0;
     SPECT.inflight = false;
     show('bd-spectators', false);
@@ -1015,12 +1010,12 @@
       if (NET.fails === 1 && window.console) console.warn('[board] 同步失败', err);
       if (dbMissing(err)) {
         toast('对局数据库还没初始化：先跑一遍 supabase/install-all.sql');
-        backToLobby(true);
+        backToLobby();
         return;
       }
       if (/房间不存在|已解散|自动关闭|等人超过/.test(err.message || '')) {
         toast((err && err.message) || '这个房间不存在或已经关闭');
-        backToLobby(true);
+        backToLobby();
         return;
       }
       schedulePoll(Math.min(6000, 1800 * NET.fails));
@@ -1258,55 +1253,6 @@
     else commitOnline(mv);
   }
 
-  function flushLocalUploads() {
-    if (!S || !isLocalRoom() || S.uploadBusy || S.uploadTimer) return;
-    if (!S.uploadQueue || !S.uploadQueue.length) return;
-    var job = S.uploadQueue[0];
-    var myCode = S.code;
-    S.uploadBusy = true;
-    B8.sb.rpc('b8_board_move', {
-      p_token: token(),
-      p_code: S.code,
-      p_seq: job.seq,
-      p_move: job.move,
-      p_state: job.state
-    }).then(function (res) {
-      if (!S || S.code !== myCode) { if (S) S.uploadBusy = false; return; }
-      S.uploadBusy = false;
-      if (res && res.timeout) {
-        S.uploadQueue = [];
-        S.room = res.room;
-        S.state = res.state;
-        S.resultShown = true;
-        renderAll();
-        showResult();
-        return;
-      }
-      S.uploadQueue.shift();
-      if (res && res.room) S.room = res.room;
-      if (!S.uploadQueue.length && res && res.state && S.state && res.state.seq === S.state.seq) {
-        S.state = res.state;
-      }
-      setNet('', '已同步');
-      renderAll();
-      if (S.uploadQueue.length) flushLocalUploads();
-      else syncNow();
-    }).catch(function () {
-      if (!S || S.code !== myCode) { if (S) S.uploadBusy = false; return; }
-      S.uploadBusy = false;
-      if (!S.uploadWarned) {
-        S.uploadWarned = true;
-        toast('本地对局上传有点慢，先继续下，后台会补上');
-      }
-      clearTimeout(S.uploadTimer);
-      S.uploadTimer = setTimeout(function () {
-        if (!S) return;
-        S.uploadTimer = 0;
-        flushLocalUploads();
-      }, 1500);
-    });
-  }
-
   function applyPendingDead(ns) {
     if (S && S.pendingDead && ns && ns.status === 'over' && ns.reason === 'score') {
       ns.score = E.scoreGo(ns, S.pendingDead);
@@ -1366,15 +1312,6 @@
     S.undo = null;
     S.moveBusy = true;
     renderAll();
-
-    if (isLocalRoom()) {
-      S.moveBusy = false;
-      S.uploadQueue.push({ seq: ns.seq, move: mv, state: ns });
-      setNet('', '已排队');
-      renderAll();
-      flushLocalUploads();
-      return;
-    }
 
     setNet('', '发送中');
     var myCode = S.code;
@@ -1868,10 +1805,6 @@
     show('bd-undo', playing && canOperate);
     show('bd-end', playing && localRoom && S.seat > 0);
     show('bd-restart', playing && (offline || (localRoom && S.seat > 0)));
-    var pendingUpload = !!(S.uploadQueue && S.uploadQueue.length);
-    var endBtn = $('bd-end'); if (endBtn) endBtn.disabled = pendingUpload;
-    var restartBtn = $('bd-restart'); if (restartBtn) restartBtn.disabled = pendingUpload;
-    var resignBtn = $('bd-resign'); if (resignBtn) resignBtn.disabled = pendingUpload;
     show('bd-score', st.game === 'go' && (st.status === 'play' || S.reviewing));
     show('bd-chat', online);
     show('bd-cancel-room', !!(S.isHost && S.room && S.room.status === 'wait'));
@@ -1882,7 +1815,7 @@
     var undoBtn = $('bd-undo');
     if (undoBtn) {
       if (isVsRoom()) undoBtn.disabled = S.undoBusy || S.moveBusy || !(st.turn !== S.seat) || !!S.undo;
-      else undoBtn.disabled = S.undoBusy || S.moveBusy || (S.uploadQueue && S.uploadQueue.length > 0) || !playing;
+      else undoBtn.disabled = S.undoBusy || S.moveBusy || !playing;
       undoBtn.title = isVsRoom()
         ? '只有刚走完的一方能申请悔棋，要对方同意'
         : '撤回上一手';
@@ -2035,7 +1968,6 @@
 
   function requestUndo() {
     if (!S || !S.state || S.state.status !== 'play') return;
-    if (S.uploadQueue && S.uploadQueue.length) { toast('还有几步在上传，稍等一下'); return; }
     if (isOfflineLocal()) return;
     S.undoBusy = true;
     var btn = $('bd-undo');
@@ -3475,8 +3407,7 @@
 
     $('bd-restart').addEventListener('click', function () {
       if (!S) return;
-      if (S.uploadQueue && S.uploadQueue.length) { toast('还有几步在上传，稍等一下'); return; }
-      var localRoom = isLocalRoom();
+        var localRoom = isLocalRoom();
       if (!isOfflineLocal() && !localRoom) return;
       B8.confirm(localRoom ? '重开一局？现在这盘会记成和棋，然后开一盘新的。' : '重开一局？现在这盘会被清掉。',
         { title: '重开', danger: true, okText: '重开' }).then(function (ok) {
@@ -3500,8 +3431,7 @@
 
     $('bd-end').addEventListener('click', function () {
       if (!S || !isLocalRoom() || S.state.status !== 'play') return;
-      if (S.uploadQueue && S.uploadQueue.length) { toast('还有几步在上传，稍等一下'); return; }
-      B8.confirm('结束这盘本机对局？会按和棋记进历史。', { title: '结束对局', danger: true, okText: '结束' })
+        B8.confirm('结束这盘本机对局？会按和棋记进历史。', { title: '结束对局', danger: true, okText: '结束' })
         .then(function (ok) {
           if (!ok) return;
           B8.sb.rpc('b8_board_end_local', { p_token: token(), p_code: S.code, p_winner: 3 })
@@ -3519,8 +3449,7 @@
 
     $('bd-resign').addEventListener('click', function () {
       if (!S) return;
-      if (S.uploadQueue && S.uploadQueue.length) { toast('还有几步在上传，稍等一下'); return; }
-      var localGame = isOfflineLocal() || isLocalRoom();
+        var localGame = isOfflineLocal() || isLocalRoom();
       var loser = S.state.turn;
       var msg = localGame
         ? '现在轮到 ' + nameForColor(loser) + ' 走。确定让 ' + nameForColor(loser) + ' 认输？'
@@ -3690,12 +3619,6 @@
     renderHistory();
     renderer = new Renderer($('bd-canvas'));
     bind();
-    window.addEventListener('beforeunload', function (e) {
-      if (S && S.uploadQueue && S.uploadQueue.length) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    });
     document.addEventListener('keydown', function (e) {
       if (!S || !S.reviewing) return;
       var tag = (e.target && e.target.tagName) || '';
