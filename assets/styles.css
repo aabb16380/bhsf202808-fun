@@ -2340,6 +2340,34 @@ html[data-mode="night"] .b2048.is-plain .b2048-in.vbig {
   -webkit-tap-highlight-color: transparent;
 }
 
+.schulte-board { position: relative; }
+
+.schulte.is-waiting .schulte-cell {
+  color: transparent;
+  pointer-events: none;
+}
+
+.schulte-start {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  text-align: center;
+  background: color-mix(in srgb, var(--card) 82%, transparent);
+  border-radius: 4px;
+}
+
+.schulte-start span {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.schulte-start[hidden] { display: none; }
 .schulte-cell:hover { border-color: var(--ink-2); }
 
 .schulte-cell.is-done {
@@ -4133,4 +4161,8 @@ body.mo-super-open { overflow: hidden; }
   .poll-ballot-who { grid-column: 1 / span 4; }
   .poll-ballot-select { grid-column: 1 / span 2; }
   .poll-ballot-weight { grid-column: 3; }
+}
+.poll-ballot-more {
+  display: block;
+  margin: 10px 0 0 auto;
 }
