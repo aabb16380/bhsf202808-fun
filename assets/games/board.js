@@ -875,6 +875,11 @@
         backToLobby();
         return;
       }
+      if (/房间不存在|已解散/.test(err.message || '')) {
+        toast('这个房间不存在或已经解散');
+        backToLobby();
+        return;
+      }
       schedulePoll(Math.min(6000, 1800 * NET.fails));
     });
   }
@@ -899,7 +904,7 @@
     S.undo = res.undo || null;
     S.undoBusy = false;
     if (!S.undo) S.undoPrompted = null;
-    if (res.me && res.me.seat) S.seat = res.me.seat;
+    if (res.me) S.seat = res.me.seat || 0;
     S.commentsHidden = !!res.comments_hidden;
 
     var undoBack = !!(res.room && res.room.seq < prevSeq);
@@ -1524,6 +1529,7 @@
   }
 
   function acceptUndo(prev) {
+    if (!S) return;
     B8.sb.rpc('b8_board_undo', {
       p_token: token(), p_code: S.code, p_accept: true, p_state: prev
     }).then(function (res) {
@@ -1565,6 +1571,7 @@
   }
 
   function declineUndo(act) {
+    if (!S) return;
     B8.sb.rpc('b8_board_undo', {
       p_token: token(), p_code: S.code, p_accept: false
     }).then(function (res) {
