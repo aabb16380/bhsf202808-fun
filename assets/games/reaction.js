@@ -1,5 +1,5 @@
 /* ============================================================
-   专注方格（Schulte Table）· 八班游乐场版
+   舒尔特方格（Schulte Table）· 八班游乐场版
    ------------------------------------------------------------
    25 个数字打乱，从 1 点到 25。计时用 performance.now()，
    比 Date.now() 稳；展示精确到毫秒，但只在收表那一刻定稿。
@@ -14,7 +14,7 @@
   var KEY_BEST = 'b8.reaction.best';
   var N = 25;
 
-  var grid, timeEl, bestEl, progressEl, stateEl, noteEl, restartBtn;
+  var grid, timeEl, bestEl, progressEl, stateEl, noteEl, restartBtn, startBtn, startWrap;
   var next = 1;
   var started = false;
   var finished = false;
@@ -97,13 +97,7 @@
 
   function onCell(e) {
     var btn = e.currentTarget;
-    if (finished) return;
-
-    if (!started) {
-      started = true;
-      startAt = now();
-      ticker = setInterval(tick, 50);
-    }
+    if (finished || !started) return;
 
     var v = Number(btn.getAttribute('data-v'));
 
@@ -174,7 +168,19 @@
       });
   }
 
-  /* ---------- 重开 ---------- */
+  /* ---------- 开始 / 重开 ---------- */
+  function startGame() {
+    if (started || finished) return;
+    started = true;
+    startAt = now();
+    if (ticker) clearInterval(ticker);
+    ticker = setInterval(tick, 50);
+    tick();
+    if (grid) grid.classList.remove('is-waiting');
+    if (startWrap) startWrap.hidden = true;
+    setState('开始！从 1 按顺序点到 25。', true);
+  }
+
   function reset() {
     gen++;
     if (ticker) { clearInterval(ticker); ticker = 0; }
@@ -188,10 +194,12 @@
     submitted = false;
 
     build();
+    if (grid) grid.classList.add('is-waiting');
+    if (startWrap) startWrap.hidden = false;
     if (timeEl) timeEl.textContent = '0.000 s';
     if (progressEl) progressEl.textContent = '0 / ' + N;
     if (bestEl) bestEl.textContent = best ? fmt(best, 2) : '—';
-    setState('从 1 开始，按顺序点到 25；计时从第一下点击开始。', false);
+    setState('点「开始」，数字出现时计时立刻走。', false);
     setNote(writable
       ? '完成后自动上传：上榜分 = 60000 − 毫秒（越快越靠前）。'
       : '成绩只存在这台设备：数据库还没接，暂时不上传排行榜。');
@@ -207,9 +215,13 @@
     stateEl = B8.qs('#gschulte-state');
     noteEl = B8.qs('#gschulte-note');
     restartBtn = B8.qs('#gschulte-restart');
+    startBtn = B8.qs('#gschulte-start');
+    startWrap = B8.qs('#gschulte-start-wrap');
 
     best = readBest();
     B8.on(restartBtn, 'click', reset);
+    if (startBtn) B8.on(startBtn, 'click', startGame);
+    reset();
 
     if (!B8.auth) return;
     B8.auth.ready(function (st) {
