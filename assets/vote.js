@@ -20,6 +20,11 @@
   var peopleLoaded = false;
   var people = [];
   var activeBallotPoll = 0;
+  var activeBallot = null;
+
+  function errText(err, fallback) {
+    return err && err.message ? err.message : fallback;
+  }
 
   var els = {};
 
@@ -206,12 +211,38 @@
     card.appendChild(ul);
 
     if (superUser) {
+      var actions = document.createElement('div');
+      actions.className = 'poll-super-actions';
+
       var superBtn = document.createElement('button');
       superBtn.type = 'button';
       superBtn.className = 'btn ghost sm poll-super-btn';
       superBtn.textContent = '看投票明细';
       B8.on(superBtn, 'click', function () { showBallots(p); });
-      card.appendChild(superBtn);
+      actions.appendChild(superBtn);
+
+      var delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'btn ghost sm poll-super-danger';
+      delBtn.textContent = '删除投票';
+      B8.on(delBtn, 'click', function () {
+        B8.confirm('删除「' + (p.title || '这个投票') + '」？候选人、票数都会一起删掉，不能恢复。', {
+          title: '删除投票',
+          ok: '删除',
+          danger: true
+        }).then(function (yes) {
+          if (!yes) return;
+          B8.sb.rpc('b8_poll_delete', { p_token: token, p_poll_id: p.id }).then(function () {
+            B8.toast('投票已删除');
+            loadPolls();
+          }).catch(function (err) {
+            B8.toast(errText(err, '删除失败'));
+          });
+        });
+      });
+      actions.appendChild(delBtn);
+
+      card.appendChild(actions);
     }
 
     return card;
@@ -361,11 +392,15 @@
   function showBallots(p) {
     if (!superUser) return;
     activeBallotPoll = p.id;
+    activeBallot = p;
     if (els.ballotsModal) els.ballotsModal.hidden = false;
-    if (els.ballotsList) els.ballotsList.textContent = '正在读…';
     if (els.ballotsTitle) els.ballotsTitle.textContent = '投票明细 · ' + p.title;
+    loadBallots(p.id);
+  }
 
-    B8.sb.rpc('b8_poll_ballots', { p_token: token, p_poll_id: p.id }).then(function (rows) {
+  function loadBallots(pollId) {
+    if (els.ballotsList) els.ballotsList.textContent = '正在读…';
+    B8.sb.rpc('b8_poll_ballots', { p_token: token, p_poll_id: pollId }).then(function (rows) {
       renderBallots(Array.isArray(rows) ? rows : []);
     }).catch(function (err) {
       if (els.ballotsList) els.ballotsList.textContent =
@@ -381,25 +416,94 @@
       return;
     }
 
-    var byVoter = {};
-    rows.forEach(function (r) {
-      var k = r.voter_no || r.voter_name;
-      if (!byVoter[k]) byVoter[k] = { name: r.voter_name || r.voter_no, votes: [] };
-      byVoter[k].votes.push(r);
-    });
+    var head = document.createElement('p');
+    head.className = 'form-note';
+    head.textContent = '可以直接改候选人和票数，或删掉这一条。改完立刻生效。';
+    els.ballotsList.appendChild(head);
 
-    Object.keys(byVoter).forEach(function (k) {
-      var g = byVoter[k];
+    var poll = activeBallot;
+    var cands = poll && Array.isArray(poll.candidates) ? poll.candidates : [];
+    var max = poll && poll.max_votes ? poll.max_votes : 20;
+
+    rows.forEach(function (r) {
       var box = document.createElement('div');
-      box.className = 'poll-ballot-row';
-      var name = document.createElement('b');
-      name.textContent = g.name;
-      box.appendChild(name);
-      var list = document.createElement('span');
-      list.textContent = g.votes.map(function (v) {
-        return v.candidate_name + (v.weight > 1 ? ' ×' + v.weight : '');
-      }).join('、');
-      box.appendChild(list);
+      box.className = 'poll-ballot-row poll-ballot-edit';
+
+      var who = document.createElement('b');
+      who.className = 'poll-ballot-who';
+      who.textContent = r.voter_name || r.voter_no;
+      box.appendChild(who);
+
+      var sel = document.createElement('select');
+      sel.className = 'poll-ballot-select';
+      cands.forEach(function (c) {
+        var o = document.createElement('option');
+        o.value = c.id;
+        o.textContent = c.name;
+        if (String(c.id) === String(r.candidate_id)) o.selected = true;
+        sel.appendChild(o);
+      });
+      box.appendChild(sel);
+
+      var weight = document.createElement('input');
+      weight.type = 'number';
+      weight.className = 'poll-ballot-weight';
+      weight.min = '1';
+      weight.max = String(max);
+      weight.value = String(r.weight || 1);
+      box.appendChild(weight);
+
+      var save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'btn ghost sm';
+      save.textContent = '保存';
+      B8.on(save, 'click', function () {
+        var cid = Number(sel.value);
+        var w = Number(weight.value);
+        if (!cid || !w || w < 1 || w > max) {
+          B8.toast('票数要在 1–' + max + ' 之间');
+          return;
+        }
+        B8.sb.rpc('b8_poll_ballot_update', {
+          p_token: token,
+          p_vote_id: r.vote_id,
+          p_candidate_id: cid,
+          p_weight: w
+        }).then(function () {
+          B8.toast('已修改');
+          loadBallots(activeBallotPoll);
+          loadPolls();
+        }).catch(function (err) {
+          B8.toast(errText(err, '修改失败'));
+        });
+      });
+      box.appendChild(save);
+
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'btn ghost sm poll-ballot-del';
+      del.textContent = '删除';
+      B8.on(del, 'click', function () {
+        B8.confirm('删掉 ' + (r.voter_name || r.voter_no) + ' 这一条投票？', {
+          title: '删除投票记录',
+          ok: '删除',
+          danger: true
+        }).then(function (yes) {
+          if (!yes) return;
+          B8.sb.rpc('b8_poll_ballot_delete', {
+            p_token: token,
+            p_vote_id: r.vote_id
+          }).then(function () {
+            B8.toast('已删除');
+            loadBallots(activeBallotPoll);
+            loadPolls();
+          }).catch(function (err) {
+            B8.toast(errText(err, '删除失败'));
+          });
+        });
+      });
+      box.appendChild(del);
+
       els.ballotsList.appendChild(box);
     });
   }
@@ -407,8 +511,8 @@
   function closeBallots() {
     if (els.ballotsModal) els.ballotsModal.hidden = true;
     activeBallotPoll = 0;
+    activeBallot = null;
   }
-
   /* ============================================================
      启动
      ============================================================ */
