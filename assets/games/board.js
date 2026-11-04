@@ -946,7 +946,11 @@
     setTimeout(draw, 60);
   }
 
-  function backToLobby() {
+  function backToLobby(force) {
+    if (!force && S && S.uploadQueue && S.uploadQueue.length) {
+      toast('还有几步在上传，稍等一下再离开');
+      return;
+    }
     SPECT.last = 0;
     SPECT.inflight = false;
     show('bd-spectators', false);
@@ -1009,12 +1013,12 @@
       if (NET.fails === 1 && window.console) console.warn('[board] 同步失败', err);
       if (dbMissing(err)) {
         toast('对局数据库还没初始化：先跑一遍 supabase/install-all.sql');
-        backToLobby();
+        backToLobby(true);
         return;
       }
       if (/房间不存在|已解散|自动关闭|等人超过/.test(err.message || '')) {
         toast((err && err.message) || '这个房间不存在或已经关闭');
-        backToLobby();
+        backToLobby(true);
         return;
       }
       schedulePoll(Math.min(6000, 1800 * NET.fails));
@@ -3684,6 +3688,12 @@
     renderHistory();
     renderer = new Renderer($('bd-canvas'));
     bind();
+    window.addEventListener('beforeunload', function (e) {
+      if (S && S.uploadQueue && S.uploadQueue.length) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
     document.addEventListener('keydown', function (e) {
       if (!S || !S.reviewing) return;
       var tag = (e.target && e.target.tagName) || '';
