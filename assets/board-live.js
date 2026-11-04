@@ -1,7 +1,7 @@
 /* ============================================================
-   B8 · 首页「正在对弈」
+   B8 · 首页「正在对弈」（膜宙金按钮下方）
    ------------------------------------------------------------
-   读 b8_board_list（不需要登录），把还在进行 / 等人的棋局放在首页。
+   读 b8_board_list（不需要登录），把还在进行 / 等人的棋局放在首屏。
    点「观战」进 board.html?code=…&watch=1；等人的局点「加入」直接坐下。
    数据库没初始化（函数 404）就整块隐藏，不影响首页其它内容。
    ============================================================ */
@@ -9,11 +9,11 @@
   'use strict';
 
   var B8 = window.B8;
-  var section = document.getElementById('board-live');
-  if (!B8 || !section) return;
+  var mount = document.getElementById('hero-live');
+  if (!B8 || !mount) return;
 
-  var listEl = document.getElementById('board-live-list');
-  var noteEl = document.getElementById('board-live-note');
+  var listEl = document.getElementById('hero-live-list');
+  var countEl = document.getElementById('hero-live-count');
   var timer = 0;
   var loading = false;
   var missing = false;
@@ -29,45 +29,42 @@
 
   function esc(s) { return B8.esc(s == null ? '' : s); }
 
-  function timeText(r) {
-    return r.timed ? r.minutes + ' 分钟' : '不限时';
-  }
-
-  function card(r) {
+  function row(r) {
     var g = GAMES[r.game] || { name: r.game, icon: '棋', colors: ['先', '后'] };
-    var a = document.createElement('a');
     var waiting = r.status === 'wait';
-    a.className = 'board-live-card' + (waiting ? ' is-wait' : '');
+    var a = document.createElement('a');
+    a.className = 'hero-live-row' + (waiting ? ' is-wait' : '');
     a.href = 'board.html?code=' + encodeURIComponent(r.code) + (waiting ? '' : '&watch=1');
 
-    var glyph = document.createElement('span');
-    glyph.className = 'blc-glyph';
-    glyph.textContent = g.icon;
+    var icon = document.createElement('span');
+    icon.className = 'hlr-icon';
+    icon.textContent = g.icon;
 
     var main = document.createElement('span');
-    main.className = 'blc-main';
-    var title = document.createElement('b');
-    title.textContent = g.name;
-    var players = document.createElement('span');
-    players.className = 'blc-players';
-    players.innerHTML =
+    main.className = 'hlr-main';
+    var line = document.createElement('b');
+    line.textContent = g.name + (r.mode === 'local' ? ' · 本机' : '');
+    var who = document.createElement('span');
+    who.className = 'hlr-who';
+    who.innerHTML =
       esc(r.host_name || '房主') + ' <i>' + g.colors[r.host_color - 1] + '</i>' +
       ' <em>vs</em> ' +
       (r.guest_name ? esc(r.guest_name) + ' <i>' + g.colors[r.guest_color - 1] + '</i>' : '<u>空位</u>');
+    main.appendChild(line);
+    main.appendChild(who);
+
     var meta = document.createElement('span');
-    meta.className = 'blc-meta';
-    meta.textContent = (waiting ? '等人' : (r.seq || 0) + ' 手') + ' · ' + timeText(r) +
-      (r.watchers ? ' · ' + r.watchers + ' 人观战' : '');
-    main.appendChild(title);
-    main.appendChild(players);
-    main.appendChild(meta);
+    meta.className = 'hlr-meta';
+    meta.textContent = (waiting ? '等人' : (r.seq || 0) + ' 手') +
+      (r.watchers ? ' · ' + r.watchers + ' 人看' : '');
 
     var go = document.createElement('span');
-    go.className = 'blc-go';
+    go.className = 'hlr-go';
     go.textContent = waiting ? '加入 →' : '观战 →';
 
-    a.appendChild(glyph);
+    a.appendChild(icon);
     a.appendChild(main);
+    a.appendChild(meta);
     a.appendChild(go);
     return a;
   }
@@ -76,16 +73,12 @@
     if (!listEl) return;
     listEl.innerHTML = '';
     if (!rooms.length) {
-      section.hidden = true;
+      mount.hidden = true;
       return;
     }
-    section.hidden = false;
-    rooms.slice(0, 6).forEach(function (r) {
-      listEl.appendChild(card(r));
-    });
-    if (noteEl) {
-      noteEl.textContent = '共 ' + rooms.length + ' 盘在桌上 · 每 20 秒刷新';
-    }
+    mount.hidden = false;
+    rooms.slice(0, 3).forEach(function (r) { listEl.appendChild(row(r)); });
+    if (countEl) countEl.textContent = rooms.length + ' 盘在桌上';
   }
 
   function schedule() {
@@ -96,10 +89,7 @@
 
   function load() {
     if (missing || loading) return;
-    if (document.hidden) {
-      schedule();
-      return;
-    }
+    if (document.hidden) { schedule(); return; }
     if (!B8.sb || !B8.sb.ready) return;
     loading = true;
     lastLoad = Date.now();
@@ -113,10 +103,9 @@
         render(rooms);
       })
       .catch(function (err) {
-        // 函数还没建（SQL 没跑）就把这一块收起来，别在首页留个报错
         if (err && (err.status === 404 || /does not exist|schema cache|Could not find the function/i.test(err.message || ''))) {
           missing = true;
-          section.hidden = true;
+          mount.hidden = true;
           return;
         }
         if (window.console) console.warn('[board-live] 读取失败', err);
@@ -131,6 +120,5 @@
     if (!document.hidden && Date.now() - lastLoad > 5000) load();
   });
 
-  // 首页先把其它内容画完，再补这一块
   setTimeout(load, 700);
 })();

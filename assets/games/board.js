@@ -55,7 +55,8 @@
   ];
   var GO_SIZES = [9, 13, 19];
 
-  var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, rooms: [], mine: [], dbMissing: false, busy: false };
+  var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, rooms: [], mine: [], history: [], dbMissing: false, busy: false };
+  var LS = { mode1: 'no', mode2: 'no', name1: '', name2: '', resolved1: '', resolved2: '', timer1: 0, timer2: 0 };
   var S = null;                 // 当前对局
   var NET = { offset: 0, lastOk: 0, fails: 0, timer: 0, inflight: false, again: false, lastPing: 0, started: 0 };
   var CHAT = { timer: 0, lastId: 0, inflight: false, items: [], hidden: false };
@@ -97,6 +98,11 @@
   function isNight() {
     return document.documentElement.getAttribute('data-mode') === 'night';
   }
+
+  function isOfflineLocal() { return !!(S && S.mode === 'local'); }
+  function isLocalRoom() { return !!(S && S.room && S.room.mode === 'local'); }
+  function isLocalGame() { return isOfflineLocal() || isLocalRoom(); }
+  function isVsRoom() { return !!(S && S.room && S.room.mode !== 'local'); }
 
   /* ============================================================
      一、登录门
@@ -234,8 +240,8 @@
     });
 
     txt('bd-create-note', LOBBY.minutes > 0
-      ? '每方 ' + LOBBY.minutes + ' 分钟，超时判负。走完一步才轮到对方计时。'
-      : '不限时。网络对局会生成 6 位邀请码。');
+      ? '每方 ' + LOBBY.minutes + ' 分钟，超时判负。本机对局也会进历史。'
+      : '不限时。本机对局会先问两位棋手，也会公开、进历史。');
   }
 
   function fmtAgo(iso) {
@@ -263,7 +269,8 @@
     var main = document.createElement('div');
     main.className = 'bd-room-main';
     var title = document.createElement('b');
-    title.textContent = GAMES[r.game].name + (r.status === 'wait' ? ' · 等人' : ' · 对弈中');
+    title.textContent = (r.mode === 'local' ? '本机 · ' : '') + GAMES[r.game].name +
+      (r.status === 'wait' ? ' · 等人' : ' · 对弈中');
     var sub = document.createElement('span');
     var watchers = r.watchers ? ' · <i>' + r.watchers + ' 人观战</i>' : '';
     sub.innerHTML = B8.esc(roomPlayers(r)) + ' · ' + (r.seq || 0) + ' 手' +
@@ -341,6 +348,68 @@
     show('bd-live-dot', (LOBBY.rooms || []).some(function (r) { return r.status === 'play'; }));
   }
 
+  function historyReason(r) {
+    return {
+      checkmate: '将死', stalemate: '困毙', resign: '认输', timeout: '超时',
+      agreement: '和棋', manual: '手动结束', score: '点目', 'no-move': '无子可动',
+      nomove: '无子可动', five: '五连', full: '棋盘填满'
+    }[r.reason] || '';
+  }
+
+  function historyResult(r) {
+    if (!r.winner || r.winner === 3) return '和棋';
+    var name = r.winner === r.host_color ? r.host_name : r.guest_name;
+    return (name || '') + ' 胜';
+  }
+
+  function renderHistory() {
+    var box = $('bd-history');
+    if (!box) return;
+    box.innerHTML = '';
+    var list = LOBBY.history || [];
+    if (!list.length) {
+      var empty = document.createElement('p');
+      empty.className = 'bd-empty';
+      empty.textContent = LOBBY.dbMissing ? '数据库还没初始化。' : '还没有下完的棋。下完一盘，这里会留下棋谱。';
+      box.appendChild(empty);
+      return;
+    }
+    list.forEach(function (r) {
+      var info = GAMES[r.game] || { name: r.game, colors: ['先', '后'] };
+      var row = document.createElement('div');
+      row.className = 'bd-hrow';
+      var main = document.createElement('div');
+      main.className = 'bd-hrow-main';
+      var title = document.createElement('b');
+      title.innerHTML = B8.esc(info.name) + (r.mode === 'local' ? '<i>本机</i>' : '');
+      var sub = document.createElement('span');
+      var when = B8.dateTime ? B8.dateTime(r.ended_at || r.created_at) : '';
+      var why = historyReason(r);
+      sub.innerHTML = B8.esc(r.host_name || '房主') + ' <em>(' + info.colors[r.host_color - 1] + ')</em> vs ' +
+        B8.esc(r.guest_name || '对手') + ' <em>(' + info.colors[r.guest_color - 1] + ')</em> · ' +
+        B8.esc(when) + ' · ' + (r.seq || 0) + ' 手' + (why ? ' · ' + why : '');
+      main.appendChild(title);
+      main.appendChild(sub);
+
+      var res = document.createElement('span');
+      res.className = 'bd-hrow-result' + (!r.winner || r.winner === 3 ? ' is-draw' : '');
+      res.textContent = historyResult(r);
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'bd-room-btn';
+      btn.textContent = '看棋谱';
+      btn.addEventListener('click', function () {
+        openRoom(r.code, { watch: true });
+      });
+
+      row.appendChild(main);
+      row.appendChild(res);
+      row.appendChild(btn);
+      box.appendChild(row);
+    });
+  }
+
   function loadLists(force) {
     if (!B8.sb || !B8.sb.ready) return;
     if (Date.now() - lastLobbyLoad < 2500 && !force) return;
@@ -350,8 +419,10 @@
         LOBBY.dbMissing = false;
         LOBBY.rooms = res.rooms || [];
         LOBBY.mine = res.mine || [];
+        LOBBY.history = res.history || [];
         show('bd-db-note', false);
         renderRooms();
+        renderHistory();
         renderGameLiveDots();
       })
       .catch(function (err) {
@@ -359,6 +430,7 @@
           LOBBY.dbMissing = true;
           LOBBY.rooms = [];
           LOBBY.mine = [];
+          LOBBY.history = [];
           var n = $('bd-db-note');
           if (n) {
             n.hidden = false;
@@ -366,6 +438,7 @@
               '在那之前，本机对局照常能玩。';
           }
           renderRooms();
+          renderHistory();
         } else if (window.console) {
           console.warn('[board] 大厅加载失败', err);
         }
@@ -449,6 +522,7 @@
       game: S.game,
       size: S.size,
       minutes: S.minutes,
+      names: S.playerNames,
       moves: S.moves.map(function (m) { return m.move; }),
       clock: S.timed ? [Math.round(S.clock[1]), Math.round(S.clock[2])] : null,
       savedAt: Date.now(),
@@ -456,22 +530,195 @@
     });
   }
 
-  function startLocal() {
-    var g = LOBBY.game;
-    var st = E.init(g, { size: LOBBY.size });
+  function startOfflineLocal(name1, name2, settings) {
+    var g = settings ? settings.game : LOBBY.game;
+    var size = settings ? settings.size : LOBBY.size;
+    var minutes = settings ? settings.minutes : LOBBY.minutes;
+    var st = E.init(g, { size: size });
     S = {
       mode: 'local', game: g, size: st.size,
-      minutes: LOBBY.minutes, timed: LOBBY.minutes > 0,
+      minutes: minutes, timed: minutes > 0,
       state: st, moves: [], texts: [], stack: [],
-      clock: { 1: LOBBY.minutes * 60000, 2: LOBBY.minutes * 60000 },
+      clock: { 1: minutes * 60000, 2: minutes * 60000 },
       clockStart: 0, clockRunning: 0,
       sel: null, targets: [], drPath: null, drMoves: null,
-      score: null, flip: false, resultShown: false
+      score: null, flip: false, resultShown: false,
+      room: null, code: '', playerNames: [name1 || '玩家一', name2 || '玩家二']
     };
     writeJSON(LOCAL_KEY, null);
     showGame();
     renderAll();
-    toast('本机对局：两个人轮流点，' + GAMES[g].first + '先走');
+    toast('本机对局：' + S.playerNames[0] + ' 对 ' + S.playerNames[1] + '，' + GAMES[g].first + '先走');
+  }
+
+  function startLocal() { startOfflineLocal('玩家一', '玩家二'); }
+
+  /* ---------- 本机对局也上传成一个公开房间 ---------- */
+  function createLocalRoom(name1, name2, settings) {
+    if (!logged()) {
+      toast('没登录：这盘只在本机，不会保存，别人也看不到');
+      startOfflineLocal(name1, name2, settings);
+      return;
+    }
+    if (!B8.sb || !B8.sb.ready) {
+      startOfflineLocal(name1, name2, settings);
+      toast('没接数据库：这盘只在本机');
+      return;
+    }
+    if (LOBBY.busy) return;
+    LOBBY.busy = true;
+    var g = settings ? settings.game : LOBBY.game;
+    var size = settings ? settings.size : LOBBY.size;
+    var minutes = settings ? settings.minutes : LOBBY.minutes;
+    var st = E.init(g, { size: size });
+    B8.sb.rpc('b8_board_create_local', {
+      p_token: token(),
+      p_game: g,
+      p_state: st,
+      p_timed: minutes > 0,
+      p_minutes: minutes > 0 ? minutes : 0,
+      p_name1: name1,
+      p_name2: name2
+    }).then(function (res) {
+      enterOnline(res.room.code, res.room, res.state, res.seat || 1, { localRoom: true });
+      toast('本机对局已开：别人也能观战，下完进历史');
+    }).catch(function (err) {
+      var msg = (err && err.message) || '开局没成功';
+      if (dbMissing(err)) {
+        B8.confirm('数据库还没初始化，这盘只能在本机下：不会保存，别人也看不到。\n\n要继续吗？', {
+          title: '只在本机', okText: '继续下'
+        }).then(function (ok) { if (ok) startOfflineLocal(name1, name2, settings); });
+      } else {
+        toast(msg);
+      }
+    }).then(function () {
+      LOBBY.busy = false;
+    });
+  }
+
+  /* ---------- 本机开局：先填两位棋手 ---------- */
+  function setSetupMode(p, mode) {
+    if (p === 1) LS.mode1 = mode; else LS.mode2 = mode;
+    if (p === 1) LS.resolved1 = ''; else LS.resolved2 = '';
+    var btns = document.querySelectorAll('.bd-setup-modes .chip[data-p="' + p + '"]');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].setAttribute('aria-pressed', btns[i].getAttribute('data-mode') === mode ? 'true' : 'false');
+    }
+    var input = $('bd-name' + p);
+    var hint = $('bd-hint' + p);
+    if (!input) return;
+    input.value = '';
+    if (mode === 'no') {
+      input.setAttribute('inputmode', 'numeric');
+      input.setAttribute('placeholder', p === 1 ? '8 位学号（如 20282307）' : '8 位学号（如 20282308）');
+    } else {
+      input.removeAttribute('inputmode');
+      input.setAttribute('placeholder', p === 1 ? '给自己起个昵称（12 字以内）' : '给对手起个昵称（12 字以内）');
+    }
+    if (hint) { hint.textContent = ''; hint.className = 'bd-setup-hint'; }
+  }
+
+  function lookupPlayer(p) {
+    var input = $('bd-name' + p);
+    var hint = $('bd-hint' + p);
+    if (!input || !hint) return;
+    var mode = p === 1 ? LS.mode1 : LS.mode2;
+    var raw = (input.value || '').trim();
+    if (p === 1) LS.resolved1 = ''; else LS.resolved2 = '';
+    if (mode !== 'no') return;
+    if (raw.length !== 8) {
+      hint.textContent = raw ? '学号是 8 位数字' : '';
+      hint.className = 'bd-setup-hint' + (raw ? ' is-bad' : '');
+      return;
+    }
+    hint.textContent = '查花名册中…';
+    hint.className = 'bd-setup-hint';
+    B8.sb.rpc('b8_member_lookup', { p_token: token(), p_no: raw })
+      .then(function (res) {
+        if ((p === 1 ? LS.mode1 : LS.mode2) !== 'no') return;
+        if ((input.value || '').trim() !== raw) return;
+        if (res && res.ok && res.name) {
+          if (p === 1) LS.resolved1 = res.name; else LS.resolved2 = res.name;
+          hint.textContent = '✓ ' + res.name;
+          hint.className = 'bd-setup-hint is-good';
+        } else {
+          hint.textContent = '花名册里没有这个学号，可以切到「昵称」';
+          hint.className = 'bd-setup-hint is-bad';
+        }
+      })
+      .catch(function () {
+        hint.textContent = '查不到（没登录或数据库没连上？），可以切到「昵称」';
+        hint.className = 'bd-setup-hint is-bad';
+      });
+  }
+
+  function openLocalSetup() {
+    var no = (B8.auth && B8.auth.no && B8.auth.no()) || '';
+    var nick = (B8.auth && B8.auth.nick && B8.auth.nick()) || '';
+    LS.mode1 = no ? 'no' : 'nick';
+    LS.mode2 = 'no';
+    LS.resolved1 = '';
+    LS.resolved2 = '';
+    var i1 = $('bd-name1'), i2 = $('bd-name2');
+    i1.value = no || nick || '';
+    i2.value = '';
+    var h1 = $('bd-hint1'), h2 = $('bd-hint2');
+    h1.textContent = ''; h1.className = 'bd-setup-hint';
+    h2.textContent = ''; h2.className = 'bd-setup-hint';
+    var modes1 = document.querySelectorAll('.bd-setup-modes .chip[data-p="1"]');
+    for (var i = 0; i < modes1.length; i++) {
+      modes1[i].setAttribute('aria-pressed', modes1[i].getAttribute('data-mode') === LS.mode1 ? 'true' : 'false');
+    }
+    var modes2 = document.querySelectorAll('.bd-setup-modes .chip[data-p="2"]');
+    for (var j = 0; j < modes2.length; j++) {
+      modes2[j].setAttribute('aria-pressed', modes2[j].getAttribute('data-mode') === 'no' ? 'true' : 'false');
+    }
+    if (LS.mode1 === 'no') {
+      i1.setAttribute('inputmode', 'numeric');
+      i1.setAttribute('placeholder', '8 位学号（如 20282307）');
+      lookupPlayer(1);
+    } else {
+      i1.removeAttribute('inputmode');
+      i1.setAttribute('placeholder', '给自己起个昵称（12 字以内）');
+    }
+    i2.setAttribute('inputmode', 'numeric');
+    i2.setAttribute('placeholder', '8 位学号（如 20282308）');
+    show('bd-local-setup', true);
+    setTimeout(function () { (no ? i2 : i1).focus(); }, 80);
+  }
+
+  function closeLocalSetup() {
+    show('bd-local-setup', false);
+  }
+
+  function submitLocalSetup() {
+    var names = [];
+    for (var p = 1; p <= 2; p++) {
+      var mode = p === 1 ? LS.mode1 : LS.mode2;
+      var input = $('bd-name' + p);
+      var hint = $('bd-hint' + p);
+      var raw = (input.value || '').trim();
+      if (mode === 'no') {
+        var resolved = p === 1 ? LS.resolved1 : LS.resolved2;
+        if (!resolved) {
+          hint.textContent = raw.length === 8 ? '这个学号没查到姓名，可以切到「昵称」' : '请填 8 位学号，或切到「昵称」';
+          hint.className = 'bd-setup-hint is-bad';
+          input.focus();
+          return;
+        }
+        names.push(resolved);
+      } else {
+        if (!raw || raw.length > 12) {
+          hint.textContent = raw ? '昵称最多 12 个字' : '请填一个昵称';
+          hint.className = 'bd-setup-hint is-bad';
+          input.focus();
+          return;
+        }
+        names.push(raw);
+      }
+    }
+    closeLocalSetup();
+    createLocalRoom(names[0], names[1]);
   }
 
   function resumeLocal(saved) {
@@ -501,7 +748,9 @@
       },
       clockStart: 0, clockRunning: 0,
       sel: null, targets: [], drPath: null, drMoves: null,
-      score: null, flip: false, resultShown: false
+      score: null, flip: false, resultShown: false,
+      room: null, code: '',
+      playerNames: saved.names || ['玩家一', '玩家二']
     };
     var tmp = E.init(saved.game, { size: saved.size });
     for (var i = 0; i < moves.length; i++) {
@@ -532,7 +781,7 @@
       mode: 'online', code: code, room: room || null, state: state || null,
       game: room ? room.game : '', size: room ? room.size : 0,
       timed: room ? !!room.timed : false, minutes: room ? room.minutes : 0,
-      seat: seat || 0, me: null, watchers: 0, offer: null,
+      seat: seat || 0, me: null, watchers: 0, offer: null, undo: null, undoPrompted: null,
       commentsHidden: false, moves: [], texts: [],
       sel: null, targets: [], drPath: null, drMoves: null,
       score: null, flip: seat === 2, resultShown: false, watch: !!opts.watch,
@@ -628,6 +877,7 @@
     NET.offset = (res.server_now || Date.now()) - Date.now();
     setNet('', '已同步');
 
+    var prevSeq = S.room ? S.room.seq : -1;
     S.room = res.room;
     S.me = res.me;
     S.game = res.room.game;
@@ -637,12 +887,16 @@
     S.isHost = !!(res.me && res.me.host);
     S.watchers = res.watchers || 0;
     S.offer = res.offer || null;
+    S.undo = res.undo || null;
+    if (!S.undo) S.undoPrompted = null;
     if (res.me && res.me.seat) S.seat = res.me.seat;
     S.commentsHidden = !!res.comments_hidden;
 
-    if (res.state && (!S.state || res.state.seq >= S.state.seq || res.room.status === 'over')) {
+    var undoBack = !!(res.room && res.room.seq < prevSeq);
+    if (res.state && (!S.state || res.state.seq >= S.state.seq || undoBack || res.room.status === 'over')) {
       S.state = res.state;
     }
+    if (undoBack) trimMovesTo(res.room.seq);
 
     var changed = false;
     (res.moves || []).forEach(function (m) {
@@ -673,10 +927,30 @@
     }
 
     renderAll();
+    promptUndoRequest();
 
     if (S.room.status === 'play' && S.state.status === 'play' && S.state.turn === S.seat) {
       // 轮到自己时不用轮询得那么勤，但仍要保持连接
     }
+  }
+
+  function promptUndoRequest() {
+    if (!S || !S.room || !S.undo || S.undo.mine || S.seat === 0) return;
+    if (S.state.status !== 'play') return;
+    if (S.undoPrompted === S.undo.by) return;
+    S.undoPrompted = S.undo.by;
+    var name = S.undo.name || '对方';
+    B8.confirm(name + ' 想悔一步，撤回上一手。\n\n同意吗？', {
+      title: '悔棋请求', okText: '同意悔棋', cancelText: '拒绝'
+    }).then(function (ok) {
+      if (!S || !S.undo || S.undo.mine) return;
+      if (ok) {
+        var prev = stateBeforeLast();
+        if (prev) acceptUndo(prev);
+      } else {
+        declineUndo();
+      }
+    });
   }
 
   function rebuildTexts() {
@@ -723,9 +997,10 @@
      六、走子
      ============================================================ */
   function myTurn() {
-    if (!S || S.state.status !== 'play') return false;
-    if (S.mode === 'local') return true;
-    return S.room && S.room.status === 'play' && S.seat > 0 && S.state.turn === S.seat;
+    if (!S || !S.state || S.state.status !== 'play') return false;
+    if (isOfflineLocal()) return true;
+    if (isLocalRoom()) return S.seat > 0 && S.room.status === 'play';
+    return !!(S.room && S.room.status === 'play' && S.seat > 0 && S.state.turn === S.seat);
   }
 
   function commit(mv) {
@@ -735,7 +1010,7 @@
       else if (S.mode === 'online') toast('还没轮到你');
       return;
     }
-    if (S.mode === 'local') commitLocal(mv);
+    if (isOfflineLocal()) commitLocal(mv);
     else commitOnline(mv);
   }
 
@@ -775,6 +1050,7 @@
     S.sel = null; S.targets = []; S.drPath = null; S.drMoves = null;
     S.score = null;
     S.offer = null;
+    S.undo = null;
     renderAll();
 
     setNet('', '发送中');
@@ -981,7 +1257,7 @@
 
   function nameForColor(c) {
     if (!S) return '';
-    if (S.mode === 'local') return c === 1 ? '玩家一' : '玩家二';
+    if (isOfflineLocal()) return S.playerNames ? S.playerNames[c - 1] : (c === 1 ? '玩家一' : '玩家二');
     var r = S.room;
     if (!r) return '';
     if (r.host_color === c) return r.host_name || '房主';
@@ -1000,6 +1276,7 @@
     renderPlayers();
     renderActions();
     renderOffer();
+    renderUndoBox();
     renderMoves();
     renderChat();
     renderStatus();
@@ -1015,9 +1292,10 @@
     var bits = [];
     if (S.mode === 'online') {
       bits.push('房间 ' + S.code);
-      bits.push(S.seat > 0 ? '你执' + colorName(S.seat) : '观战');
+      if (isLocalRoom()) bits.push('本机双人 · 房主操作两边');
+      else bits.push(S.seat > 0 ? '你执' + colorName(S.seat) : '观战');
     } else {
-      bits.push('本机双人');
+      bits.push('本机双人 · 不上传');
     }
     bits.push(S.timed ? '每方 ' + S.minutes + ' 分钟' : '不限时');
     if (S.room && S.room.status === 'wait') bits.push('等待对手');
@@ -1037,10 +1315,10 @@
     tag2.textContent = colorName(c2);
     $('bd-pl1').className = 'bd-player' +
       (st.status === 'play' && st.turn === c1 ? ' is-active' : '') +
-      (S.mode === 'online' && S.seat === c1 ? ' is-me' : '');
+      (S.mode === 'online' && !isLocalRoom() && S.seat === c1 ? ' is-me' : '');
     $('bd-pl2').className = 'bd-player' +
       (st.status === 'play' && st.turn === c2 ? ' is-active' : '') +
-      (S.mode === 'online' && S.seat === c2 ? ' is-me' : '');
+      (S.mode === 'online' && !isLocalRoom() && S.seat === c2 ? ' is-me' : '');
 
     txt('bd-name1', nameForColor(c1));
     txt('bd-name2', nameForColor(c2));
@@ -1068,6 +1346,7 @@
     if (S.state.status === 'over') return '已结束';
     if (S.room && S.room.status === 'wait') return '等对手';
     if (S.mode === 'local') return colorName(S.state.turn) + '走';
+    if (isLocalRoom()) return nameForColor(S.state.turn) + '走';
     if (S.seat === 0) return '观战 · ' + colorName(S.state.turn) + '走';
     return S.state.turn === S.seat ? '轮到你' : '对方思考';
   }
@@ -1126,7 +1405,8 @@
       return;
     }
     var s = '';
-    if (S.mode === 'local') s = E.turnText(st) + ' · 本机双人';
+    if (isOfflineLocal()) s = E.turnText(st) + ' · 本机双人';
+    else if (isLocalRoom()) s = E.turnText(st) + ' · 本机双人（' + nameForColor(1) + ' / ' + nameForColor(2) + '）';
     else if (S.seat === 0) s = '观战中 · ' + E.turnText(st);
     else s = st.turn === S.seat ? '<b>轮到你走</b>' : '对方思考中…';
     if (S.mode === 'online' && NET.lastOk) s += ' · ' + fmtAgo(new Date(NET.lastOk).toISOString()) + '同步';
@@ -1135,14 +1415,18 @@
 
   function renderActions() {
     var st = S.state;
-    var playing = st.status === 'play' && (S.mode === 'local' || (S.room && S.room.status === 'play'));
     var online = S.mode === 'online';
+    var localRoom = isLocalRoom();
+    var offline = isOfflineLocal();
+    var playing = st.status === 'play' && (offline || (S.room && S.room.status === 'play'));
     var isPlayer = !online || S.seat > 0;
-    show('bd-resign', playing && isPlayer);
-    show('bd-draw', playing && online && isPlayer);
-    show('bd-pass', playing && st.game === 'go' && isPlayer);
-    show('bd-undo', playing && !online);
-    show('bd-restart', !online);
+    var canOperate = offline || (isLocalRoom() && S.seat > 0) || (isVsRoom() && S.seat > 0);
+    show('bd-resign', playing && online && !localRoom && isPlayer);
+    show('bd-draw', playing && online && !localRoom && isPlayer);
+    show('bd-pass', playing && st.game === 'go' && canOperate);
+    show('bd-undo', playing && canOperate);
+    show('bd-end', playing && localRoom && S.seat > 0);
+    show('bd-restart', playing && (offline || (localRoom && S.seat > 0)));
     show('bd-score', st.game === 'go');
     show('bd-chat', online);
     show('bd-cancel-room', !!(S.isHost && S.room && S.room.status === 'wait'));
@@ -1150,12 +1434,20 @@
     if (passBtn) passBtn.disabled = !myTurn();
     var drawBtn = $('bd-draw');
     if (drawBtn) drawBtn.disabled = !!(S.offer && !S.offer.mine);
+    var undoBtn = $('bd-undo');
+    if (undoBtn) {
+      if (isVsRoom()) undoBtn.disabled = !(st.turn !== S.seat) || !!S.undo;
+      else undoBtn.disabled = !playing;
+      undoBtn.title = isVsRoom()
+        ? '只有刚走完的一方能申请悔棋，要对方同意'
+        : '撤回上一手';
+    }
   }
 
   function renderOffer() {
     var box = $('bd-offer');
     if (!box) return;
-    if (!S || S.mode !== 'online' || !S.offer || S.seat === 0) {
+    if (!S || S.mode !== 'online' || !S.offer || S.seat === 0 || S.state.status !== 'play') {
       box.hidden = true;
       box.innerHTML = '';
       return;
@@ -1202,6 +1494,114 @@
     });
   }
 
+  function stateBeforeLast() {
+    if (!S || !S.moves || !S.moves.length) return null;
+    try {
+      return E.replay(S.game, { size: S.size }, S.moves.slice(0, -1).map(function (m) { return m.move; }));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function trimMovesTo(seq) {
+    S.moves = S.moves.filter(function (m) { return m.seq <= seq; });
+    S.texts = S.texts.filter(function (t) { return t.seq <= seq; });
+  }
+
+  function acceptUndo(prev) {
+    B8.sb.rpc('b8_board_undo', {
+      p_token: token(), p_code: S.code, p_accept: true, p_state: prev
+    }).then(function (res) {
+      if (!S || !res || !res.room) return;
+      S.room = res.room;
+      S.state = res.state;
+      S.undo = null;
+      S.resultShown = false;
+      trimMovesTo(res.seq || 0);
+      renderAll();
+      toast('已悔一步');
+    }).catch(function (err) {
+      toast((err && err.message) || '悔棋没成功');
+      syncNow();
+    });
+  }
+
+  function renderUndoBox() {
+    var box = $('bd-undo-box');
+    if (!box) return;
+    if (!S || S.mode !== 'online' || !S.undo || S.seat === 0 || S.state.status !== 'play') {
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+    box.hidden = false;
+    if (S.undo.mine) {
+      box.innerHTML = '<b>已申请悔棋</b>，等对方同意。' +
+        '<div class="bd-offer-btns"><button type="button" class="bd-mini" data-undo="cancel">撤回</button></div>';
+    } else {
+      box.innerHTML = '<b>' + B8.esc(S.undo.name || '对方') + '</b> 想悔一步，同意吗？' +
+        '<div class="bd-offer-btns">' +
+        '<button type="button" class="bd-mini" data-undo="accept">同意悔棋</button>' +
+        '<button type="button" class="bd-mini" data-undo="decline">拒绝</button>' +
+        '</div>';
+    }
+  }
+
+  function declineUndo(act) {
+    B8.sb.rpc('b8_board_undo', {
+      p_token: token(), p_code: S.code, p_accept: false
+    }).then(function (res) {
+      if (!S) return;
+      if (res && res.room) S.room = res.room;
+      if (res && res.state) S.state = res.state;
+      S.undo = null;
+      S.undoPrompted = null;
+      renderAll();
+      toast(act === 'cancel' ? '已撤回悔棋申请' : '已拒绝悔棋');
+    }).catch(function (err) {
+      toast((err && err.message) || '操作没成功');
+      syncNow();
+    });
+  }
+
+  function onUndoClick(ev) {
+    var btn = ev.target;
+    if (!btn || !btn.getAttribute) return;
+    var act = btn.getAttribute('data-undo');
+    if (!act || !S || S.mode !== 'online') return;
+    if (act === 'accept') {
+      var prev = stateBeforeLast();
+      if (!prev) { toast('算不出上一手，刷新一下再试'); return; }
+      acceptUndo(prev);
+      return;
+    }
+    declineUndo(act);
+  }
+
+  function requestUndo() {
+    if (!S || !S.state || S.state.status !== 'play') return;
+    if (isOfflineLocal()) return;
+    if (isLocalRoom()) {
+      var prev = stateBeforeLast();
+      if (!prev) { toast('还没有可以悔的棋'); return; }
+      B8.confirm('悔棋？撤回上一手，棋盘回到上一步。', { title: '悔棋', okText: '悔一步' })
+        .then(function (ok) { if (ok) acceptUndo(prev); });
+      return;
+    }
+    if (!isVsRoom()) return;
+    if (S.undo && S.undo.mine) return;
+    B8.sb.rpc('b8_board_undo', { p_token: token(), p_code: S.code, p_accept: false })
+      .then(function (res) {
+        if (res && res.room) S.room = res.room;
+        toast('悔棋请求已发给对方');
+        syncNow();
+      })
+      .catch(function (err) {
+        toast((err && err.message) || '申请悔棋失败');
+        syncNow();
+      });
+  }
+
   function renderMoves() {
     var box = $('bd-moves');
     if (!box) return;
@@ -1210,7 +1610,7 @@
     if (!S.moves.length) {
       var li = document.createElement('li');
       li.className = 'bd-mv-empty';
-      li.textContent = '还没走子。' + (S.mode === 'local' ? '点棋盘开始。' : '');
+      li.textContent = '还没走子。' + (isLocalGame() ? '点棋盘开始。' : '');
       box.appendChild(li);
       return;
     }
@@ -1247,7 +1647,7 @@
     else if (S.resultShown) {
       show('bd-result', true);
       var info = resultInfo();
-      txt('bd-result-kicker', S.mode === 'local' ? '本机对局结束' : '对局结束 · ' + S.code);
+      txt('bd-result-kicker', isLocalGame() ? '本机对局结束' : '对局结束 · ' + S.code);
       txt('bd-result-title', info.title);
       txt('bd-result-sub', info.sub);
     }
@@ -1264,9 +1664,12 @@
     } else {
       title = '对局结束';
     }
-    if (S.mode === 'local') {
-      if (winner === 1 || winner === 2) title = colorName(winner) + ' 胜';
-      else title = '和棋';
+    if (isOfflineLocal()) {
+      if (winner === 1 || winner === 2) {
+        title = (S.playerNames ? S.playerNames[winner - 1] : colorName(winner)) + ' 胜';
+      } else {
+        title = '和棋';
+      }
     }
     if (!sub && r && r.reason === 'resign') sub = '认输';
     if (!sub && r && r.reason === 'timeout') sub = '超时';
@@ -2044,7 +2447,7 @@
     $('bd-back-lobby').addEventListener('click', backToLobby);
     $('bd-exit').addEventListener('click', backToLobby);
     $('bd-refresh').addEventListener('click', function () { loadLists(true); toast('已刷新'); });
-    $('bd-local').addEventListener('click', startLocal);
+    $('bd-local').addEventListener('click', openLocalSetup);
     $('bd-create').addEventListener('click', function () {
       createRoom({ game: LOBBY.game, size: LOBBY.size, minutes: LOBBY.minutes, color: LOBBY.color });
     });
@@ -2061,6 +2464,41 @@
     });
 
     $('bd-canvas').addEventListener('click', onBoardClick);
+
+    var modeChips = document.querySelectorAll('.bd-setup-modes .chip');
+    for (var mc = 0; mc < modeChips.length; mc++) {
+      modeChips[mc].addEventListener('click', function () {
+        setSetupMode(Number(this.getAttribute('data-p')), this.getAttribute('data-mode'));
+      });
+    }
+    [1, 2].forEach(function (p) {
+      var input = $('bd-name' + p);
+      if (!input) return;
+      input.addEventListener('input', function () {
+        var mode = p === 1 ? LS.mode1 : LS.mode2;
+        if (mode === 'no') {
+          this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);
+        }
+        if (p === 1) LS.resolved1 = ''; else LS.resolved2 = '';
+        var hint = $('bd-hint' + p);
+        if (hint) { hint.textContent = ''; hint.className = 'bd-setup-hint'; }
+        clearTimeout(p === 1 ? LS.timer1 : LS.timer2);
+        var t = setTimeout(function () { lookupPlayer(p); }, 260);
+        if (p === 1) LS.timer1 = t; else LS.timer2 = t;
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); submitLocalSetup(); }
+      });
+    });
+    $('bd-setup-cancel').addEventListener('click', closeLocalSetup);
+    $('bd-setup-start').addEventListener('click', submitLocalSetup);
+    $('bd-undo-box').addEventListener('click', onUndoClick);
+    $('bd-view-board').addEventListener('click', function () {
+      if (!S) return;
+      S.resultShown = false;
+      show('bd-result', false);
+      renderActions();
+    });
 
     $('bd-flip').addEventListener('click', function () {
       if (!S) return;
@@ -2090,24 +2528,65 @@
     });
 
     $('bd-undo').addEventListener('click', function () {
-      if (!S || S.mode !== 'local' || !S.stack.length) return;
-      S.state = S.stack.pop();
-      S.moves.pop();
-      S.texts.pop();
-      S.clockRunning = S.state.status === 'play' ? S.state.turn : 0;
-      S.clockStart = S.timed ? Date.now() : 0;
-      S.score = null;
-      S.sel = null; S.targets = []; S.drPath = null; S.drMoves = null;
-      S.resultShown = false;
-      saveLocal();
-      renderAll();
-      toast('悔了一步');
+      if (!S || S.state.status !== 'play') return;
+      if (isOfflineLocal()) {
+        if (!S.stack.length) { toast('还没有可以悔的棋'); return; }
+        S.state = S.stack.pop();
+        S.moves.pop();
+        S.texts.pop();
+        S.clockRunning = S.state.status === 'play' ? S.state.turn : 0;
+        S.clockStart = S.timed ? Date.now() : 0;
+        S.score = null;
+        S.sel = null; S.targets = []; S.drPath = null; S.drMoves = null;
+        S.resultShown = false;
+        saveLocal();
+        renderAll();
+        toast('悔了一步');
+        return;
+      }
+      requestUndo();
     });
 
     $('bd-restart').addEventListener('click', function () {
-      if (!S || S.mode !== 'local') return;
-      B8.confirm('重开一局？现在这盘会被清掉。', { title: '重开', danger: true, okText: '重开' })
-        .then(function (ok) { if (ok) { writeJSON(LOCAL_KEY, null); startLocal(); } });
+      if (!S) return;
+      var localRoom = isLocalRoom();
+      if (!isOfflineLocal() && !localRoom) return;
+      B8.confirm(localRoom ? '重开一局？现在这盘会记成和棋，然后开一盘新的。' : '重开一局？现在这盘会被清掉。',
+        { title: '重开', danger: true, okText: '重开' }).then(function (ok) {
+        if (!ok) return;
+        if (localRoom) {
+          var names = [S.room.host_name, S.room.guest_name];
+          var settings = { game: S.room.game, size: S.room.size, minutes: S.room.timed ? S.room.minutes : 0 };
+          B8.sb.rpc('b8_board_end_local', { p_token: token(), p_code: S.code, p_winner: 3 })
+            .then(function () {
+              createLocalRoom(names[0], names[1], settings);
+            })
+            .catch(function (err) { toast((err && err.message) || '重开失败'); });
+          return;
+        }
+        var g = S.game, size = S.size, minutes = S.minutes;
+        var nm = S.playerNames || ['玩家一', '玩家二'];
+        writeJSON(LOCAL_KEY, null);
+        startOfflineLocal(nm[0], nm[1], { game: g, size: size, minutes: minutes });
+      });
+    });
+
+    $('bd-end').addEventListener('click', function () {
+      if (!S || !isLocalRoom() || S.state.status !== 'play') return;
+      B8.confirm('结束这盘本机对局？会按和棋记进历史。', { title: '结束对局', danger: true, okText: '结束' })
+        .then(function (ok) {
+          if (!ok) return;
+          B8.sb.rpc('b8_board_end_local', { p_token: token(), p_code: S.code, p_winner: 3 })
+            .then(function (res) {
+              if (!res || !res.room) return;
+              S.room = res.room;
+              S.state = res.state;
+              S.resultShown = true;
+              renderAll();
+              showResult();
+            })
+            .catch(function (err) { toast((err && err.message) || '结束失败'); });
+        });
     });
 
     $('bd-resign').addEventListener('click', function () {
@@ -2170,11 +2649,9 @@
 
     $('bd-again').addEventListener('click', function () {
       if (!S) return;
-      if (S.mode === 'local') {
-        var g = S.game, size = S.size, minutes = S.minutes;
-        LOBBY.game = g; LOBBY.size = size; LOBBY.minutes = minutes;
-        writeJSON(LOCAL_KEY, null);
-        startLocal();
+      if (isOfflineLocal()) {
+        var nm = S.playerNames || ['玩家一', '玩家二'];
+        startOfflineLocal(nm[0], nm[1], { game: S.game, size: S.size, minutes: S.minutes });
         return;
       }
       var settings = {
@@ -2183,6 +2660,10 @@
         minutes: S.room.timed ? S.room.minutes : 0,
         color: S.seat || 1
       };
+      if (isLocalRoom()) {
+        createLocalRoom(S.room.host_name, S.room.guest_name, settings);
+        return;
+      }
       backToLobby();
       setTimeout(function () { createRoom(settings); }, 180);
     });
@@ -2238,6 +2719,7 @@
     buildGames();
     renderOptions();
     renderRooms();
+    renderHistory();
     renderer = new Renderer($('bd-canvas'));
     bind();
     updateWho();
@@ -2304,6 +2786,7 @@
       get state() { return S; },
       move: function (mv) { commit(mv); },
       sync: function () { syncNow(); },
+      refresh: function () { loadLists(true); },
       open: function (code, watch) { openRoom(code, { watch: !!watch }); },
       chat: function (body) {
         var i = $('bd-chat-input');

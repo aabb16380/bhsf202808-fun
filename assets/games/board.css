@@ -1236,3 +1236,188 @@ html[data-mode="night"] .bd-room-btn.is-live {
     outline-offset: 2px;
   }
 }
+
+/* ---------- 历史对局 ---------- */
+.bd-history-card { margin-top: 20px; }
+
+.bd-history-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.bd-history-head h2 { margin: 0; }
+
+.bd-history-head span {
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.bd-history {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.bd-hrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.bd-hrow-main { flex: 1 1 auto; min-width: 0; }
+
+.bd-hrow-main b {
+  display: block;
+  font-family: var(--serif);
+  font-size: 13.5px;
+  color: var(--ink);
+  letter-spacing: .03em;
+}
+
+.bd-hrow-main b i {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-family: var(--sans);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 400;
+  color: var(--jade);
+  border: 1px solid rgba(47, 111, 94, .3);
+  border-radius: 999px;
+  vertical-align: 1px;
+}
+
+.bd-hrow-main span {
+  display: block;
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bd-hrow-main span em {
+  font-style: normal;
+  color: var(--ink-2);
+}
+
+.bd-hrow-result {
+  flex: 0 0 auto;
+  font-family: var(--serif);
+  font-size: 12.5px;
+  color: var(--seal);
+  white-space: nowrap;
+}
+
+.bd-hrow-result.is-draw { color: var(--ink-3); }
+
+/* ---------- 本机对局：填两位棋手 ---------- */
+.bd-setup-card {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 22px 20px 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 30px 80px -40px rgba(0, 0, 0, .6);
+}
+
+.bd-setup-card h3 {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 21px;
+  letter-spacing: .04em;
+}
+
+.bd-setup-sub {
+  margin: 0 0 16px;
+  font-size: 11.5px;
+  line-height: 1.8;
+  color: var(--ink-3);
+}
+
+.bd-setup-row {
+  margin-bottom: 14px;
+  padding: 11px 12px;
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.bd-setup-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.bd-setup-head b {
+  font-family: var(--serif);
+  font-size: 14px;
+  letter-spacing: .03em;
+}
+
+.bd-setup-modes { margin-left: auto; gap: 4px; }
+
+.bd-setup-modes .chip {
+  min-height: 26px;
+  padding: 3px 10px;
+  font-size: 10.5px;
+}
+
+.bd-setup-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  font-family: var(--sans);
+  font-size: 14px;
+  letter-spacing: .06em;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  outline: none;
+}
+
+.bd-setup-input:focus { border-color: var(--seal); box-shadow: 0 0 0 3px rgba(193, 82, 47, .12); }
+
+.bd-setup-hint {
+  margin: 6px 0 0;
+  min-height: 15px;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+.bd-setup-hint.is-good { color: var(--jade); }
+.bd-setup-hint.is-bad { color: var(--seal); }
+
+.bd-setup-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.bd-setup-actions .bd-btn { flex: 1 1 0; }
+
+@media (max-width: 620px) {
+  .bd-history { max-height: 300px; }
+  .bd-hrow { flex-wrap: wrap; }
+  .bd-hrow-result { margin-left: auto; }
+  .bd-setup-card { padding: 18px 14px 14px; }
+}

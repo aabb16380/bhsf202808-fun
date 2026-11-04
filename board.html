@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。支持本机两人对局与网络房间，6 位邀请码，每一步自动保存，退出回来还能接着下；可计时可不计时，所有人能观战和实时评论，围棋支持点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g48" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g48">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g48">
+<link rel="icon" href="assets/favicon.png?v=20261101g49" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g49">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g49">
 <script>
-window.B8_BUILD = '20261101g48';
+window.B8_BUILD = '20261101g49';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g48"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g48">
+<script src="assets/theme.js?v=20261101g49"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g49">
 </head>
 
 <body data-site="fun">
@@ -47,7 +47,8 @@ window.B8_TEST = !!window.B8_T;
         <h1>摆一盘</h1>
         <p class="bd-lead">
           五种棋。可以两个人挤一台设备，也可以开个房间把邀请码发给同学——他点进来就坐下。
-          每一步都存着，关掉页面回来还能接着下；可计时可不计时。
+          每一步都存着，关掉页面回来还能接着下；本机对局也公开、可被观战、会进历史。
+          可计时可不计时，网络对局可以申请悔棋（对方同意才生效）。
           下棋时所有人都能进来观战、实时评论，<b>棋手看不到评论</b>。围棋可以随时<b>点目</b>。
         </p>
       </div>
@@ -78,7 +79,7 @@ window.B8_TEST = !!window.B8_T;
             <button class="bd-btn" id="bd-local" type="button">本机对局</button>
             <button class="bd-btn primary" id="bd-create" type="button">创建网络对局</button>
           </div>
-          <p class="bd-hint" id="bd-create-note">网络对局会生成 6 位邀请码，登录后可用。</p>
+          <p class="bd-hint" id="bd-create-note">本机对局会先问两位棋手是谁；它也会进历史、能被观战。网络对局会生成 6 位邀请码，登录后可用。</p>
           <p class="bd-hint is-warn" id="bd-db-note" hidden></p>
         </div>
 
@@ -99,6 +100,14 @@ window.B8_TEST = !!window.B8_T;
           <div class="bd-rooms" id="bd-live"></div>
           <button class="bd-link" id="bd-refresh" type="button">刷新列表</button>
         </div>
+      </div>
+
+      <div class="bd-card bd-history-card">
+        <div class="bd-history-head">
+          <h2>历史对局</h2>
+          <span>所有人可见 · 时间 / 人物 / 结果 · 点开看棋谱</span>
+        </div>
+        <div class="bd-history" id="bd-history"></div>
       </div>
 
       <div class="bd-rules">
@@ -127,8 +136,8 @@ window.B8_TEST = !!window.B8_T;
           </div>
           <div>
             <b>通用</b>
-            <p>网络对局每一步都会保存（房间快照 + 着法表），刷新、关页、换设备都能回来接着下。
-              计时的超时判负由服务器判定。</p>
+            <p>本机和网络对局都会把每一步存进数据库；本机对局也会开一个公开房间，别人能观战，下完进「历史对局」。
+              网络对局悔棋要对方同意；计时超时由服务器判负。</p>
           </div>
         </div>
       </div>
@@ -188,6 +197,7 @@ window.B8_TEST = !!window.B8_T;
               <p class="bd-over-sub" id="bd-result-sub"></p>
               <div class="bd-over-actions">
                 <button class="bd-btn primary" id="bd-again" type="button">再来一局</button>
+                <button class="bd-btn" id="bd-view-board" type="button">看棋盘</button>
                 <button class="bd-btn" id="bd-back-lobby" type="button">回大厅</button>
               </div>
             </div>
@@ -210,11 +220,13 @@ window.B8_TEST = !!window.B8_T;
             <button class="bd-mini" id="bd-draw" type="button">求和</button>
             <button class="bd-mini" id="bd-pass" type="button" hidden>停一手</button>
             <button class="bd-mini" id="bd-undo" type="button" hidden>悔棋</button>
+            <button class="bd-mini" id="bd-end" type="button" hidden>结束</button>
             <button class="bd-mini" id="bd-restart" type="button" hidden>重开</button>
             <button class="bd-mini" id="bd-invite" type="button" hidden>邀请码</button>
           </div>
 
           <div class="bd-offer" id="bd-offer" hidden></div>
+          <div class="bd-offer" id="bd-undo-box" hidden></div>
 
           <div class="bd-moves-box">
             <div class="bd-box-head"><b>着法</b><span id="bd-move-count">0</span></div>
@@ -252,6 +264,44 @@ window.B8_TEST = !!window.B8_T;
   </p>
 </noscript>
 
+<div class="bd-promo" id="bd-local-setup" hidden>
+  <div class="bd-setup-card" role="dialog" aria-modal="true" aria-labelledby="bd-setup-title">
+    <h3 id="bd-setup-title">本机对局 · 两位棋手</h3>
+    <p class="bd-setup-sub">这盘也一样公开、可被观战、会进历史。填学号会自动查姓名，也可以直接用昵称。</p>
+
+    <div class="bd-setup-row" data-p="1">
+      <div class="bd-setup-head">
+        <b>玩家一 · 先手</b>
+        <div class="chips bd-setup-modes" role="group" aria-label="玩家一身份方式">
+          <button type="button" class="chip is-on" data-p="1" data-mode="no" aria-pressed="true">学号</button>
+          <button type="button" class="chip" data-p="1" data-mode="nick" aria-pressed="false">昵称</button>
+        </div>
+      </div>
+      <input class="bd-setup-input" id="bd-name1" maxlength="12" autocomplete="off"
+             inputmode="numeric" placeholder="8 位学号（如 20282307）">
+      <p class="bd-setup-hint" id="bd-hint1"></p>
+    </div>
+
+    <div class="bd-setup-row" data-p="2">
+      <div class="bd-setup-head">
+        <b>玩家二 · 后手</b>
+        <div class="chips bd-setup-modes" role="group" aria-label="玩家二身份方式">
+          <button type="button" class="chip is-on" data-p="2" data-mode="no" aria-pressed="true">学号</button>
+          <button type="button" class="chip" data-p="2" data-mode="nick" aria-pressed="false">昵称</button>
+        </div>
+      </div>
+      <input class="bd-setup-input" id="bd-name2" maxlength="12" autocomplete="off"
+             inputmode="numeric" placeholder="8 位学号（如 20282308）">
+      <p class="bd-setup-hint" id="bd-hint2"></p>
+    </div>
+
+    <div class="bd-setup-actions">
+      <button class="bd-btn" id="bd-setup-cancel" type="button">取消</button>
+      <button class="bd-btn primary" id="bd-setup-start" type="button">开始对局</button>
+    </div>
+  </div>
+</div>
+
 <div class="bd-promo" id="bd-promo" hidden>
   <div class="bd-promo-card" role="dialog" aria-modal="true" aria-labelledby="bd-promo-title">
     <h3 id="bd-promo-title">兵到底线，升变成什么？</h3>
@@ -268,7 +318,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g48' + T;
+  var V = '?v=20261101g49' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

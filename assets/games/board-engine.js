@@ -184,7 +184,7 @@
     },
     result: function (st) {
       if (st.reason && st.reason !== 'score') {
-        var why = { resign: '认输', timeout: '超时', agreement: '和棋协议' }[st.reason] || '';
+        var why = { resign: '认输', timeout: '超时', agreement: '和棋协议', manual: '手动结束' }[st.reason] || '';
         if (st.winner === 3) return '和棋' + (why ? ' · ' + why : '');
         if (st.winner === 1 || st.winner === 2) {
           return (st.winner === 1 ? '黑方' : '白方') + '胜' + (why ? ' · ' + why : '');
@@ -249,8 +249,13 @@
       return gomokuLetters.charAt(mv.t % 15) + (15 - Math.floor(mv.t / 15));
     },
     result: function (st) {
-      if (st.winner === 3) return '和棋 · 棋盘填满';
-      return (st.winner === 1 ? '黑方' : '白方') + '胜 · 五连';
+      var why = {
+        five: '五连', full: '棋盘填满', resign: '认输', timeout: '超时',
+        agreement: '和棋协议', manual: '手动结束'
+      }[st.reason] || '';
+      if (st.winner === 3) return '和棋' + (why ? ' · ' + why : '');
+      if (!st.winner) return '';
+      return (st.winner === 1 ? '黑方' : '白方') + '胜' + (why ? ' · ' + why : '');
     }
   };
 
@@ -516,7 +521,7 @@
       var name = st.winner === 1 ? '红方' : (st.winner === 2 ? '黑方' : '');
       var why = {
         checkmate: '将死', stalemate: '困毙', resign: '认输',
-        timeout: '超时', agreement: '和棋协议'
+        timeout: '超时', agreement: '和棋协议', manual: '手动结束'
       }[st.reason] || '';
       if (st.winner === 3) return '和棋' + (why ? ' · ' + why : '');
       if (!st.winner) return '';
@@ -793,7 +798,7 @@
     },
     result: function (st) {
       if (st.winner === 3) {
-        var w = { stalemate: '逼和', fifty: '50 回合和棋', material: '子力不足' }[st.reason] || '';
+        var w = { stalemate: '逼和', fifty: '50 回合和棋', material: '子力不足', manual: '手动结束' }[st.reason] || '';
         return '和棋 · ' + w;
       }
       var why = { checkmate: '将死', resign: '认输', timeout: '超时', agreement: '和棋协议' }[st.reason] || '';
@@ -957,7 +962,8 @@
     },
     result: function (st) {
       var why = {
-        nomove: '对方无子可动', resign: '认输', timeout: '超时', agreement: '和棋协议'
+        nomove: '对方无子可动', resign: '认输', timeout: '超时',
+        agreement: '和棋协议', manual: '手动结束'
       }[st.reason] || '';
       if (st.winner === 3) return '和棋' + (why ? ' · ' + why : '');
       if (!st.winner) return '';
