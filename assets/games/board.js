@@ -55,7 +55,7 @@
   ];
   var GO_SIZES = [9, 13, 19];
 
-  var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, rooms: [], mine: [], history: [], dbMissing: false, busy: false };
+  var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, rooms: [], mine: [], history: [], historyApi: true, dbMissing: false, busy: false };
   var LS = { mode1: 'no', mode2: 'no', name1: '', name2: '', resolved1: '', resolved2: '', timer1: 0, timer2: 0 };
   var S = null;                 // 当前对局
   var NET = { offset: 0, lastOk: 0, fails: 0, timer: 0, inflight: false, again: false, lastPing: 0, started: 0 };
@@ -282,10 +282,12 @@
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'bd-room-btn' + (r.status === 'play' ? ' is-live' : '');
-    btn.textContent = opts.mine ? (r.status === 'play' ? '继续' : '回到房间') : '观战';
+    btn.textContent = opts.mine
+      ? (r.status === 'play' ? '继续' : '回到房间')
+      : (r.status === 'wait' ? '加入' : '观战');
     btn.addEventListener('click', function () {
       if (opts.mine) openRoom(r.code, { watch: false });
-      else openRoom(r.code, { watch: true });
+      else openRoom(r.code, { watch: r.status !== 'wait' });
     });
     wrap.appendChild(btn);
     return wrap;
@@ -370,7 +372,10 @@
     if (!list.length) {
       var empty = document.createElement('p');
       empty.className = 'bd-empty';
-      empty.textContent = LOBBY.dbMissing ? '数据库还没初始化。' : '还没有下完的棋。下完一盘，这里会留下棋谱。';
+      empty.textContent = LOBBY.dbMissing
+        ? '数据库还没初始化。'
+        : (LOBBY.historyApi ? '还没有下完的棋。下完一盘，这里会留下棋谱。'
+          : '历史对局要等数据库更新（重跑 install-all.sql）后才有。');
       box.appendChild(empty);
       return;
     }
@@ -420,6 +425,7 @@
         LOBBY.rooms = res.rooms || [];
         LOBBY.mine = res.mine || [];
         LOBBY.history = res.history || [];
+        LOBBY.historyApi = Object.prototype.hasOwnProperty.call(res, 'history');
         show('bd-db-note', false);
         renderRooms();
         renderHistory();
@@ -585,7 +591,7 @@
     }).catch(function (err) {
       var msg = (err && err.message) || '开局没成功';
       if (dbMissing(err)) {
-        B8.confirm('数据库还没初始化，这盘只能在本机下：不会保存，别人也看不到。\n\n要继续吗？', {
+        B8.confirm('数据库里还没有本机对局的函数（要重跑一遍 install-all.sql）。\n\n这盘只能在本机下：不会保存，别人也看不到。要继续吗？', {
           title: '只在本机', okText: '继续下'
         }).then(function (ok) { if (ok) startOfflineLocal(name1, name2, settings); });
       } else {
