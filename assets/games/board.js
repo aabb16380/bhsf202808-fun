@@ -1307,7 +1307,8 @@
     if (S.room && S.room.status === 'wait') bits.push('等待对手');
     txt('bd-gmeta', bits.join(' · '));
     show('bd-net', S.mode === 'online');
-    show('bd-invite', S.mode === 'online' && S.room && S.room.status === 'wait' && S.seat > 0);
+    show('bd-invite', S.mode === 'online' && S.room && S.seat > 0 &&
+      (S.room.status === 'wait' || isLocalRoom()));
   }
 
   function renderPlayers() {
@@ -1587,14 +1588,19 @@
   function requestUndo() {
     if (!S || !S.state || S.state.status !== 'play') return;
     if (isOfflineLocal()) return;
+    var btn = $('bd-undo');
+    if (btn) btn.disabled = true;
     if (isLocalRoom()) {
       var prev = stateBeforeLast();
-      if (!prev) { toast('还没有可以悔的棋'); return; }
+      if (!prev) { toast('还没有可以悔的棋'); if (btn) btn.disabled = false; return; }
       B8.confirm('悔棋？撤回上一手，棋盘回到上一步。', { title: '悔棋', okText: '悔一步' })
-        .then(function (ok) { if (ok) acceptUndo(prev); });
+        .then(function (ok) {
+          if (ok) acceptUndo(prev);
+          else if (btn) btn.disabled = false;
+        });
       return;
     }
-    if (!isVsRoom()) return;
+    if (!isVsRoom()) { if (btn) btn.disabled = false; return; }
     if (S.undo && S.undo.mine) return;
     B8.sb.rpc('b8_board_undo', { p_token: token(), p_code: S.code, p_accept: false })
       .then(function (res) {
@@ -1603,6 +1609,7 @@
         syncNow();
       })
       .catch(function (err) {
+        if (btn) btn.disabled = false;
         toast((err && err.message) || '申请悔棋失败');
         syncNow();
       });
