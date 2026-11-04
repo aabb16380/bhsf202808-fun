@@ -511,7 +511,8 @@
     var h = history.pop();
     grid = h.grid;
     notes = h.notes;
-    mistakes = h.mistakes;
+    // 撤销只退盘面，不退已经犯过的错误；错误次数只增不减。
+    mistakes = Math.max(mistakes, h.mistakes);
     hints = h.hints;
     filled = h.filled;
     hintMark = [];
@@ -1185,6 +1186,7 @@
       api.demo = enterDemo;
       api.demoKeep = keepDemo;
       api.demoDiscard = discardDemo;
+      api.undo = undo;
     }
     B8.games = B8.games || {};
     B8.games.sudoku = api;

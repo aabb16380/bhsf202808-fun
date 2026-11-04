@@ -1220,6 +1220,74 @@ body[data-site="site"][data-mode="night"] .gate-seal {
 }
 
 .console-row.is-off { opacity: 0.55; }
+
+/* 上线记录：同一人 30 分钟内合并成一条，可展开 */
+.visit-group {
+  border-top: 1px solid var(--line);
+}
+
+.visit-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 2px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.visit-summary::-webkit-details-marker { display: none; }
+.visit-summary::before {
+  content: "▸";
+  flex: 0 0 auto;
+  color: var(--ink-3);
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+
+.visit-group[open] .visit-summary::before { transform: rotate(90deg); }
+
+.visit-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.visit-when {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.visit-items {
+  padding: 0 2px 10px 18px;
+}
+
+.visit-item {
+  display: flex;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.visit-time {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  color: var(--ink-2);
+}
+
+.visit-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .console-main { min-width: 0; }
 
 /* 最近删除：左边一张小图，右边是照片和删除者信息 */

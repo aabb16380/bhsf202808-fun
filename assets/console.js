@@ -259,6 +259,25 @@
     }, fail);
   }
 
+  function visitDate(t) {
+    var d = new Date(t);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function visitClock(t) {
+    var d = visitDate(t);
+    if (!d) return '—';
+    return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  function visitFull(t) {
+    var d = visitDate(t);
+    if (!d) return '—';
+    return d.toLocaleString('zh-CN', {
+      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+    });
+  }
+
   function paintVisits() {
     var b = body();
     if (!b) return;
@@ -267,24 +286,77 @@
       return;
     }
 
-    var html = '<p class="form-note">最近 ' + visits.length + ' 次打开记录（三站都算，时间精确到分钟）。</p>' +
-      '<div class="console-list">';
-    visits.forEach(function (v) {
-      var d = new Date(v.opened_at);
-      var t = isNaN(d.getTime()) ? '—' : d.toLocaleString('zh-CN', {
-        month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
-      });
-      html += '<div class="console-row">' +
-        '<div class="console-main">' +
-          '<div class="console-title">' + esc(v.name) + ' <span class="console-dim">' + esc(v.member_no) + '</span></div>' +
-          '<div class="console-meta">' + esc(t) + ' · ' + esc(v.path || '首页') + '</div>' +
-        '</div>' +
-      '</div>';
+    // 先按时间正序，同一个人 30 分钟内连续打开合并成一组；组按最新时间倒序。
+    var items = visits.map(function (v) {
+      var d = visitDate(v.opened_at);
+      return {
+        member_no: v.member_no,
+        name: v.name || v.member_no,
+        path: v.path || '首页',
+        at: d ? d.getTime() : 0,
+        raw: v.opened_at
+      };
+    }).filter(function (v) { return v.at > 0; }).sort(function (a, b) { return a.at - b.at; });
+
+    var groups = [];
+    var last = {};
+    items.forEach(function (v) {
+      var key = v.member_no || v.name;
+      var g = last[key];
+      if (g && v.at - g.end <= 30 * 60 * 1000) {
+        g.end = v.at;
+        g.items.push(v);
+      } else {
+        g = {
+          member_no: v.member_no,
+          name: v.name,
+          start: v.at,
+          end: v.at,
+          items: [v]
+        };
+        groups.push(g);
+        last[key] = g;
+      }
     });
+    groups.sort(function (a, b) { return b.end - a.end; });
+
+    var html = '<p class="form-note">同一人 30 分钟内连续打开合并成一组；点开可看每次。共 ' +
+      items.length + ' 次打开。</p><div class="console-list">';
+
+    groups.forEach(function (g) {
+      var sd = new Date(g.start);
+      var ed = new Date(g.end);
+      var sameDay = sd.toDateString() === ed.toDateString();
+      var range;
+      if (g.items.length === 1) {
+        range = visitClock(g.start);
+      } else if (sameDay) {
+        range = visitClock(g.start) + '–' + visitClock(g.end);
+      } else {
+        range = visitFull(g.start) + '–' + visitFull(g.end);
+      }
+
+      html += '<details class="visit-group">' +
+        '<summary class="visit-summary">' +
+          '<span class="visit-who">' + esc(g.name) +
+            ' <span class="console-dim">' + esc(g.member_no) + '</span></span>' +
+          '<span class="visit-when">' + esc(range) + ' · ' + g.items.length + ' 次</span>' +
+        '</summary>' +
+        '<div class="visit-items">';
+
+      g.items.slice().reverse().forEach(function (v) {
+        html += '<div class="visit-item">' +
+          '<span class="visit-time">' + esc(visitFull(v.at)) + '</span>' +
+          '<span class="visit-path">' + esc(v.path) + '</span>' +
+        '</div>';
+      });
+
+      html += '</div></details>';
+    });
+
     html += '</div>';
     b.innerHTML = html;
   }
-
   /* ---------- 密钥 ---------- */
   function loadKeys() {
     B8.sb.rpc('b8_super_keys', { p_token: tok() }).then(function (rows) {
