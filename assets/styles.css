@@ -2128,14 +2128,14 @@ html[data-mode="night"] .b2048.is-plain .b2048-in {
   background-color: #24221e;
   text-shadow: none;
 }
-html[data-mode="night"] .b2048.is-plain .b2048-in.v2   { background: #2b2823; }
-html[data-mode="night"] .b2048.is-plain .b2048-in.v4   { background: #332d25; }
-html[data-mode="night"] .b2048.is-plain .b2048-in.v8   { background: #3d3428; }
-html[data-mode="night"] .b2048.is-plain .b2048-in.v16  { background: #4a3b2a; color: #f6ead2; }
-html[data-mode="night"] .b2048.is-plain .b2048-in.v32  { background: #5a452c; color: #ffefcf; }
-html[data-mode="night"] .b2048.is-plain .b2048-in.v64  { background: #6b4e2d; color: #fff2d7; }
-html[data-mode="night"] .b2048.is-plain .b2048-in.v128 { background: #7f592d; color: #fff4dc; }
-html[data-mode="night"] .b2048.is-plain .b2048-in.v256 { background: #945f2d; color: #fff6e2; }
+html[data-mode="night"] .b2048.is-plain .b2048-in.v2   { background: #2e3440; }
+html[data-mode="night"] .b2048.is-plain .b2048-in.v4   { background: #3a4a32; }
+html[data-mode="night"] .b2048.is-plain .b2048-in.v8   { background: #5a3a28; }
+html[data-mode="night"] .b2048.is-plain .b2048-in.v16  { background: #6b3f2a; color: #fff0d8; }
+html[data-mode="night"] .b2048.is-plain .b2048-in.v32  { background: #7a3a3a; color: #ffe8d8; }
+html[data-mode="night"] .b2048.is-plain .b2048-in.v64  { background: #3f4a5a; color: #e8f0ff; }
+html[data-mode="night"] .b2048.is-plain .b2048-in.v128 { background: #7a5a24; color: #ffe8a8; }
+html[data-mode="night"] .b2048.is-plain .b2048-in.v256 { background: #8a3f2a; color: #ffe5c8; }
 html[data-mode="night"] .b2048.is-plain .b2048-in.v512 {
   background: linear-gradient(152deg, #6d2f24 0%, #4e211a 100%);
   color: #ffe7c6;
@@ -2356,6 +2356,17 @@ html[data-mode="night"] .b2048.is-plain .b2048-in.vbig {
   animation: wrongShake 0.28s ease;
 }
 
+html[data-mode="night"] .schulte-cell.is-done {
+  color: #9fe7c1;
+  background: rgba(72, 152, 116, 0.34);
+  border-color: rgba(126, 206, 166, 0.58);
+}
+
+html[data-mode="night"] .schulte-cell.is-wrong {
+  color: #fff2ea;
+  background: #8c2f26;
+  border-color: #b74a3a;
+}
 @keyframes wrongShake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-2px); }
@@ -4067,3 +4078,59 @@ body.mo-super-open { overflow: hidden; }
 }
 
 .mo-super-layer.is-rings .mo-super-speed { opacity: 1; }
+.poll-super-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.poll-super-actions .btn { margin-top: 0; }
+
+.poll-super-danger {
+  color: var(--seal);
+  border-color: color-mix(in srgb, var(--seal) 35%, var(--line));
+}
+
+.poll-ballot-edit {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) minmax(110px, 1.2fr) 58px auto auto;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.poll-ballot-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poll-ballot-select,
+.poll-ballot-weight {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 6px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+}
+
+.poll-ballot-del {
+  color: var(--seal);
+  border-color: color-mix(in srgb, var(--seal) 32%, var(--line));
+}
+
+@media (max-width: 640px) {
+  .poll-ballot-edit {
+    grid-template-columns: minmax(0, 1fr) 58px auto auto;
+  }
+  .poll-ballot-who { grid-column: 1 / span 4; }
+  .poll-ballot-select { grid-column: 1 / span 2; }
+  .poll-ballot-weight { grid-column: 3; }
+}
