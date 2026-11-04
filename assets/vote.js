@@ -21,6 +21,8 @@
   var people = [];
   var activeBallotPoll = 0;
   var activeBallot = null;
+  var ballotRows = [];
+  var ballotEdit = false;
 
   function errText(err, fallback) {
     return err && err.message ? err.message : fallback;
@@ -393,6 +395,8 @@
     if (!superUser) return;
     activeBallotPoll = p.id;
     activeBallot = p;
+    ballotEdit = false;
+    ballotRows = [];
     if (els.ballotsModal) els.ballotsModal.hidden = false;
     if (els.ballotsTitle) els.ballotsTitle.textContent = '投票明细 · ' + p.title;
     loadBallots(p.id);
@@ -401,7 +405,8 @@
   function loadBallots(pollId) {
     if (els.ballotsList) els.ballotsList.textContent = '正在读…';
     B8.sb.rpc('b8_poll_ballots', { p_token: token, p_poll_id: pollId }).then(function (rows) {
-      renderBallots(Array.isArray(rows) ? rows : []);
+      ballotRows = Array.isArray(rows) ? rows : [];
+      renderBallots(ballotRows);
     }).catch(function (err) {
       if (els.ballotsList) els.ballotsList.textContent =
         '读不出来：' + (err && err.message ? err.message : '网络异常');
@@ -415,7 +420,45 @@
       els.ballotsList.textContent = '还没有人投票。';
       return;
     }
+    if (ballotEdit) renderBallotEdit(rows);
+    else renderBallotView(rows);
+  }
 
+  function renderBallotView(rows) {
+    var byVoter = {};
+    rows.forEach(function (r) {
+      var k = r.voter_no || r.voter_name;
+      if (!byVoter[k]) byVoter[k] = { name: r.voter_name || r.voter_no, votes: [] };
+      byVoter[k].votes.push(r);
+    });
+
+    Object.keys(byVoter).forEach(function (k) {
+      var g = byVoter[k];
+      var box = document.createElement('div');
+      box.className = 'poll-ballot-row';
+      var name = document.createElement('b');
+      name.textContent = g.name;
+      box.appendChild(name);
+      var list = document.createElement('span');
+      list.textContent = g.votes.map(function (v) {
+        return v.candidate_name + (v.weight > 1 ? ' ×' + v.weight : '');
+      }).join('、');
+      box.appendChild(list);
+      els.ballotsList.appendChild(box);
+    });
+
+    var more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'btn ghost sm poll-ballot-more';
+    more.textContent = '修改投票记录';
+    B8.on(more, 'click', function () {
+      ballotEdit = true;
+      renderBallots(ballotRows);
+    });
+    els.ballotsList.appendChild(more);
+  }
+
+  function renderBallotEdit(rows) {
     var head = document.createElement('p');
     head.className = 'form-note';
     head.textContent = '可以直接改候选人和票数，或删掉这一条。改完立刻生效。';
@@ -506,12 +549,23 @@
 
       els.ballotsList.appendChild(box);
     });
-  }
 
+    var done = document.createElement('button');
+    done.type = 'button';
+    done.className = 'btn ghost sm poll-ballot-more';
+    done.textContent = '完成';
+    B8.on(done, 'click', function () {
+      ballotEdit = false;
+      renderBallots(ballotRows);
+    });
+    els.ballotsList.appendChild(done);
+  }
   function closeBallots() {
     if (els.ballotsModal) els.ballotsModal.hidden = true;
     activeBallotPoll = 0;
     activeBallot = null;
+    ballotRows = [];
+    ballotEdit = false;
   }
   /* ============================================================
      启动
