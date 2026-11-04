@@ -4166,3 +4166,156 @@ body.mo-super-open { overflow: hidden; }
   display: block;
   margin: 10px 0 0 auto;
 }
+/* ============================================================
+   棋类对弈 · 首页「正在对弈」
+   ============================================================ */
+.board-live-sec { border-top: 1px solid var(--line); }
+
+.board-live-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+  gap: 10px;
+}
+
+.board-live-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 13px 15px 13px 13px;
+  color: var(--ink-2);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--seal);
+  border-radius: 8px;
+  box-shadow: var(--shadow-1, 0 1px 2px rgba(35, 33, 28, .05));
+  transition: transform .12s ease, border-color .12s ease;
+}
+
+.board-live-card:hover {
+  transform: translateY(-2px);
+  text-decoration: none;
+  border-color: var(--line-2);
+  border-left-color: var(--seal);
+}
+
+.board-live-card.is-wait {
+  border-left-color: var(--gold);
+  border-style: dashed;
+  border-left-style: solid;
+}
+
+.blc-glyph {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  font-family: var(--serif);
+  font-size: 21px;
+  color: var(--seal);
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+
+.board-live-card.is-wait .blc-glyph { color: var(--gold); }
+
+.blc-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.blc-main b {
+  font-family: var(--serif);
+  font-size: 15px;
+  letter-spacing: .04em;
+  color: var(--ink);
+}
+
+.blc-players {
+  font-size: 12px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.blc-players i {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--seal);
+  margin-right: 1px;
+}
+
+.blc-players em {
+  font-style: normal;
+  margin: 0 3px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--ink-3);
+}
+
+.blc-players u {
+  text-decoration: none;
+  color: var(--ink-3);
+  border-bottom: 1px dashed var(--line-2);
+}
+
+.blc-meta {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: .03em;
+  color: var(--ink-3);
+}
+
+.blc-go {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--seal);
+  background: var(--seal-soft, rgba(193, 82, 47, .08));
+  border: 1px solid rgba(193, 82, 47, .22);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.board-live-card.is-wait .blc-go {
+  color: var(--gold);
+  background: rgba(192, 140, 44, .08);
+  border-color: rgba(192, 140, 44, .28);
+}
+
+.board-live-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.board-live-foot span {
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+html[data-mode="night"] .board-live-card {
+  background: var(--card);
+  border-color: var(--line);
+}
+
+html[data-mode="night"] .blc-glyph {
+  background: var(--card-2);
+  border-color: var(--line);
+}
+
+html[data-mode="night"] .blc-main b { color: var(--ink); }
+html[data-mode="night"] .blc-players { color: var(--ink-2); }
+
+@media (max-width: 620px) {
+  .board-live-list { grid-template-columns: minmax(0, 1fr); }
+  .board-live-card { padding: 11px 12px; }
+  .blc-glyph { width: 34px; height: 34px; font-size: 18px; }
+}
