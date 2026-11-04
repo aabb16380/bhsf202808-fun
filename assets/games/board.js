@@ -56,7 +56,7 @@
   var GO_SIZES = [9, 13, 19];
 
   var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, rooms: [], mine: [], history: [], historyApi: true, dbMissing: false, busy: false };
-  var LS = { mode1: 'no', mode2: 'no', name1: '', name2: '', resolved1: '', resolved2: '', timer1: 0, timer2: 0 };
+  var LS = { mode1: 'no', mode2: 'no', name1: '', name2: '', resolved1: '', resolved2: '', timer1: 0, timer2: 0, busy: false };
   var S = null;                 // 当前对局
   var NET = { offset: 0, lastOk: 0, fails: 0, timer: 0, inflight: false, again: false, lastPing: 0, started: 0 };
   var CHAT = { timer: 0, lastId: 0, inflight: false, items: [], hidden: false };
@@ -614,120 +614,217 @@
       btns[i].setAttribute('aria-pressed', btns[i].getAttribute('data-mode') === mode ? 'true' : 'false');
     }
     var input = $('bd-p' + p + 'name');
-    var hint = $('bd-hint' + p);
     if (!input) return;
     input.value = '';
+    applySetupInput(p, mode);
+    if (mode === 'no' && !logged()) setSetupHint(p, '查学号要登录；也可以切到「昵称」', true);
+    else setSetupHint(p, '', false);
+  }
+
+  function digitsOnly(v) {
+    var s = String(v == null ? '' : v);
+    s = s.replace(/[０-９]/g, function (ch) {
+      return String.fromCharCode(ch.charCodeAt(0) - 65248);
+    });
+    return s.replace(/[^0-9]/g, '').slice(0, 8);
+  }
+
+  function setSetupHint(p, text, bad) {
+    var hint = $('bd-hint' + p);
+    if (!hint) return;
+    hint.textContent = text || '';
+    hint.className = 'bd-setup-hint' + (bad ? ' is-bad' : (text ? ' is-good' : ''));
+  }
+
+  function applySetupInput(p, mode) {
+    var input = $('bd-p' + p + 'name');
+    if (!input) return;
     if (mode === 'no') {
       input.setAttribute('inputmode', 'numeric');
+      input.setAttribute('maxlength', '8');
       input.setAttribute('placeholder', p === 1 ? '8 位学号（如 20282307）' : '8 位学号（如 20282308）');
     } else {
       input.removeAttribute('inputmode');
+      input.setAttribute('maxlength', '12');
       input.setAttribute('placeholder', p === 1 ? '给自己起个昵称（12 字以内）' : '给对手起个昵称（12 字以内）');
     }
-    if (hint) { hint.textContent = ''; hint.className = 'bd-setup-hint'; }
   }
 
   function lookupPlayer(p) {
     var input = $('bd-p' + p + 'name');
-    var hint = $('bd-hint' + p);
-    if (!input || !hint) return;
+    if (!input) return;
     var mode = p === 1 ? LS.mode1 : LS.mode2;
-    var raw = (input.value || '').trim();
+    var raw = digitsOnly(input.value);
+    if (input.value !== raw) input.value = raw;
     if (p === 1) LS.resolved1 = ''; else LS.resolved2 = '';
     if (mode !== 'no') return;
     if (raw.length !== 8) {
-      hint.textContent = raw ? '学号是 8 位数字' : '';
-      hint.className = 'bd-setup-hint' + (raw ? ' is-bad' : '');
+      setSetupHint(p, raw ? '学号是 8 位数字（现在 ' + raw.length + ' 位）' : '', !!raw);
       return;
     }
-    hint.textContent = '查花名册中…';
-    hint.className = 'bd-setup-hint';
+    if (!logged()) {
+      setSetupHint(p, '查学号要登录；也可以切到「昵称」', true);
+      return;
+    }
+    setSetupHint(p, '查花名册中…', false);
     B8.sb.rpc('b8_member_lookup', { p_token: token(), p_no: raw })
       .then(function (res) {
         if ((p === 1 ? LS.mode1 : LS.mode2) !== 'no') return;
-        if ((input.value || '').trim() !== raw) return;
+        if (digitsOnly(input.value) !== raw) return;
         if (res && res.ok && res.name) {
           if (p === 1) LS.resolved1 = res.name; else LS.resolved2 = res.name;
-          hint.textContent = '✓ ' + res.name;
-          hint.className = 'bd-setup-hint is-good';
+          setSetupHint(p, '✓ ' + res.name, false);
         } else {
-          hint.textContent = '花名册里没有这个学号，可以切到「昵称」';
-          hint.className = 'bd-setup-hint is-bad';
+          setSetupHint(p, '花名册里没有这个学号，可以切到「昵称」', true);
         }
       })
-      .catch(function () {
-        hint.textContent = '查不到（没登录或数据库没连上？），可以切到「昵称」';
-        hint.className = 'bd-setup-hint is-bad';
+      .catch(function (err) {
+        var msg = (err && err.message) || '';
+        setSetupHint(p, /登录|token|jwt|授权/i.test(msg)
+          ? '查学号要登录；也可以切到「昵称」'
+          : '查学号失败（数据库没连上？），可以切到「昵称」', true);
       });
   }
 
   function openLocalSetup() {
     var no = (B8.auth && B8.auth.no && B8.auth.no()) || '';
     var nick = (B8.auth && B8.auth.nick && B8.auth.nick()) || '';
-    LS.mode1 = no ? 'no' : 'nick';
-    LS.mode2 = 'no';
+    var noRaw = digitsOnly(no);
+    var hasNo = logged() && noRaw.length === 8;
+    LS.busy = false;
+    LS.mode1 = hasNo ? 'no' : 'nick';
+    LS.mode2 = hasNo ? 'no' : 'nick';
     LS.resolved1 = '';
     LS.resolved2 = '';
+    clearTimeout(LS.timer1);
+    clearTimeout(LS.timer2);
     var i1 = $('bd-p1name'), i2 = $('bd-p2name');
-    i1.value = no || nick || '';
+    i1.value = hasNo ? noRaw : (nick || '');
     i2.value = '';
-    var h1 = $('bd-hint1'), h2 = $('bd-hint2');
-    h1.textContent = ''; h1.className = 'bd-setup-hint';
-    h2.textContent = ''; h2.className = 'bd-setup-hint';
+    setSetupHint(1, '', false);
+    setSetupHint(2, '', false);
     var modes1 = document.querySelectorAll('.bd-setup-modes .chip[data-p="1"]');
     for (var i = 0; i < modes1.length; i++) {
       modes1[i].setAttribute('aria-pressed', modes1[i].getAttribute('data-mode') === LS.mode1 ? 'true' : 'false');
     }
     var modes2 = document.querySelectorAll('.bd-setup-modes .chip[data-p="2"]');
     for (var j = 0; j < modes2.length; j++) {
-      modes2[j].setAttribute('aria-pressed', modes2[j].getAttribute('data-mode') === 'no' ? 'true' : 'false');
+      modes2[j].setAttribute('aria-pressed', modes2[j].getAttribute('data-mode') === LS.mode2 ? 'true' : 'false');
     }
-    if (LS.mode1 === 'no') {
-      i1.setAttribute('inputmode', 'numeric');
-      i1.setAttribute('placeholder', '8 位学号（如 20282307）');
-      lookupPlayer(1);
-    } else {
-      i1.removeAttribute('inputmode');
-      i1.setAttribute('placeholder', '给自己起个昵称（12 字以内）');
-    }
-    i2.setAttribute('inputmode', 'numeric');
-    i2.setAttribute('placeholder', '8 位学号（如 20282308）');
+    applySetupInput(1, LS.mode1);
+    applySetupInput(2, LS.mode2);
+    txt('bd-setup-sub', hasNo
+      ? '这盘也一样公开、可被观战、会进历史。填学号会自动查姓名，也可以直接用昵称。'
+      : '没登录（或账号学号不是 8 位）：学号查姓名要先登录；现在可以直接用昵称。');
+    var start = $('bd-setup-start');
+    if (start) { start.disabled = false; start.textContent = '开始对局'; }
     show('bd-local-setup', true);
-    setTimeout(function () { (no ? i2 : i1).focus(); }, 80);
+    if (hasNo) lookupPlayer(1);
+    setTimeout(function () { (hasNo ? i2 : i1).focus(); }, 80);
   }
 
   function closeLocalSetup() {
     show('bd-local-setup', false);
   }
 
-  function submitLocalSetup() {
+  function finishLocalSetup() {
+    if ($('bd-local-setup').hidden) return false;
     var names = [];
     for (var p = 1; p <= 2; p++) {
       var mode = p === 1 ? LS.mode1 : LS.mode2;
       var input = $('bd-p' + p + 'name');
-      var hint = $('bd-hint' + p);
       var raw = (input.value || '').trim();
       if (mode === 'no') {
+        raw = digitsOnly(raw);
+        if (input.value !== raw) input.value = raw;
         var resolved = p === 1 ? LS.resolved1 : LS.resolved2;
         if (!resolved) {
-          hint.textContent = raw.length === 8 ? '这个学号没查到姓名，可以切到「昵称」' : '请填 8 位学号，或切到「昵称」';
-          hint.className = 'bd-setup-hint is-bad';
+          if (raw.length !== 8) setSetupHint(p, '学号是 8 位数字（现在 ' + raw.length + ' 位）', true);
+          else setSetupHint(p, '这个学号没查到姓名，可以切到「昵称」', true);
           input.focus();
-          return;
+          return false;
         }
         names.push(resolved);
       } else {
         if (!raw || raw.length > 12) {
-          hint.textContent = raw ? '昵称最多 12 个字' : '请填一个昵称';
-          hint.className = 'bd-setup-hint is-bad';
+          setSetupHint(p, raw ? '昵称最多 12 个字' : '请填一个昵称', true);
           input.focus();
-          return;
+          return false;
         }
         names.push(raw);
       }
     }
     closeLocalSetup();
     createLocalRoom(names[0], names[1]);
+    return true;
+  }
+
+  function submitLocalSetup() {
+    if (LS.busy) return;
+    clearTimeout(LS.timer1);
+    clearTimeout(LS.timer2);
+    var pending = [];
+    for (var p = 1; p <= 2; p++) {
+      var mode = p === 1 ? LS.mode1 : LS.mode2;
+      var input = $('bd-p' + p + 'name');
+      var raw = (input.value || '').trim();
+      if (mode === 'no') {
+        raw = digitsOnly(raw);
+        if (input.value !== raw) input.value = raw;
+        if (raw.length !== 8) {
+          setSetupHint(p, '学号是 8 位数字（现在 ' + raw.length + ' 位）', true);
+          input.focus();
+          return;
+        }
+        if (!(p === 1 ? LS.resolved1 : LS.resolved2)) pending.push(p);
+      } else if (!raw || raw.length > 12) {
+        setSetupHint(p, raw ? '昵称最多 12 个字' : '请填一个昵称', true);
+        input.focus();
+        return;
+      }
+    }
+    if (!pending.length) { finishLocalSetup(); return; }
+    if (!logged()) {
+      setSetupHint(pending[0], '查学号要登录；也可以切到「昵称」', true);
+      $('bd-p' + pending[0] + 'name').focus();
+      return;
+    }
+
+    LS.busy = true;
+    var start = $('bd-setup-start');
+    var oldText = start ? start.textContent : '';
+    if (start) { start.disabled = true; start.textContent = '查花名册…'; }
+    var left = pending.length;
+    var bad = false;
+
+    pending.forEach(function (p) {
+      var input = $('bd-p' + p + 'name');
+      var raw = digitsOnly(input.value);
+      setSetupHint(p, '查花名册中…', false);
+      B8.sb.rpc('b8_member_lookup', { p_token: token(), p_no: raw })
+        .then(function (res) {
+          if (res && res.ok && res.name) {
+            if (p === 1) LS.resolved1 = res.name; else LS.resolved2 = res.name;
+            setSetupHint(p, '✓ ' + res.name, false);
+          } else {
+            bad = true;
+            setSetupHint(p, '花名册里没有这个学号，可以切到「昵称」', true);
+          }
+        })
+        .catch(function (err) {
+          bad = true;
+          var msg = (err && err.message) || '';
+          setSetupHint(p, /登录|token|jwt|授权/i.test(msg)
+            ? '查学号要登录；也可以切到「昵称」'
+            : '查学号失败（数据库没连上？），可以切到「昵称」', true);
+        })
+        .then(function () {
+          if (--left !== 0) return;
+          LS.busy = false;
+          if (start) { start.disabled = false; start.textContent = oldText || '开始对局'; }
+          if (!bad) finishLocalSetup();
+        });
+    });
   }
 
   function resumeLocal(saved) {
@@ -2790,7 +2887,8 @@
       input.addEventListener('input', function () {
         var mode = p === 1 ? LS.mode1 : LS.mode2;
         if (mode === 'no') {
-          this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);
+          var v = digitsOnly(this.value);
+          if (this.value !== v) this.value = v;
         }
         if (p === 1) LS.resolved1 = ''; else LS.resolved2 = '';
         var hint = $('bd-hint' + p);
@@ -2798,6 +2896,10 @@
         clearTimeout(p === 1 ? LS.timer1 : LS.timer2);
         var t = setTimeout(function () { lookupPlayer(p); }, 260);
         if (p === 1) LS.timer1 = t; else LS.timer2 = t;
+      });
+      input.addEventListener('focus', function () {
+        var mode = p === 1 ? LS.mode1 : LS.mode2;
+        if (mode === 'no' && this.value.length >= 8) this.select();
       });
       input.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); submitLocalSetup(); }
