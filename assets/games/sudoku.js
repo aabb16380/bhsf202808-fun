@@ -6,7 +6,7 @@
    · 辅助：笔记（免费）、候选模式（算提示）、提示推演、撤销
    · 填错立刻标红并扣 500 分；填满后还有错也只按错误扣，不额外清零
    · 计时从「开始」那一刻走，不是从第一次填数才开始
-   · 计分：最终分 =（5000 − 秒数）× 难度系数 − 错误次数 × 500（最低 0）
+   · 计分：最终分 = 2500 × 难度系数 − 秒数 − 错误次数 × 500（最低 0）
    · 提示/候选：第一次打开会确认「用了就不进排行榜」，之后本局只算本机成绩
    · 演示模式：不判对错；退出可保留当前填数（不排行）或回到进入前
    · 排行：game = sudoku:<难度>，每人每档一行；b8_sudoku_top
@@ -23,9 +23,9 @@
 
   var DIFFS = [
     { id: 'easy',   name: '简单', coef: 1.00, clues: 40, desc: '40 个已知数 · 先热身' },
-    { id: 'normal', name: '普通', coef: 1.50, clues: 34, desc: '34 个已知数起 · 日常难度' },
-    { id: 'hard',   name: '困难', coef: 2.20, clues: 28, desc: '28 个已知数起 · 要推几步' },
-    { id: 'expert', name: '极难', coef: 3.00, clues: 24, desc: '24 个已知数起 · 慢慢来' }
+    { id: 'normal', name: '普通', coef: 2.00, clues: 34, desc: '34 个已知数起 · 日常难度' },
+    { id: 'hard',   name: '困难', coef: 3.00, clues: 28, desc: '28 个已知数起 · 要推几步' },
+    { id: 'expert', name: '极难', coef: 4.00, clues: 24, desc: '24 个已知数起 · 慢慢来' }
   ];
   var DIFF_BY_ID = {};
   DIFFS.forEach(function (d) { DIFF_BY_ID[d.id] = d; });
@@ -370,7 +370,7 @@
   function startClock() {
     if (finished) return;
     started = true;
-    startAt = Date.now() - elapsedMs;
+    if (!startAt) startAt = Date.now() - elapsedMs;
     if (!ticker) {
       ticker = setInterval(function () {
         if (timerEl) timerEl.textContent = fmt(elapsed());
@@ -624,12 +624,12 @@
   function calcScore(failed) {
     var d = diffOf(diff);
     var sec = Math.max(0, Math.round(elapsedMs / 1000));
-    var base = Math.max(0, 5000 - sec);
-    var raw = Math.round(base * d.coef);
+    var base = 2500;
+    var scaled = Math.round(base * d.coef);
     var penalty = mistakes * 500;
-    var final = Math.max(0, raw - penalty);
+    var final = Math.max(0, scaled - sec - penalty);
     return {
-      sec: sec, base: base, coef: d.coef, raw: raw,
+      sec: sec, base: base, coef: d.coef, scaled: scaled,
       penalty: penalty, final: final, failed: !!failed
     };
   }
@@ -650,7 +650,7 @@
     }
     paintAll();
     scoreInfo = calcScore(wrongAnswer);
-    // 用了提示 / 演示 / 超过 5000 秒的局不刷本机最高；答案有错只扣分，仍可上榜。
+    // 用了提示 / 演示 / 0 分的局不刷本机最高；答案有错只扣分，仍可上榜。
     if (hints === 0 && !demoUsed && scoreInfo.final > 0) {
       saveBest(diff, scoreInfo.final);
     }
@@ -663,8 +663,7 @@
     var d = diffOf(diff);
     var best = readBest(diff);
     var s = scoreInfo || calcScore(wrongAnswer);
-    var title = wrongAnswer ? '答案有错'
-      : (s.final <= 0 ? (s.sec >= 5000 ? '超时' : '没分了') : '完成了');
+    var title = wrongAnswer ? '答案有错' : (s.final <= 0 ? '没分了' : '完成了');
 
     var penaltyText = mistakes > 0 ? '填错 ' + mistakes + ' 次，扣 ' + s.penalty + ' 分。' : '';
 
@@ -681,9 +680,7 @@
         : '本局用了 ' + hints + ' 次提示') +
         (penaltyText ? '另外' + penaltyText : '') + '按规则不加入排行榜。';
     } else if (s.final <= 0) {
-      note = s.sec >= 5000
-        ? '超过 5000 秒，本局 0 分，没有进排行榜。'
-        : (penaltyText + '分数被扣到 0，本局没有进排行榜。');
+      note = (penaltyText ? penaltyText : '') + '时间和错误把分数扣到 0，本局没有进排行榜。';
     } else if (demoUsed) {
       note = (penaltyText ? penaltyText : '') + '本局用过演示模式，不加入排行榜。';
     } else if (!writable) {
@@ -703,10 +700,10 @@
         '<span class="big-unit">分</span></div>' +
         '<p class="rank-line">难度系数 <b>×' + d.coef.toFixed(2) + '</b> · 本机最高 <b>' + best + '</b> 分</p>' +
       '<dl>' +
-        '<div><dt>基础</dt><dd>5000</dd></div>' +
-        '<div><dt>用时</dt><dd>−' + s.sec + '</dd></div>' +
-        '<div><dt>基础分</dt><dd>' + s.base + '</dd></div>' +
+        '<div><dt>基础</dt><dd>' + s.base + '</dd></div>' +
         '<div><dt>难度系数</dt><dd>×' + s.coef.toFixed(2) + '</dd></div>' +
+        '<div><dt>难度分</dt><dd>' + s.scaled + '</dd></div>' +
+        '<div><dt>用时</dt><dd>−' + s.sec + '</dd></div>' +
         '<div><dt>错误扣分</dt><dd>−' + s.penalty + '</dd></div>' +
         '<div><dt>最终</dt><dd>' + s.final + '</dd></div>' +
         '<div><dt>规则</dt><dd>有提示不排行</dd></div>' +
@@ -756,9 +753,9 @@
     html += '</div></div>' +
       '<button class="btn-main" type="button" id="sd-start">开始</button>' +
       '<button class="btn-2nd" type="button" id="sd-close">' + (started && !finished ? '继续这一局' : '先看看') + '</button>' +
-      '<p class="tip">开始后计时立刻走：<b>分数 =（5000 − 秒数）× 难度系数 − 错误 × 500</b>；' +
+      '<p class="tip">开始后计时立刻走：<b>分数 = 2500 × 难度系数 − 秒数 − 错误 × 500</b>；' +
       '填错立刻标红并扣 500 分；填满 81 格时如果还有错，只按错误继续扣，不再额外清零。<br>' +
-      '<b>简单 ×1.00 / 普通 ×1.50 / 困难 ×2.20 / 极难 ×3.00</b>。' +
+      '<b>简单 ×1.00 / 普通 ×2.00 / 困难 ×3.00 / 极难 ×4.00</b>。' +
       '提示/候选：第一次打开会弹确认，<b>用了提示或候选的局都不加入排行榜</b>。' +
       '<b>演示模式</b>：填任何数字都不判对错；退出时可选保留当前填数（本局不排行）或回到进入前。</p>';
     panelEl.innerHTML = html;
