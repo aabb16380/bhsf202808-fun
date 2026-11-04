@@ -17,20 +17,20 @@
 <meta property="og:locale" content="zh_CN">
 <meta name="twitter:card" content="summary">
 
-<link rel="icon" href="assets/favicon.png?v=20261101g43" type="image/png">
-<link rel="apple-touch-icon" href="assets/icon.png?v=20261101g43">
+<link rel="icon" href="assets/favicon.png?v=20261101g44" type="image/png">
+<link rel="apple-touch-icon" href="assets/icon.png?v=20261101g44">
 <script>
-window.B8_BUILD = '20261101g43';
+window.B8_BUILD = '20261101g44';
 // ?t=<时间戳> 透传到每个资源，绕开 GitHub Pages 缓存
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
-document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g43' + window.B8_T + '">');
+document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g44' + window.B8_T + '">');
 </script>
-<script src="assets/theme.js?v=20261101g43"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g43">
+<script src="assets/theme.js?v=20261101g44"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g44">
 <script>document.documentElement.classList.add('js');</script>
 </head>
 
@@ -45,7 +45,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g43' + 
 <header class="site-header" id="site-header">
   <div class="wrap header-inner">
     <a class="brand" href="#top" aria-label="回到顶部">
-      <img class="brand-mark" src="assets/icon.png?v=20261101g43" alt="" width="30" height="30">
+      <img class="brand-mark" src="assets/icon.png?v=20261101g44" alt="" width="30" height="30">
       <span class="brand-text">
         <span class="brand-name">八班游乐场</span>
         <span class="brand-ver" id="brand-ver">v1.0</span>
@@ -146,7 +146,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g43' + 
       <div class="hero-play" id="mo-play">
         <div class="mo-badge">
           <span class="play-ring" aria-hidden="true"></span>
-          <img class="play-logo" id="mo-logo" src="assets/logo.webp?v=20261101g43" alt="八班班徽" width="200" height="160">
+          <img class="play-logo" id="mo-logo" src="assets/logo.webp?v=20261101g44" alt="八班班徽" width="200" height="160">
           <span class="mo-zj" id="mo-zj">宙金</span>
         </div>
         <div class="mo-cat-wrap" id="mo-cat-wrap" hidden>
@@ -474,8 +474,8 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g43' + 
         再把最高的 <b>三首歌相加</b>；不足三首就按实际首数算。
         记忆数字是 <b>准确率 × 等级系数 × 400000</b>；页面和榜单显示成百分制（标准分 ÷ 10000，满分 100.00），
         内部标准分不变，排序也不变。两项本身就是越大越好。
-        数独的分数是 <b>（5000 − 秒数）× 难度系数 − 错误 × 500</b>
-        （简单 1.00 / 普通 1.50 / 困难 2.20 / 极难 3.00）。填错会立刻标红并扣 500 分；
+        数独的分数是 <b>2500 × 难度系数 − 秒数 − 错误 × 500</b>
+        （简单 ×1 / 普通 ×2 / 困难 ×3 / 极难 ×4）。填错会立刻标红并扣 500 分；
         每个人取四档里最高的一行进榜；用了提示或候选模式的局不加入排行榜；
         填满 81 格时如果还有错，只按错误继续扣，不再额外清零。
       </p>
@@ -622,7 +622,7 @@ document.write('<link rel="stylesheet" href="assets/styles.css?v=20261101g43' + 
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g43' + T;
+  var V = '?v=20261101g44' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
