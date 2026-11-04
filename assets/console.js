@@ -26,7 +26,7 @@
     { key: '', name: '全部' },
     { key: '2048', name: '2048' },
     { key: 'memory', name: '记忆翻牌' },
-    { key: 'schulte', name: '专注方格' },
+    { key: 'schulte', name: '舒尔特方格' },
     { key: 'sudoku', name: '数独' }
   ];
 
