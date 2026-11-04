@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；6 位邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g55" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g55">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g55">
+<link rel="icon" href="assets/favicon.png?v=20261101g56" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g56">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g56">
 <script>
-window.B8_BUILD = '20261101g55';
+window.B8_BUILD = '20261101g56';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g55"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g55">
+<script src="assets/theme.js?v=20261101g56"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g56">
 </head>
 
 <body data-site="fun">
@@ -114,7 +114,7 @@ window.B8_TEST = !!window.B8_T;
       <div class="bd-card bd-history-card">
         <div class="bd-history-head">
           <h2>历史对局</h2>
-          <span>所有人可见 · 最近 30 盘 · 时间 / 人物 / 结果 · 点开看棋谱</span>
+          <span>所有人可见 · 最近 100 盘 · 时间 / 人物 / 结果 · 点开看棋谱</span>
         </div>
         <div class="bd-history" id="bd-history"></div>
       </div>
@@ -354,7 +354,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g55' + T;
+  var V = '?v=20261101g56' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

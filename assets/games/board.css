@@ -115,6 +115,15 @@ a:hover { text-decoration: underline; }
   cursor: pointer;
   white-space: nowrap;
 }
+.bd-del {
+  color: var(--seal);
+  border-color: rgba(193, 82, 47, .35);
+}
+
+.bd-del:hover {
+  border-color: var(--seal);
+  background: rgba(193, 82, 47, .07);
+}
 
 .bd-who {
   max-width: 26vw;

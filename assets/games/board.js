@@ -414,7 +414,36 @@
       row.appendChild(main);
       row.appendChild(res);
       row.appendChild(btn);
+      if (B8.auth && B8.auth.isSuper && B8.auth.isSuper()) {
+        var del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'bd-room-btn bd-del';
+        del.textContent = '删除';
+        del.title = '超级管理员：删除这盘记录';
+        del.addEventListener('click', (function (code) {
+          return function () { deleteHistory(code); };
+        })(r.code));
+        row.appendChild(del);
+      }
       box.appendChild(row);
+    });
+  }
+
+  function deleteHistory(code) {
+    B8.confirm('删除这盘棋谱？对局记录、着法、观战评论都会删掉，不能恢复。', {
+      title: '删除对局', danger: true, okText: '删除'
+    }).then(function (ok) {
+      if (!ok) return;
+      B8.sb.rpc('b8_board_admin_delete', {
+        p_token: (B8.auth && B8.auth.token && B8.auth.token()) || '',
+        p_code: code
+      }).then(function (res) {
+        if (!res || !res.ok) throw new Error('删除没成功');
+        toast('已删除 ' + code);
+        loadLists(true);
+      }).catch(function (err) {
+        toast((err && err.message) || '删除没成功');
+      });
     });
   }
 
@@ -1766,7 +1795,7 @@
     var playing = st.status === 'play' && (offline || (S.room && S.room.status === 'play'));
     var isPlayer = !online || S.seat > 0;
     var canOperate = offline || (isLocalRoom() && S.seat > 0) || (isVsRoom() && S.seat > 0);
-    show('bd-resign', playing && online && !localRoom && isPlayer);
+    show('bd-resign', playing && ((isVsRoom() && S.seat > 0) || (isLocalRoom() && S.seat > 0) || isOfflineLocal()));
     show('bd-draw', playing && online && !localRoom && isPlayer);
     show('bd-pass', playing && st.game === 'go' && canOperate);
     show('bd-undo', playing && canOperate);
@@ -3418,15 +3447,22 @@
 
     $('bd-resign').addEventListener('click', function () {
       if (!S) return;
-      B8.confirm('确定认输？这盘就结束了。', { title: '认输', danger: true, okText: '认输' })
+      var localGame = isOfflineLocal() || isLocalRoom();
+      var loser = S.state.turn;
+      var msg = localGame
+        ? '现在轮到 ' + nameForColor(loser) + ' 走。确定让 ' + nameForColor(loser) + ' 认输？'
+        : '确定认输？这盘就结束了。';
+      B8.confirm(msg, { title: '认输', danger: true, okText: '认输' })
         .then(function (ok) {
           if (!ok) return;
-          if (S.mode === 'local') {
+          if (isOfflineLocal()) {
             S.state = E.clone(S.state);
             S.state.status = 'over';
             S.state.winner = 3 - S.state.turn;
             S.state.reason = 'resign';
             S.clockRunning = 0;
+            S.score = null;
+            S.scoreBusy = false;
             saveLocal();
             renderAll();
             showResult();
@@ -3436,6 +3472,8 @@
             .then(function (res) {
               S.room = res.room; S.state = res.state;
               S.resultShown = true;
+              S.score = null;
+              S.scoreBusy = false;
               renderAll();
               showResult();
             })
