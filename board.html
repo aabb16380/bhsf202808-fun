@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；6 位邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g54" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g54">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g54">
+<link rel="icon" href="assets/favicon.png?v=20261101g55" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g55">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g55">
 <script>
-window.B8_BUILD = '20261101g54';
+window.B8_BUILD = '20261101g55';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g54"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g54">
+<script src="assets/theme.js?v=20261101g55"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g55">
 </head>
 
 <body data-site="fun">
@@ -156,6 +156,7 @@ window.B8_TEST = !!window.B8_T;
 
     <!-- ==================== 对局 ==================== -->
     <section class="bd-view" id="bd-game" hidden>
+      <div class="bd-first-banner" id="bd-first-banner" hidden></div>
       <div class="bd-gamebar">
         <button class="bd-back2" id="bd-exit" type="button">← 离开</button>
         <div class="bd-gname">
@@ -254,6 +255,15 @@ window.B8_TEST = !!window.B8_T;
             </div>
           </div>
 
+          <div class="bd-spectators" id="bd-spectators" hidden>
+            <div class="bd-box-head"><b>观战名单</b><span id="bd-spectator-count">0</span></div>
+            <ul class="bd-spectator-list" id="bd-spectator-list"></ul>
+            <div class="bd-spectator-foot">
+              <button class="bd-mini" id="bd-spectator-refresh" type="button">刷新</button>
+              <span id="bd-spectator-note">仅管理员可见</span>
+            </div>
+          </div>
+
           <div class="bd-moves-box">
             <div class="bd-box-head"><b>着法</b><span id="bd-move-count">0</span></div>
             <ol class="bd-moves" id="bd-moves"></ol>
@@ -344,7 +354,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g54' + T;
+  var V = '?v=20261101g55' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

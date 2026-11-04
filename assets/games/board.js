@@ -58,6 +58,7 @@
   var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, rooms: [], mine: [], history: [], historyApi: true, dbMissing: false, busy: false };
   var LS = { mode1: 'no', mode2: 'no', name1: '', name2: '', resolved1: '', resolved2: '', timer1: 0, timer2: 0, busy: false };
   var DEADSTONES = { loading: null };
+  var SPECT = { last: 0, inflight: false };
   var S = null;                 // 当前对局
   var NET = { offset: 0, lastOk: 0, fails: 0, timer: 0, inflight: false, again: false, lastPing: 0, started: 0 };
   var CHAT = { timer: 0, lastId: 0, inflight: false, items: [], hidden: false };
@@ -875,6 +876,8 @@
      ============================================================ */
   function enterOnline(code, room, state, seat, opts) {
     opts = opts || {};
+    SPECT.last = 0;
+    SPECT.inflight = false;
     stopChat();
     clearTimeout(NET.timer);
     CHAT.items = [];
@@ -915,6 +918,9 @@
   }
 
   function backToLobby() {
+    SPECT.last = 0;
+    SPECT.inflight = false;
+    show('bd-spectators', false);
     stopChat();
     clearTimeout(NET.timer);
     closePromo();
@@ -1509,6 +1515,7 @@
     }
     renderMeta();
     renderPlayers();
+    renderSpectators();
     renderActions();
     renderOffer();
     renderUndoBox();
@@ -1521,6 +1528,68 @@
     else { var sp = $('bd-scorepanel'); if (sp) sp.hidden = true; }
     draw();
     if (S.anim) ensureAnimLoop();
+  }
+
+  function isAdminUser() {
+    return !!(B8.auth && B8.auth.isAdmin && B8.auth.isAdmin());
+  }
+
+  function adminToken() {
+    return (B8.auth && B8.auth.token && B8.auth.token()) || token();
+  }
+
+  function loadSpectators(force) {
+    if (!S || S.mode !== 'online' || !isAdminUser()) return;
+    if (SPECT.inflight) return;
+    if (!force && Date.now() - SPECT.last < 8000) return;
+    SPECT.inflight = true;
+    var myCode = S.code;
+    B8.sb.rpc('b8_board_watchers_list', { p_token: adminToken(), p_code: myCode })
+      .then(function (res) {
+        if (!S || S.code !== myCode) return;
+        S.spectators = (res && res.watchers) || [];
+        S.spectatorError = '';
+        SPECT.last = Date.now();
+        renderSpectators();
+      })
+      .catch(function (err) {
+        if (!S || S.code !== myCode) return;
+        S.spectatorError = (err && err.message) || '读取观战名单失败';
+        SPECT.last = Date.now();
+        renderSpectators();
+      })
+      .then(function () { SPECT.inflight = false; });
+  }
+
+  function renderSpectators() {
+    var on = !!(S && S.mode === 'online' && isAdminUser());
+    show('bd-spectators', on);
+    if (!on) return;
+    var list = S.spectators || [];
+    txt('bd-spectator-count', String(list.length));
+    var box = $('bd-spectator-list');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!list.length) {
+      var li = document.createElement('li');
+      li.className = 'bd-sp-empty';
+      li.textContent = '现在没有观战';
+      box.appendChild(li);
+    } else {
+      for (var i = 0; i < list.length; i++) {
+        var w = list[i];
+        var row = document.createElement('li');
+        var name = document.createElement('b');
+        name.textContent = w.name || w.nick || w.no || '同学';
+        var when = document.createElement('span');
+        when.textContent = w.last_seen ? fmtAgo(new Date(w.last_seen).toISOString()) : '';
+        row.appendChild(name);
+        row.appendChild(when);
+        box.appendChild(row);
+      }
+    }
+    var note = $('bd-spectator-note');
+    if (note) note.textContent = S.spectatorError || '仅管理员可见';
   }
 
   function renderMeta() {
@@ -2598,7 +2667,14 @@
         ctx.beginPath(); ctx.moveTo(ox + x * cell, oy + 5 * cell); ctx.lineTo(ox + x * cell, oy + bh); ctx.stroke();
       }
     }
-    // 九宫
+    // 九宫：上下各一个 3×3；先铺底色和边框，让宫位贴着两端
+    ctx.fillStyle = p.night ? 'rgba(201,168,106,.11)' : 'rgba(192,140,44,.10)';
+    ctx.fillRect(ox + 3 * cell, oy, 3 * cell, 3 * cell);
+    ctx.fillRect(ox + 3 * cell, oy + 7 * cell, 3 * cell, 3 * cell);
+    ctx.strokeStyle = p.night ? 'rgba(201,168,106,.7)' : 'rgba(120,80,30,.6)';
+    ctx.lineWidth = Math.max(1, cell * 0.028);
+    ctx.strokeRect(ox + 3 * cell, oy, 3 * cell, 3 * cell);
+    ctx.strokeRect(ox + 3 * cell, oy + 7 * cell, 3 * cell, 3 * cell);
     [[3, 0], [5, 0], [3, 7], [5, 7]].forEach(function (s) {
       var x1 = ox + s[0] * cell, y1 = oy + s[1] * cell;
       ctx.beginPath();
@@ -2610,6 +2686,14 @@
       ctx.lineTo(x1, y1 + 2 * cell);
       ctx.stroke();
     });
+
+    // 两边各一个九宫，标出来，免得看成漂在中间
+    ctx.fillStyle = p.night ? 'rgba(201,168,106,.8)' : 'rgba(110,72,24,.62)';
+    ctx.font = '600 ' + (cell * 0.24) + 'px "Noto Serif SC", "Songti SC", serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('九宫', ox + 4 * cell, oy + 1 * cell);
+    ctx.fillText('九宫', ox + 4 * cell, oy + 8 * cell);
 
     // 楚河汉界
     ctx.fillStyle = p.night ? 'rgba(201,168,106,.7)' : 'rgba(70,45,18,.72)';
@@ -2953,6 +3037,35 @@
   /* ============================================================
      十、计时
      ============================================================ */
+  function renderFirstBanner() {
+    if (!S || S.mode !== 'online' || !S.room || isLocalRoom() ||
+        !S.timed || S.room.status !== 'play' || !S.state || S.state.status !== 'play' ||
+        S.state.seq !== 0 || !S.room.turn_started) {
+      show('bd-first-banner', false);
+      return;
+    }
+    var elapsed = (Date.now() + (NET.offset || 0)) - S.room.turn_started;
+    if (elapsed < 10000) {
+      show('bd-first-banner', false);
+      return;
+    }
+    var left = Math.ceil((30000 - elapsed) / 1000);
+    var text;
+    if (left <= 0) {
+      text = '第一手已超时，正在结算…';
+      if (!NET.timeoutAt || Date.now() - NET.timeoutAt > 2500) {
+        NET.timeoutAt = Date.now();
+        syncNow();
+      }
+    } else {
+      var who = S.seat === 0 ? '' : (S.state.turn === S.seat ? '你的' : '对方的');
+      text = who + '第一手倒计时 <b>' + left + '</b> 秒 · 超时判负';
+    }
+    var el = $('bd-first-banner');
+    if (el) el.innerHTML = text;
+    show('bd-first-banner', true);
+  }
+
   function tick() {
     if (!S) return;
     if (S.timed && S.state && S.state.status === 'play') {
@@ -2987,6 +3100,8 @@
         syncNow();
       }
     }
+    renderFirstBanner();
+    loadSpectators(false);
   }
 
   /* ============================================================
@@ -3217,6 +3332,9 @@
     $('bd-review-next').addEventListener('click', function () { reviewStep(1); });
     $('bd-review-end').addEventListener('click', function () {
       if (S) reviewGoto(S.moves.length);
+    });
+    $('bd-spectator-refresh').addEventListener('click', function () {
+      loadSpectators(true);
     });
 
     $('bd-flip').addEventListener('click', function () {
