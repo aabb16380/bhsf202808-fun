@@ -1380,6 +1380,7 @@
      ============================================================ */
   function onBoardClick(ev) {
     if (!S || !renderer || !renderer.g) return;
+    if (S.moveBusy) { toast('这一步还在上传，上传完成后才能继续落子'); return; }
     var rect = renderer.cv.getBoundingClientRect();
     var px = (ev.clientX - rect.left) * (renderer.w / rect.width);
     var py = (ev.clientY - rect.top) * (renderer.h / rect.height);
@@ -1548,6 +1549,7 @@
     renderPlayers();
     renderSpectators();
     renderActions();
+    renderUploadMask();
     renderOffer();
     renderUndoBox();
     renderMoves();
@@ -1791,6 +1793,10 @@
     n.innerHTML = s;
   }
 
+  function renderUploadMask() {
+    show('bd-upload-mask', !!(S && S.mode === 'online' && S.moveBusy));
+  }
+
   function renderActions() {
     var st = S.state;
     var online = S.mode === 'online';
@@ -1809,7 +1815,10 @@
     show('bd-chat', online);
     show('bd-cancel-room', !!(S.isHost && S.room && S.room.status === 'wait'));
     var passBtn = $('bd-pass');
-    if (passBtn) passBtn.disabled = !myTurn();
+    if (passBtn) passBtn.disabled = !myTurn() || !!S.moveBusy;
+    var resignBtn = $('bd-resign'); if (resignBtn) resignBtn.disabled = !!S.moveBusy;
+    var endBtn = $('bd-end'); if (endBtn) endBtn.disabled = !!S.moveBusy;
+    var restartBtn = $('bd-restart'); if (restartBtn) restartBtn.disabled = !!S.moveBusy;
     var drawBtn = $('bd-draw');
     if (drawBtn) drawBtn.disabled = !!(S.offer && !S.offer.mine);
     var undoBtn = $('bd-undo');

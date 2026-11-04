@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；6 位邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g60" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g60">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g60">
+<link rel="icon" href="assets/favicon.png?v=20261101g61" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g61">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g61">
 <script>
-window.B8_BUILD = '20261101g60';
+window.B8_BUILD = '20261101g61';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g60"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g60">
+<script src="assets/theme.js?v=20261101g61"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g61">
 </head>
 
 <body data-site="fun">
@@ -193,6 +193,9 @@ window.B8_TEST = !!window.B8_T;
         <div class="bd-boardbox">
           <div class="bd-boardwrap" id="bd-boardwrap">
             <canvas id="bd-canvas" aria-label="棋盘"></canvas>
+            <div class="bd-upload-mask" id="bd-upload-mask" hidden>
+              <span>正在上传这一步…<br><i>上传完成后才能继续落子</i></span>
+            </div>
 
             <div class="bd-overlay" id="bd-wait" hidden>
               <p class="bd-over-kicker">房间已建好 · 等人</p>
@@ -355,7 +358,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g60' + T;
+  var V = '?v=20261101g61' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
