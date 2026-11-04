@@ -1100,6 +1100,8 @@
       if (!S || S.mode !== 'online' || S.code !== myCode) return;
       S.moveBusy = false;
       if (res && res.timeout) {
+        S.moveBusy = false;
+        S.anim = null;
         S.moves.pop();
         S.texts.pop();
         S.room = res.room;
@@ -1125,6 +1127,7 @@
       if (!S || S.mode !== 'online' || S.code !== myCode) return;
       // 回滚这一步，避免自己的棋盘和服务器越走越远
       S.moveBusy = false;
+      S.anim = null;
       S.moves.pop();
       S.texts.pop();
       S.state = prev;
