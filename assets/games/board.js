@@ -1252,6 +1252,55 @@
     else commitOnline(mv);
   }
 
+  function flushLocalUploads() {
+    if (!S || !isLocalRoom() || S.uploadBusy || S.uploadTimer) return;
+    if (!S.uploadQueue || !S.uploadQueue.length) return;
+    var job = S.uploadQueue[0];
+    var myCode = S.code;
+    S.uploadBusy = true;
+    B8.sb.rpc('b8_board_move', {
+      p_token: token(),
+      p_code: S.code,
+      p_seq: job.seq,
+      p_move: job.move,
+      p_state: job.state
+    }).then(function (res) {
+      if (!S || S.code !== myCode) { if (S) S.uploadBusy = false; return; }
+      S.uploadBusy = false;
+      if (res && res.timeout) {
+        S.uploadQueue = [];
+        S.room = res.room;
+        S.state = res.state;
+        S.resultShown = true;
+        renderAll();
+        showResult();
+        return;
+      }
+      S.uploadQueue.shift();
+      if (res && res.room) S.room = res.room;
+      if (!S.uploadQueue.length && res && res.state && S.state && res.state.seq === S.state.seq) {
+        S.state = res.state;
+      }
+      setNet('', '已同步');
+      renderAll();
+      if (S.uploadQueue.length) flushLocalUploads();
+      else syncNow();
+    }).catch(function () {
+      if (!S || S.code !== myCode) { if (S) S.uploadBusy = false; return; }
+      S.uploadBusy = false;
+      if (!S.uploadWarned) {
+        S.uploadWarned = true;
+        toast('本地对局上传有点慢，先继续下，后台会补上');
+      }
+      clearTimeout(S.uploadTimer);
+      S.uploadTimer = setTimeout(function () {
+        if (!S) return;
+        S.uploadTimer = 0;
+        flushLocalUploads();
+      }, 1500);
+    });
+  }
+
   function applyPendingDead(ns) {
     if (S && S.pendingDead && ns && ns.status === 'over' && ns.reason === 'score') {
       ns.score = E.scoreGo(ns, S.pendingDead);
@@ -1311,6 +1360,15 @@
     S.undo = null;
     S.moveBusy = true;
     renderAll();
+
+    if (isLocalRoom()) {
+      S.moveBusy = false;
+      S.uploadQueue.push({ seq: ns.seq, move: mv, state: ns });
+      setNet('', '已排队');
+      renderAll();
+      flushLocalUploads();
+      return;
+    }
 
     setNet('', '发送中');
     var myCode = S.code;
@@ -1385,8 +1443,9 @@
     var idx = renderer.g.hit(px, py);
     if (idx < 0) return;
     if (S.scoreBusy) { toast('正在点目，稍等一下'); return; }
-    if (S.score && S.state.game === 'go' && S.state.status === 'play') {
-      if (S.state.board[idx]) toggleDeadChain(idx);
+    if (S.score && S.state.game === 'go' && (S.state.status === 'play' || S.reviewing)) {
+      var scoreBoard = scoreState().board;
+      if (scoreBoard[idx]) toggleDeadChain(idx);
       else toast('点棋子可以标死子；再点「退出点目」回到对局');
       return;
     }
@@ -1553,7 +1612,7 @@
     renderStatus();
     renderOverlays();
     renderReview();
-    if (S.state.game === 'go' && !S.reviewing) renderScorePanel();
+    if (S.state.game === 'go') renderScorePanel();
     else { var sp = $('bd-scorepanel'); if (sp) sp.hidden = true; }
     draw();
     if (S.anim) ensureAnimLoop();
@@ -1803,7 +1862,11 @@
     show('bd-undo', playing && canOperate);
     show('bd-end', playing && localRoom && S.seat > 0);
     show('bd-restart', playing && (offline || (localRoom && S.seat > 0)));
-    show('bd-score', st.game === 'go' && st.status === 'play');
+    var pendingUpload = !!(S.uploadQueue && S.uploadQueue.length);
+    var endBtn = $('bd-end'); if (endBtn) endBtn.disabled = pendingUpload;
+    var restartBtn = $('bd-restart'); if (restartBtn) restartBtn.disabled = pendingUpload;
+    var resignBtn = $('bd-resign'); if (resignBtn) resignBtn.disabled = pendingUpload;
+    show('bd-score', st.game === 'go' && (st.status === 'play' || S.reviewing));
     show('bd-chat', online);
     show('bd-cancel-room', !!(S.isHost && S.room && S.room.status === 'wait'));
     var passBtn = $('bd-pass');
@@ -1813,7 +1876,7 @@
     var undoBtn = $('bd-undo');
     if (undoBtn) {
       if (isVsRoom()) undoBtn.disabled = S.undoBusy || S.moveBusy || !(st.turn !== S.seat) || !!S.undo;
-      else undoBtn.disabled = S.undoBusy || S.moveBusy || !playing;
+      else undoBtn.disabled = S.undoBusy || S.moveBusy || (S.uploadQueue && S.uploadQueue.length > 0) || !playing;
       undoBtn.title = isVsRoom()
         ? '只有刚走完的一方能申请悔棋，要对方同意'
         : '撤回上一手';
@@ -1966,6 +2029,7 @@
 
   function requestUndo() {
     if (!S || !S.state || S.state.status !== 'play') return;
+    if (S.uploadQueue && S.uploadQueue.length) { toast('还有几步在上传，稍等一下'); return; }
     if (isOfflineLocal()) return;
     S.undoBusy = true;
     var btn = $('bd-undo');
@@ -2037,6 +2101,8 @@
     S.reviewState = arr[i];
     S.anim = null;
     S.resultShown = false;
+    S.score = null;
+    S.scoreBusy = false;
     show('bd-result', false);
     renderAll();
   }
@@ -2266,12 +2332,17 @@
     return out;
   }
 
+  function scoreState() {
+    return (S && S.reviewing && S.reviewState) ? S.reviewState : (S ? S.state : null);
+  }
+
   function applyGoScore(dead, auto) {
-    if (!S || !S.state || S.state.game !== 'go') return;
+    var st = scoreState();
+    if (!S || !st || st.game !== 'go') return;
     dead = (dead || []).slice();
-    var sc = E.scoreGo(S.state, dead);
+    var sc = E.scoreGo(st, dead);
     sc.dead = dead;
-    sc.seq = S.state.seq;
+    sc.seq = st.seq;
     sc.auto = !!auto;
     S.score = sc;
     S.scoreBusy = false;
@@ -2291,21 +2362,25 @@
       draw();
       return;
     }
-    if (S.state.status !== 'play') { toast('对局已经结束'); return; }
-    var seq = S.state.seq;
+    var st = scoreState();
+    if (!st || st.status !== 'play') { toast('这个局面不能点目'); return; }
+    var seq = st.seq;
+    var reviewIdx = S.reviewing ? S.reviewIndex : -1;
     S.scoreBusy = true;
     S.score = null;
     renderScorePanel();
     renderActions();
     draw();
-    estimateDead(S.state).then(function (dead) {
-      if (!S || !S.state || S.state.game !== 'go' || S.state.status !== 'play' || S.state.seq !== seq) return;
+    estimateDead(st).then(function (dead) {
+      if (!S || !S.state || S.state.game !== 'go' || !S.scoreBusy) return;
+      if (S.reviewing ? (S.reviewIndex !== reviewIdx) : (S.state.seq !== seq)) return;
       applyGoScore(dead, true);
       toast(dead.length
         ? '自动标出 ' + dead.length + ' 颗死子；点错的棋子可以直接点一下改正'
         : '没有找到死子；有争议的话点棋子手动标死子');
     }).catch(function () {
-      if (!S || !S.state || S.state.game !== 'go' || S.state.seq !== seq) return;
+      if (!S || !S.state || S.state.game !== 'go' || !S.scoreBusy) return;
+      if (S.reviewing ? (S.reviewIndex !== reviewIdx) : (S.state.seq !== seq)) return;
       applyGoScore([], false);
       S.score.autoFailed = true;
       renderScorePanel();
@@ -2314,8 +2389,9 @@
   }
 
   function toggleDeadChain(idx) {
-    if (!S || !S.score || S.state.game !== 'go') return;
-    var chain = goChainAt(S.state, idx);
+    var st = scoreState();
+    if (!S || !S.score || !st || st.game !== 'go') return;
+    var chain = goChainAt(st, idx);
     if (!chain.length) return;
     var dead = (S.score.dead || []).slice();
     var has = false;
@@ -3044,8 +3120,8 @@
       sel: S.reviewing ? null : S.sel,
       targets: S.reviewing ? [] : S.targets,
       flip: S.flip,
-      score: S.reviewing ? null : S.score,
-      dead: S.reviewing ? [] : ((S.score && S.score.dead) ? S.score.dead : []),
+      score: S.score || null,
+      dead: (S.score && S.score.dead) ? S.score.dead : [],
       anim: S.reviewing ? null : S.anim
     });
     renderer.draw(!!S.anim && !S.reviewing);
@@ -3393,6 +3469,7 @@
 
     $('bd-restart').addEventListener('click', function () {
       if (!S) return;
+      if (S.uploadQueue && S.uploadQueue.length) { toast('还有几步在上传，稍等一下'); return; }
       var localRoom = isLocalRoom();
       if (!isOfflineLocal() && !localRoom) return;
       B8.confirm(localRoom ? '重开一局？现在这盘会记成和棋，然后开一盘新的。' : '重开一局？现在这盘会被清掉。',
@@ -3417,6 +3494,7 @@
 
     $('bd-end').addEventListener('click', function () {
       if (!S || !isLocalRoom() || S.state.status !== 'play') return;
+      if (S.uploadQueue && S.uploadQueue.length) { toast('还有几步在上传，稍等一下'); return; }
       B8.confirm('结束这盘本机对局？会按和棋记进历史。', { title: '结束对局', danger: true, okText: '结束' })
         .then(function (ok) {
           if (!ok) return;
@@ -3435,6 +3513,7 @@
 
     $('bd-resign').addEventListener('click', function () {
       if (!S) return;
+      if (S.uploadQueue && S.uploadQueue.length) { toast('还有几步在上传，稍等一下'); return; }
       var localGame = isOfflineLocal() || isLocalRoom();
       var loser = S.state.turn;
       var msg = localGame
