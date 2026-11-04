@@ -876,6 +876,60 @@ a:hover { text-decoration: underline; }
 
 .bd-moves .is-new { color: var(--seal); }
 
+.bd-review {
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.bd-review-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.bd-review-head b {
+  font-family: var(--serif);
+  font-size: 13px;
+  letter-spacing: .04em;
+}
+
+.bd-review-head span {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.bd-review-btns {
+  display: flex;
+  gap: 5px;
+}
+
+.bd-review-btns .bd-mini {
+  flex: 1 1 auto;
+  min-height: 30px;
+  padding: 4px 6px;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.bd-moves li.is-clickable { cursor: pointer; }
+.bd-moves li.is-clickable:hover { background: rgba(193, 82, 47, .08); }
+
+.bd-moves li.is-review {
+  background: rgba(193, 82, 47, .12);
+  color: var(--seal);
+}
+
+@media (max-width: 620px) {
+  .bd-review-btns { flex-wrap: wrap; }
+  .bd-review-btns .bd-mini { flex: 1 1 44%; }
+}
+
+
 .bd-moves .bd-mv-empty {
   padding: 12px;
   font-family: var(--sans);

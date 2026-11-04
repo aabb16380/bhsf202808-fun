@@ -406,7 +406,7 @@
       btn.className = 'bd-room-btn';
       btn.textContent = '看棋谱';
       btn.addEventListener('click', function () {
-        openRoom(r.code, { watch: true });
+        openRoom(r.code, { watch: true, review: true });
       });
 
       row.appendChild(main);
@@ -491,7 +491,7 @@
     if (!/^[A-Z0-9]{6}$/.test(code)) { toast('邀请码是 6 位字母数字'); return; }
     if (opts.watch) {
       // 观战不坐下、也不需要登录；登录了还能发评论
-      enterOnline(code, null, null, 0, { watch: true });
+      enterOnline(code, null, null, 0, { watch: true, review: !!opts.review });
       return;
     }
     requireLogin(function () {
@@ -550,6 +550,7 @@
       clockStart: 0, clockRunning: 0,
       sel: null, targets: [], drPath: null, drMoves: null,
       score: null, flip: false, resultShown: false, moveBusy: false, anim: null,
+      reviewing: false, reviewIndex: 0, reviewStates: null, reviewState: null,
       room: null, code: '', playerNames: [name1 || '玩家一', name2 || '玩家二']
     };
     writeJSON(LOCAL_KEY, null);
@@ -790,9 +791,10 @@
       game: room ? room.game : '', size: room ? room.size : 0,
       timed: room ? !!room.timed : false, minutes: room ? room.minutes : 0,
       seat: seat || 0, me: null, watchers: 0, presence: null, offer: null, undo: null, undoPrompted: null, undoBusy: false, anim: null,
+      reviewing: false, reviewIndex: 0, reviewStates: null, reviewState: null,
       commentsHidden: false, moves: [], texts: [], moveBusy: false,
       sel: null, targets: [], drPath: null, drMoves: null,
-      score: null, flip: seat === 2, resultShown: false, watch: !!opts.watch,
+      score: null, flip: seat === 2, resultShown: false, watch: !!opts.watch, reviewOnOpen: !!opts.review,
       isHost: false
     };
     saveLast(code);
@@ -936,6 +938,7 @@
       S.moves.sort(function (a, b) { return a.seq - b.seq; });
       rebuildTexts();
     }
+    if (changed || undoBack) reviewReset();
     if (!undoBack && !document.hidden && added.length === 1 && prevState &&
         S.state && S.state.seq === prevState.seq + 1 &&
         S.state.status === 'play' && !added[0].move.pass) {
@@ -944,7 +947,7 @@
 
     if (S.room.status === 'over' || S.state.status === 'over') {
       clearTimeout(NET.timer);
-      if (!S.resultShown) {
+      if (!S.reviewing && !S.resultShown) {
         S.resultShown = true;
         setTimeout(showResult, 160);
       }
@@ -956,6 +959,10 @@
 
     renderAll();
     promptUndoRequest();
+    if (S.reviewOnOpen && S.state && S.state.status === 'over' && S.moves.length) {
+      S.reviewOnOpen = false;
+      reviewGoto(0);
+    }
 
     if (S.room.status === 'play' && S.state.status === 'play' && S.state.turn === S.seat) {
       // 轮到自己时不用轮询得那么勤，但仍要保持连接
@@ -1063,6 +1070,7 @@
     S.moves.push({ seq: ns.seq, color: prev.turn, move: mv, at: Date.now() });
     S.texts.push({ seq: ns.seq, color: prev.turn, text: text });
     S.state = ns;
+    reviewReset();
     animateMove(prev, mv, ns);
     S.sel = null; S.targets = []; S.drPath = null; S.drMoves = null;
     S.score = null;
@@ -1080,6 +1088,7 @@
     S.moves.push({ seq: ns.seq, color: prev.turn, move: mv, at: Date.now() });
     S.texts.push({ seq: ns.seq, color: prev.turn, text: text });
     S.state = ns;
+    reviewReset();
     animateMove(prev, mv, ns);
     S.sel = null; S.targets = []; S.drPath = null; S.drMoves = null;
     S.score = null;
@@ -1321,7 +1330,8 @@
     renderChat();
     renderStatus();
     renderOverlays();
-    if (S.state.game === 'go') renderScorePanel();
+    renderReview();
+    if (S.state.game === 'go' && !S.reviewing) renderScorePanel();
     else { var sp = $('bd-scorepanel'); if (sp) sp.hidden = true; }
     draw();
     if (S.anim) ensureAnimLoop();
@@ -1416,6 +1426,7 @@
 
   function turnLine() {
     if (!S || !S.state) return '';
+    if (S.reviewing) return '回看 ' + S.reviewIndex + '/' + S.moves.length;
     if (S.state.status === 'over') return '已结束';
     if (S.room && S.room.status === 'wait') return '等对手';
     if (S.mode === 'local') return colorName(S.state.turn) + '走';
@@ -1469,6 +1480,12 @@
     var n = $('bd-status');
     if (!n) return;
     var st = S.state;
+    if (S.reviewing) {
+      n.textContent = S.reviewIndex === 0
+        ? '开局 · 共 ' + S.moves.length + ' 手（← → 切换）'
+        : '回看第 ' + S.reviewIndex + ' / ' + S.moves.length + ' 手（← → 切换）';
+      return;
+    }
     if (S.room && S.room.status === 'wait') {
       n.innerHTML = '把邀请码 <b>' + B8.esc(S.code) + '</b> 发给同学，他点进来就坐下。';
       return;
@@ -1592,6 +1609,7 @@
       S.undo = null;
       S.undoBusy = false;
       S.anim = null;
+      reviewReset();
       S.resultShown = false;
       trimMovesTo(res.seq || 0);
       renderAll();
@@ -1699,6 +1717,65 @@
       });
   }
 
+  function reviewReset() {
+    if (!S) return;
+    S.reviewing = false;
+    S.reviewIndex = 0;
+    S.reviewStates = null;
+    S.reviewState = null;
+  }
+
+  function reviewBuild() {
+    if (!S || !S.moves) return [];
+    if (S.reviewStates) return S.reviewStates;
+    var arr = [E.init(S.game, { size: S.size })];
+    var st = arr[0];
+    for (var i = 0; i < S.moves.length; i++) {
+      if (st.status !== 'play') break;
+      try { st = E.apply(st, S.moves[i].move); } catch (e) { break; }
+      arr.push(st);
+    }
+    S.reviewStates = arr;
+    return arr;
+  }
+
+  function reviewGoto(i) {
+    if (!S || !S.state || S.state.status !== 'over' || !S.moves.length) return;
+    var arr = reviewBuild();
+    if (!arr.length) return;
+    i = Math.max(0, Math.min(arr.length - 1, i));
+    S.reviewing = true;
+    S.reviewIndex = i;
+    S.reviewState = arr[i];
+    S.anim = null;
+    S.resultShown = false;
+    show('bd-result', false);
+    renderAll();
+  }
+
+  function reviewStep(d) {
+    if (!S) return;
+    var total = S.moves.length;
+    var i = S.reviewing ? S.reviewIndex : total;
+    reviewGoto(i + d);
+  }
+
+  function renderReview() {
+    if (!S) return;
+    var on = !!(S.state && S.state.status === 'over' && S.moves && S.moves.length);
+    show('bd-review', on);
+    if (!on) return;
+    var total = S.moves.length;
+    var i = S.reviewing ? S.reviewIndex : total;
+    txt('bd-review-label', i === 0
+      ? '开局 · 共 ' + total + ' 手'
+      : (i >= total ? '终局 · 共 ' + total + ' 手' : '第 ' + i + ' / ' + total + ' 手'));
+    $('bd-review-start').disabled = i <= 0;
+    $('bd-review-prev').disabled = i <= 0;
+    $('bd-review-next').disabled = i >= total;
+    $('bd-review-end').disabled = i >= total;
+  }
+
   function renderMoves() {
     var box = $('bd-moves');
     if (!box) return;
@@ -1712,6 +1789,7 @@
       return;
     }
     var start = Math.max(0, S.moves.length - 200);
+    var cur = S.reviewing ? S.reviewIndex : S.moves.length;
     for (var i = start; i < S.moves.length; i++) {
       var m = S.moves[i];
       var t = S.texts[i - start] || null;
@@ -1719,6 +1797,25 @@
       for (var k = 0; k < S.texts.length; k++) if (S.texts[k].seq === m.seq) { t = S.texts[k]; break; }
       var li2 = document.createElement('li');
       if (i === S.moves.length - 1) li2.className = 'is-new';
+      if (i + 1 === cur) li2.className += ' is-review';
+      if (S.state.status === 'over') {
+        li2.className += ' is-clickable';
+        li2.tabIndex = 0;
+        li2.setAttribute('role', 'button');
+        li2.title = '看这一手之后的局面';
+        li2.setAttribute('data-i', String(i + 1));
+        li2.addEventListener('click', (function (idx) {
+          return function () { reviewGoto(idx); };
+        })(i + 1));
+        li2.addEventListener('keydown', (function (idx) {
+          return function (ev) {
+            if (ev.key === 'Enter' || ev.key === ' ') {
+              ev.preventDefault();
+              reviewGoto(idx);
+            }
+          };
+        })(i + 1));
+      }
       var no = document.createElement('span');
       no.className = 'bd-mv-no';
       no.textContent = (i + 1) + '.';
@@ -1732,7 +1829,10 @@
       li2.appendChild(body);
       box.appendChild(li2);
     }
-    box.scrollTop = box.scrollHeight;
+    var active = box.querySelector('.is-review');
+    if (active) box.scrollTop = Math.max(0, active.offsetTop - box.offsetTop - 30);
+    else if (cur === 0) box.scrollTop = 0;
+    else box.scrollTop = box.scrollHeight;
   }
 
   function renderOverlays() {
@@ -1775,7 +1875,7 @@
   }
 
   function showResult() {
-    if (!S || !S.state || S.state.status !== 'over') return;
+    if (!S || !S.state || S.state.status !== 'over' || S.reviewing) return;
     S.resultShown = true;
     renderOverlays();
     renderActions();
@@ -2446,15 +2546,16 @@
 
   function draw() {
     if (!S || !S.state || !renderer) return;
-    if (!S.state.board) return;
-    renderer.set(S.state, {
-      sel: S.sel,
-      targets: S.targets,
+    var st = (S.reviewing && S.reviewState) ? S.reviewState : S.state;
+    if (!st || !st.board) return;
+    renderer.set(st, {
+      sel: S.reviewing ? null : S.sel,
+      targets: S.reviewing ? [] : S.targets,
       flip: S.flip,
-      score: S.score,
-      anim: S.anim
+      score: S.reviewing ? null : S.score,
+      anim: S.reviewing ? null : S.anim
     });
-    renderer.draw(!!S.anim);
+    renderer.draw(!!S.anim && !S.reviewing);
   }
 
   /* ============================================================
@@ -2709,7 +2810,16 @@
       if (!S) return;
       S.resultShown = false;
       show('bd-result', false);
+      if (S.moves && S.moves.length) reviewGoto(0);
+      else draw();
       renderActions();
+    });
+
+    $('bd-review-start').addEventListener('click', function () { reviewGoto(0); });
+    $('bd-review-prev').addEventListener('click', function () { reviewStep(-1); });
+    $('bd-review-next').addEventListener('click', function () { reviewStep(1); });
+    $('bd-review-end').addEventListener('click', function () {
+      if (S) reviewGoto(S.moves.length);
     });
 
     $('bd-flip').addEventListener('click', function () {
@@ -2935,6 +3045,24 @@
     renderHistory();
     renderer = new Renderer($('bd-canvas'));
     bind();
+    document.addEventListener('keydown', function (e) {
+      if (!S || !S.reviewing) return;
+      var tag = (e.target && e.target.tagName) || '';
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        reviewStep(-1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        reviewStep(1);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        reviewGoto(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        if (S) reviewGoto(S.moves.length);
+      }
+    });
     updateWho();
 
     B8.auth.ready(function () {

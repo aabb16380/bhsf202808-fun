@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；6 位邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g51" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g51">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g51">
+<link rel="icon" href="assets/favicon.png?v=20261101g52" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g52">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g52">
 <script>
-window.B8_BUILD = '20261101g51';
+window.B8_BUILD = '20261101g52';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g51"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g51">
+<script src="assets/theme.js?v=20261101g52"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g52">
 </head>
 
 <body data-site="fun">
@@ -209,7 +209,7 @@ window.B8_TEST = !!window.B8_T;
               <p class="bd-over-sub" id="bd-result-sub"></p>
               <div class="bd-over-actions">
                 <button class="bd-btn primary" id="bd-again" type="button">再来一局</button>
-                <button class="bd-btn" id="bd-view-board" type="button">看棋盘</button>
+                <button class="bd-btn" id="bd-view-board" type="button">逐手回看</button>
                 <button class="bd-btn" id="bd-back-lobby" type="button">回大厅</button>
               </div>
             </div>
@@ -239,6 +239,19 @@ window.B8_TEST = !!window.B8_T;
 
           <div class="bd-offer" id="bd-offer" hidden></div>
           <div class="bd-offer" id="bd-undo-box" hidden></div>
+
+          <div class="bd-review" id="bd-review" hidden>
+            <div class="bd-review-head">
+              <b>棋谱回看</b>
+              <span id="bd-review-label">第 0 / 0 手</span>
+            </div>
+            <div class="bd-review-btns">
+              <button class="bd-mini" id="bd-review-start" type="button">开局</button>
+              <button class="bd-mini" id="bd-review-prev" type="button">← 上一手</button>
+              <button class="bd-mini" id="bd-review-next" type="button">下一手 →</button>
+              <button class="bd-mini" id="bd-review-end" type="button">终局</button>
+            </div>
+          </div>
 
           <div class="bd-moves-box">
             <div class="bd-box-head"><b>着法</b><span id="bd-move-count">0</span></div>
@@ -330,7 +343,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g51' + T;
+  var V = '?v=20261101g52' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
