@@ -1794,7 +1794,13 @@
   }
 
   function renderUploadMask() {
-    show('bd-upload-mask', !!(S && S.mode === 'online' && S.moveBusy));
+    var busy = !!(S && S.mode === 'online' && S.moveBusy);
+    show('bd-uploading', busy);
+    var wrap = $('bd-boardwrap');
+    if (wrap) {
+      if (busy) wrap.classList.add('is-uploading');
+      else wrap.classList.remove('is-uploading');
+    }
   }
 
   function renderActions() {

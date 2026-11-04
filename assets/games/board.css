@@ -737,38 +737,33 @@ html[data-mode="night"] .bd-first-banner {
 
 .bd-boardbox { min-width: 0; }
 
-.bd-upload-mask {
-  position: absolute;
-  inset: 8px;
-  z-index: 9;
-  display: flex;
+.bd-uploading {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  background: rgba(248, 244, 233, .58);
-  border-radius: 8px;
-  cursor: wait;
-}
-
-.bd-upload-mask span {
-  padding: 10px 16px;
-  border-radius: 8px;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
   background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  color: var(--ink-2);
-  font-family: var(--sans);
-  font-size: 12px;
-  line-height: 1.7;
-  text-align: center;
-}
-
-.bd-upload-mask i {
-  font-style: normal;
   color: var(--ink-3);
   font-size: 10.5px;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 
-html[data-mode="night"] .bd-upload-mask { background: rgba(14, 14, 18, .58); }
+.bd-uploading::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--seal);
+  animation: bd-pulse 1s ease-in-out infinite;
+}
+
+.bd-boardwrap.is-uploading #bd-canvas {
+  pointer-events: none;
+  cursor: wait;
+}
 
 .bd-boardwrap {
   position: relative;
