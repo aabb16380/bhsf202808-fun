@@ -228,7 +228,7 @@
       B8.on(delBtn, 'click', function () {
         B8.confirm('删除「' + (p.title || '这个投票') + '」？候选人、票数都会一起删掉，不能恢复。', {
           title: '删除投票',
-          ok: '删除',
+          okText: '删除',
           danger: true
         }).then(function (yes) {
           if (!yes) return;
@@ -486,7 +486,7 @@
       B8.on(del, 'click', function () {
         B8.confirm('删掉 ' + (r.voter_name || r.voter_no) + ' 这一条投票？', {
           title: '删除投票记录',
-          ok: '删除',
+          okText: '删除',
           danger: true
         }).then(function (yes) {
           if (!yes) return;
