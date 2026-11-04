@@ -1012,8 +1012,8 @@
         backToLobby();
         return;
       }
-      if (/房间不存在|已解散/.test(err.message || '')) {
-        toast('这个房间不存在或已经解散');
+      if (/房间不存在|已解散|自动关闭|等人超过/.test(err.message || '')) {
+        toast((err && err.message) || '这个房间不存在或已经关闭');
         backToLobby();
         return;
       }
@@ -1638,6 +1638,8 @@
     show('bd-net', S.mode === 'online');
     show('bd-invite', S.mode === 'online' && S.room && S.seat > 0 &&
       (S.room.status === 'wait' || isLocalRoom()));
+    show('bd-admin-close', !!(B8.auth && B8.auth.isSuper && B8.auth.isSuper() &&
+      S.mode === 'online' && S.room && (S.room.status === 'play' || S.room.status === 'wait')));
   }
 
   function presenceOf(c) {
@@ -2696,15 +2698,9 @@
         ctx.beginPath(); ctx.moveTo(ox + x * cell, oy + 5 * cell); ctx.lineTo(ox + x * cell, oy + bh); ctx.stroke();
       }
     }
-    // 九宫：上下各一个 3×3；先铺底色和边框，让宫位贴着两端
-    ctx.fillStyle = p.night ? 'rgba(201,168,106,.11)' : 'rgba(192,140,44,.10)';
-    ctx.fillRect(ox + 3 * cell, oy, 3 * cell, 3 * cell);
-    ctx.fillRect(ox + 3 * cell, oy + 7 * cell, 3 * cell, 3 * cell);
-    ctx.strokeStyle = p.night ? 'rgba(201,168,106,.7)' : 'rgba(120,80,30,.6)';
-    ctx.lineWidth = Math.max(1, cell * 0.028);
-    ctx.strokeRect(ox + 3 * cell, oy, 3 * cell, 3 * cell);
-    ctx.strokeRect(ox + 3 * cell, oy + 7 * cell, 3 * cell, 3 * cell);
-    [[3, 0], [5, 0], [3, 7], [5, 7]].forEach(function (s) {
+    // 九宫：上下各一个。每个九宫只画一组对角线（3,0）↔（5,2）；
+    // 之前把 (5,0) 也当成一个宫，等于每个九宫又往右画了一组，成了两个并排的 X。
+    [[3, 0], [3, 7]].forEach(function (s) {
       var x1 = ox + s[0] * cell, y1 = oy + s[1] * cell;
       ctx.beginPath();
       ctx.moveTo(x1, y1);
@@ -2715,14 +2711,6 @@
       ctx.lineTo(x1, y1 + 2 * cell);
       ctx.stroke();
     });
-
-    // 两边各一个九宫，标出来，免得看成漂在中间
-    ctx.fillStyle = p.night ? 'rgba(201,168,106,.8)' : 'rgba(110,72,24,.62)';
-    ctx.font = '600 ' + (cell * 0.24) + 'px "Noto Serif SC", "Songti SC", serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('九宫', ox + 4 * cell, oy + 1 * cell);
-    ctx.fillText('九宫', ox + 4 * cell, oy + 8 * cell);
 
     // 楚河汉界
     ctx.fillStyle = p.night ? 'rgba(201,168,106,.7)' : 'rgba(70,45,18,.72)';
@@ -3500,6 +3488,35 @@
     });
     $('bd-invite').addEventListener('click', function () {
       if (S) B8.copy(location.origin + location.pathname + '?code=' + S.code);
+    });
+    $('bd-admin-close').addEventListener('click', function () {
+      if (!S || !S.room) return;
+      B8.confirm('强制关闭这盘？对局会按和棋记录，双方都不能再走，不能恢复。', {
+        title: '强制关闭', danger: true, okText: '关闭'
+      }).then(function (ok) {
+        if (!ok) return;
+        B8.sb.rpc('b8_board_admin_close', {
+          p_token: (B8.auth && B8.auth.token && B8.auth.token()) || '',
+          p_code: S.code
+        }).then(function (res) {
+          if (!res || !res.ok) throw new Error('关闭没成功');
+          if (res.closed === 'wait') {
+            toast('等人的房间已关闭');
+            backToLobby();
+            return;
+          }
+          S.room = res.room;
+          S.state = res.state;
+          S.resultShown = true;
+          S.score = null;
+          S.scoreBusy = false;
+          renderAll();
+          showResult();
+          toast('已强制关闭，记和棋');
+        }).catch(function (err) {
+          toast((err && err.message) || '关闭没成功');
+        });
+      });
     });
     $('bd-cancel-room').addEventListener('click', function () {
       if (!S || S.mode !== 'online') return;
