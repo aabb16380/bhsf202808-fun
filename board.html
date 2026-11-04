@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；6 位邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g50" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g50">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g50">
+<link rel="icon" href="assets/favicon.png?v=20261101g51" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g51">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g51">
 <script>
-window.B8_BUILD = '20261101g50';
+window.B8_BUILD = '20261101g51';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g50"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g50">
+<script src="assets/theme.js?v=20261101g51"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g51">
 </head>
 
 <body data-site="fun">
@@ -124,7 +124,8 @@ window.B8_TEST = !!window.B8_T;
         <div class="bd-rule-grid">
           <div>
             <b>中国象棋</b>
-            <p>将帅不能照面；蹩马腿、塞象眼；困毙也算输。没有长将判负，遇到反复将军请自行协商。</p>
+            <p>将帅不能照面；蹩马腿、塞象眼；困毙也算输。棋盘上下两端各一个九宫（带斜线的 3×3），
+              一共两个，是标准画法。没有长将判负，遇到反复将军请自行协商。</p>
           </div>
           <div>
             <b>国际象棋</b>
@@ -169,6 +170,7 @@ window.B8_TEST = !!window.B8_T;
         <div class="bd-player" id="bd-pl1">
           <span class="bd-side-tag" id="bd-tag1">先手</span>
           <b class="bd-pname" id="bd-name1">—</b>
+          <span class="bd-presence" id="bd-on1"></span>
           <span class="bd-pmeta" id="bd-cap1"></span>
           <span class="bd-clock" id="bd-clock1">—</span>
         </div>
@@ -180,6 +182,7 @@ window.B8_TEST = !!window.B8_T;
         <div class="bd-player" id="bd-pl2">
           <span class="bd-side-tag" id="bd-tag2">后手</span>
           <b class="bd-pname" id="bd-name2">—</b>
+          <span class="bd-presence" id="bd-on2"></span>
           <span class="bd-pmeta" id="bd-cap2"></span>
           <span class="bd-clock" id="bd-clock2">—</span>
         </div>
@@ -286,7 +289,7 @@ window.B8_TEST = !!window.B8_T;
           <button type="button" class="chip" data-p="1" data-mode="nick" aria-pressed="false">昵称</button>
         </div>
       </div>
-      <input class="bd-setup-input" id="bd-name1" maxlength="12" autocomplete="off"
+      <input class="bd-setup-input" id="bd-p1name" maxlength="12" autocomplete="off"
              inputmode="numeric" placeholder="8 位学号（如 20282307）">
       <p class="bd-setup-hint" id="bd-hint1"></p>
     </div>
@@ -299,7 +302,7 @@ window.B8_TEST = !!window.B8_T;
           <button type="button" class="chip" data-p="2" data-mode="nick" aria-pressed="false">昵称</button>
         </div>
       </div>
-      <input class="bd-setup-input" id="bd-name2" maxlength="12" autocomplete="off"
+      <input class="bd-setup-input" id="bd-p2name" maxlength="12" autocomplete="off"
              inputmode="numeric" placeholder="8 位学号（如 20282308）">
       <p class="bd-setup-hint" id="bd-hint2"></p>
     </div>
@@ -327,7 +330,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g50' + T;
+  var V = '?v=20261101g51' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

@@ -1421,3 +1421,30 @@ html[data-mode="night"] .bd-room-btn.is-live {
   .bd-hrow-result { margin-left: auto; }
   .bd-setup-card { padding: 18px 14px 14px; }
 }
+/* ---------- 棋手在线状态 ---------- */
+.bd-presence {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  line-height: 1;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.bd-presence::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 3px;
+  vertical-align: 1px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.bd-presence.is-on { color: var(--jade); }
+.bd-presence.is-off { color: var(--ink-3); }
+.bd-presence.is-same { color: var(--gold); }
+
+@media (max-width: 480px) {
+  .bd-presence { font-size: 8.5px; }
+}
