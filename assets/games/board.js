@@ -62,7 +62,7 @@
   var SPECT = { last: 0, inflight: false };
   var S = null;                 // 当前对局
   var NET = { offset: 0, lastOk: 0, fails: 0, timer: 0, inflight: false, again: false, lastPing: 0, started: 0 };
-  var CHAT = { timer: 0, lastId: 0, inflight: false, items: [], hidden: false };
+  var CHAT = { timer: 0, lastId: 0, inflight: false, items: [], hidden: false, inited: false };
   var LOCAL_KEY = 'b8.board.local.v1';
   var LAST_KEY = 'b8.board.last.v1';
   var pendingLogin = null;
@@ -425,7 +425,13 @@
     var box = $('bd-history');
     if (!box) return;
     box.innerHTML = '';
-    var list = LOBBY.history || [];
+    var list = (LOBBY.history || []).filter(function (r) {
+      return !LOBBY.historyFilter || r.game === LOBBY.historyFilter;
+    });
+    var hbtns = document.querySelectorAll('#bd-history-filter [data-hg]');
+    for (var hi = 0; hi < hbtns.length; hi++) {
+      hbtns[hi].className = 'chip' + ((hbtns[hi].getAttribute('data-hg') || '') === (LOBBY.historyFilter || '') ? ' is-on' : '');
+    }
     if (!list.length) {
       var empty = document.createElement('p');
       empty.className = 'bd-empty';
@@ -641,6 +647,7 @@
       S.clockRunning = 0;
       CHAT.items = [];
       CHAT.lastId = 0;
+      CHAT.inited = false;
       show('bd-result', false);
       renderAll();
       initChat();
@@ -805,8 +812,10 @@
     if (/^[0-9]{8}$/.test(raw)) return raw;
     if (/^[0-9]{1,2}$/.test(raw)) {
       var n = parseInt(raw, 10);
-      if (n >= 1 && n <= 99) return String(20282305 + n);
+      if (n >= 1 && n <= 99) return String(20282306 + n);
     }
+    // 也允许直接输后四位，如 2307 → 20282307
+    if (/^[0-9]{4}$/.test(raw) && raw.slice(0, 2) === '23') return '2028' + raw;
     return '';
   }
 
@@ -823,7 +832,7 @@
     if (mode === 'no') {
       input.setAttribute('inputmode', 'numeric');
       input.setAttribute('maxlength', '8');
-      input.setAttribute('placeholder', p === 1 ? '班学号 1-2 位或 8 位学号' : '班学号 1-2 位或 8 位学号');
+      input.setAttribute('placeholder', p === 1 ? '班学号 1-2 位 / 2307 / 8 位学号' : '班学号 1-2 位 / 2307 / 8 位学号');
     } else {
       input.removeAttribute('inputmode');
       input.setAttribute('maxlength', '12');
@@ -841,7 +850,7 @@
     if (mode !== 'no') return;
     var no = classStudentNo(raw);
     if (!no) {
-      setSetupHint(p, raw ? '填班学号（1-2 位，如 1）或 8 位学号' : '', !!raw);
+      setSetupHint(p, raw ? '填班学号（1-2 位）、后四位（2307）或 8 位学号' : '', !!raw);
       return;
     }
     if (!logged()) {
@@ -896,7 +905,7 @@
     applySetupInput(1, LS.mode1);
     applySetupInput(2, LS.mode2);
     txt('bd-setup-sub', hasNo
-      ? '这盘也一样公开、可被观战、会进历史。填 8 位学号或班学号（1 号 = 20282306）会自动查姓名，也可以直接用昵称。'
+      ? '这盘也一样公开、可被观战、会进历史。填 8 位学号、班学号（1 号 = 20282307）或后四位（2307）会自动查姓名，也可以直接用昵称。'
       : '没登录（或账号学号不是 8 位）：学号查姓名要先登录；现在可以直接用昵称。');
     var start = $('bd-setup-start');
     if (start) { start.disabled = false; start.textContent = '开始对局'; }
@@ -922,7 +931,7 @@
         var no = classStudentNo(raw);
         var resolved = p === 1 ? LS.resolved1 : LS.resolved2;
         if (!resolved) {
-          if (!no) setSetupHint(p, '填班学号（1-2 位）或 8 位学号', true);
+          if (!no) setSetupHint(p, '填班学号（1-2 位）、2307 或 8 位学号', true);
           else setSetupHint(p, '这个学号没查到姓名，可以切到「昵称」', true);
           input.focus();
           return false;
@@ -955,7 +964,7 @@
         raw = digitsOnly(raw);
         if (input.value !== raw) input.value = raw;
         if (!classStudentNo(raw)) {
-          setSetupHint(p, '填班学号（1-2 位）或 8 位学号', true);
+          setSetupHint(p, '填班学号（1-2 位）、2307 或 8 位学号', true);
           input.focus();
           return;
         }
@@ -1069,6 +1078,7 @@
     CHAT.items = [];
     CHAT.lastId = 0;
     CHAT.hidden = false;
+    CHAT.inited = false;
     NET.inflight = false;
     NET.again = false;
     NET.fails = 0;
@@ -1139,6 +1149,7 @@
 
   function syncNow() {
     if (!S || S.mode !== 'online') return;
+    if (S.reviewing || S.practice) { clearTimeout(NET.timer); return; }
     if (NET.inflight) { NET.again = true; return; }
     if (navigator.onLine === false) {
       setNet('bad', '离线');
@@ -1348,6 +1359,7 @@
   function schedulePoll(delay) {
     clearTimeout(NET.timer);
     if (!S || S.mode !== 'online') return;
+    if (S.reviewing || S.practice) return;
     if (S.room && S.room.status === 'over') {
       NET.timer = setTimeout(syncNow, 3000);
       return;
@@ -1368,14 +1380,14 @@
   }
 
   document.addEventListener('visibilitychange', function () {
-    if (!S || S.mode !== 'online') return;
+    if (!S || S.mode !== 'online' || S.reviewing || S.practice) return;
     if (!document.hidden) syncNow();
   });
   window.addEventListener('focus', function () {
-    if (S && S.mode === 'online' && !document.hidden) syncNow();
+    if (S && S.mode === 'online' && !S.reviewing && !S.practice && !document.hidden) syncNow();
   });
   window.addEventListener('online', function () {
-    if (S && S.mode === 'online') { NET.fails = 0; syncNow(); }
+    if (S && S.mode === 'online' && !S.reviewing && !S.practice) { NET.fails = 0; syncNow(); }
   });
 
   /* ============================================================
@@ -1622,6 +1634,7 @@
     S.sel = null;
     S.targets = [];
     renderAll();
+    if (S.mode === 'online' && !S.reviewing) syncNow();
     toast('已退出演练');
   }
 
@@ -1630,6 +1643,7 @@
     if (S.practice) { exitPractice(); return; }
     var base = (S.reviewing && S.reviewState) ? S.reviewState : S.state;
     if (!base) return;
+    clearTimeout(NET.timer);
     S.practice = true;
     S.practiceBase = E.clone(base);
     S.practiceState = E.clone(base);
@@ -3660,7 +3674,7 @@
 
   function tick() {
     if (!S) return;
-    if (S.practice) { renderFirstBanner(); return; }
+    if (S.practice || S.reviewing) { renderFirstBanner(); return; }
     if (S.timed && S.state && S.state.status === 'play') {
       if (S.mode === 'local') {
         if (S.clockStart && S.clockRunning && clockRemain(S.clockRunning) <= 0) {
@@ -3719,10 +3733,16 @@
     if (!vis) {
       CHAT.items = [];
       CHAT.lastId = 0;
+      CHAT.inited = false;
       stopChat();
       return;
     }
-    refreshChat(true);
+    if (!CHAT.inited) {
+      CHAT.inited = true;
+      refreshChat(true);
+    } else {
+      scheduleChat();
+    }
   }
 
   function stopChat() {
@@ -3863,8 +3883,11 @@
     $('bd-analysis').addEventListener('click', toggleAnalysis);
     $('bd-practice-reset').addEventListener('click', practiceReset);
     $('bd-refresh').addEventListener('click', function () { loadLists(true); toast('已刷新'); });
-    $('bd-history-filter').addEventListener('change', function () {
-      LOBBY.historyFilter = this.value || '';
+    $('bd-history-filter').addEventListener('click', function (e) {
+      var btn = e.target;
+      while (btn && btn !== this && !(btn.getAttribute && btn.getAttribute('data-hg') !== null)) btn = btn.parentNode;
+      if (!btn || btn === this) return;
+      LOBBY.historyFilter = btn.getAttribute('data-hg') || '';
       renderHistory();
     });
     $('bd-rank-game').addEventListener('change', function () {

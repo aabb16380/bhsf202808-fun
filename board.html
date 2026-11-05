@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；3 位数字邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g67" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g67">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g67">
+<link rel="icon" href="assets/favicon.png?v=20261101g68" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g68">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g68">
 <script>
-window.B8_BUILD = '20261101g67';
+window.B8_BUILD = '20261101g68';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g67"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g67">
+<script src="assets/theme.js?v=20261101g68"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g68">
 </head>
 
 <body data-site="fun">
@@ -121,9 +121,16 @@ window.B8_TEST = !!window.B8_T;
       <div class="bd-card bd-history-card">
         <div class="bd-history-head">
           <h2>历史对局</h2>
-          <span>所有人可见 · 最近 1000 盘 · 时间 / 人物 / 结果 · 点开看棋谱</span>
+          <span>所有人可见 · 最近 1000 局 · 时间 / 人物 / 结果 · 点开看棋谱</span>
         </div>
-        <div class="bd-history-filter"><select id="bd-history-filter" aria-label="按棋类筛选历史"><option value="">全部棋类</option><option value="xiangqi">中国象棋</option><option value="chess">国际象棋</option><option value="go">围棋</option><option value="gomoku">五子棋</option><option value="draughts">国际跳棋</option></select></div>
+        <div class="bd-history-filter" id="bd-history-filter" role="group" aria-label="按棋类筛选历史">
+          <button class="chip is-on" type="button" data-hg="">全部</button>
+          <button class="chip" type="button" data-hg="xiangqi">中国象棋</button>
+          <button class="chip" type="button" data-hg="chess">国际象棋</button>
+          <button class="chip" type="button" data-hg="go">围棋</button>
+          <button class="chip" type="button" data-hg="gomoku">五子棋</button>
+          <button class="chip" type="button" data-hg="draughts">国际跳棋</button>
+        </div>
         <div class="bd-history" id="bd-history"></div>
         <h2 class="bd-h2 bd-rank-title">棋类排行榜</h2>
         <div class="bd-rank-controls">
@@ -343,7 +350,7 @@ window.B8_TEST = !!window.B8_T;
 <div class="bd-promo" id="bd-local-setup" hidden>
   <div class="bd-setup-card" role="dialog" aria-modal="true" aria-labelledby="bd-setup-title">
     <h3 id="bd-setup-title">本机对局 · 两位棋手</h3>
-    <p class="bd-setup-sub" id="bd-setup-sub">这盘也一样公开、可被观战、会进历史。填 8 位学号或班学号（1 号 = 20282306）会自动查姓名，也可以直接用昵称。</p>
+    <p class="bd-setup-sub" id="bd-setup-sub">这盘也一样公开、可被观战、会进历史。填 8 位学号、班学号（1 号 = 20282307）或后四位（2307）会自动查姓名，也可以直接用昵称。</p>
 
     <div class="bd-setup-row" data-p="1">
       <div class="bd-setup-head">
@@ -354,7 +361,7 @@ window.B8_TEST = !!window.B8_T;
         </div>
       </div>
       <input class="bd-setup-input" id="bd-p1name" maxlength="12" autocomplete="off"
-             inputmode="numeric" placeholder="班学号 1-2 位或 8 位学号">
+             inputmode="numeric" placeholder="班学号 1-2 位 / 2307 / 8 位学号">
       <p class="bd-setup-hint" id="bd-hint1"></p>
     </div>
 
@@ -367,7 +374,7 @@ window.B8_TEST = !!window.B8_T;
         </div>
       </div>
       <input class="bd-setup-input" id="bd-p2name" maxlength="12" autocomplete="off"
-             inputmode="numeric" placeholder="班学号 1-2 位或 8 位学号">
+             inputmode="numeric" placeholder="班学号 1-2 位 / 2307 / 8 位学号">
       <p class="bd-setup-hint" id="bd-hint2"></p>
     </div>
 
@@ -394,7 +401,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g67' + T;
+  var V = '?v=20261101g68' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

@@ -1519,8 +1519,16 @@ html[data-mode="night"] .bd-room-btn.is-live {
 
 .bd-history-filter {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-start;
   margin: 6px 0 2px;
+}
+
+.bd-history-filter .chip {
+  min-height: 28px;
+  padding: 3px 10px;
+  font-size: 10.5px;
 }
 
 .bd-history-filter select {
