@@ -734,7 +734,7 @@
     var g = settings ? settings.game : LOBBY.game;
     var size = settings ? settings.size : LOBBY.size;
     var minutes = settings ? settings.minutes : LOBBY.minutes;
-    var st = E.init(g, { size: size });
+    var st = E.init(g, { size: size, forbid: !!(settings && settings.forbid) });
     S = {
       mode: 'local', game: g, size: st.size,
       minutes: minutes, timed: minutes > 0,
@@ -775,7 +775,7 @@
     var g = settings ? settings.game : LOBBY.game;
     var size = settings ? settings.size : LOBBY.size;
     var minutes = settings ? settings.minutes : LOBBY.minutes;
-    var st = E.init(g, { size: size });
+    var st = E.init(g, { size: size, forbid: !!(settings && settings.forbid) });
     B8.sb.rpc('b8_board_create_local', {
       p_token: token(),
       p_game: g,
@@ -965,7 +965,9 @@
       }
     }
     closeLocalSetup();
-    createLocalRoom(names[0], names[1]);
+    createLocalRoom(names[0], names[1], {
+      game: LOBBY.game, size: LOBBY.size, minutes: LOBBY.minutes, forbid: LOBBY.forbid
+    });
     return true;
   }
 
