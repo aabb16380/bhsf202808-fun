@@ -2769,12 +2769,40 @@
     return (pc < 8 ? pc : pc - 8) * 10 + (mv.promo ? 50 : 0);
   }
 
+  // 只收「吃子」的静态搜索：让 1 层搜索也能看见对方马上回吃，
+  // 否则象棋开局会以为「炮打马」白赚一子（实际下一手就被车吃回去）。
+  function quiesce(st, alpha, beta, depth) {
+    if (st.status === 'over') {
+      if (!st.winner || st.winner === 3) return 0;
+      return st.winner === st.turn ? MATE_SCORE : -MATE_SCORE;
+    }
+    var stand = sideScore(st);
+    if (stand >= beta) return beta;
+    if (stand > alpha) alpha = stand;
+    if (depth <= 0) return alpha;
+
+    var all = E.moves(st);
+    var caps = [];
+    for (var i = 0; i < all.length; i++) {
+      if (captureValue(st, all[i]) > 0) caps.push(all[i]);
+    }
+    if (!caps.length) return alpha;
+    caps.sort(function (a, b) { return captureValue(st, b) - captureValue(st, a); });
+    for (var j = 0; j < caps.length; j++) {
+      var ns = E.apply(st, caps[j]);
+      var v = -quiesce(ns, -beta, -alpha, depth - 1);
+      if (v >= beta) return beta;
+      if (v > alpha) alpha = v;
+    }
+    return alpha;
+  }
+
   function negamax(st, depth, alpha, beta) {
     if (st.status === 'over') {
       if (!st.winner || st.winner === 3) return 0;
       return st.winner === st.turn ? MATE_SCORE : -MATE_SCORE;
     }
-    if (depth <= 0) return sideScore(st);
+    if (depth <= 0) return quiesce(st, alpha, beta, 3);
     var moves = E.moves(st);
     if (!moves.length) return -MATE_SCORE;
     moves.sort(function (a, b) { return captureValue(st, b) - captureValue(st, a); });
@@ -5090,6 +5118,9 @@
     B8.board = {
       engine: E,
       get state() { return S; },
+      eval: function (st) { return evalState(st); },
+      material: function (st) { return evalMaterial(st); },
+      search: function (st) { return searchScore(st); },
       move: function (mv) { commit(mv); },
       sync: function () { syncNow(); },
       refresh: function () { loadLists(true); },
