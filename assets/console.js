@@ -604,6 +604,27 @@
     });
   }
 
+  function saveWorship(no, total, points, btn) {
+    no = String(no == null ? '' : no).replace(/\s/g, '');
+    total = Math.floor(Number(total));
+    points = Math.floor(Number(points));
+    if (!/^\d{6,12}$/.test(no)) { B8.toast('学号是 6–12 位数字'); return; }
+    if (!isFinite(total) || total < 0 || !isFinite(points) || points < 0) {
+      B8.toast('累计次数和剩余点数要是 ≥ 0 的整数');
+      return;
+    }
+    if (btn) btn.disabled = true;
+    B8.sb.rpc('b8_super_worship_set', {
+      p_token: tok(), p_no: no, p_total: total, p_points: points
+    }).then(function () {
+      B8.toast('已保存 ' + no + '：' + total + ' 次 / ' + points + ' 点');
+      loadScores();
+    }).catch(function (err) {
+      if (btn) btn.disabled = false;
+      B8.toast(errText(err));
+    });
+  }
+
   function paintScores() {
     var b = body();
     if (!b) return;
@@ -616,20 +637,38 @@
     html += '</div>';
 
     if (scoreGame === '__worship') {
-      html += '<p class="form-note">膜宙金按每个人累计膜拜的次数排序，括号里是当前剩余点数。</p>';
+      html += '<p class="form-note">膜宙金按每个人累计膜拜的次数排序。可以直接改累计次数和剩余点数；' +
+        '没有记录的人也能在下面新建。</p>';
+      html += '<div class="console-add" style="grid-template-columns:132px 110px 110px auto">' +
+        '<div class="field"><label for="w-no">学号</label>' +
+          '<input class="input" id="w-no" inputmode="numeric" maxlength="12" placeholder="20282307"></div>' +
+        '<div class="field"><label for="w-total">累计次数</label>' +
+          '<input class="input" id="w-total" type="number" min="0" step="1" placeholder="0"></div>' +
+        '<div class="field"><label for="w-points">剩余点数</label>' +
+          '<input class="input" id="w-points" type="number" min="0" step="1" placeholder="0"></div>' +
+        '<button class="btn sm" type="button" id="w-add">保存 / 新建</button>' +
+        '</div>';
       html += '<div class="console-list">';
       if (!worship.length) {
-        html += '<p class="form-note">还没有人膜过。</p>';
+        html += '<p class="form-note">还没有人膜过；用上面的学号新建一条。</p>';
       }
       worship.forEach(function (w, i) {
         html += '<div class="console-row">' +
           '<div class="console-main">' +
             '<div class="console-title">' + (i + 1) + '. ' + esc(w.nick || '同学') +
-              ' <span class="console-dim">' + esc(w.total) + ' 次</span></div>' +
-            '<div class="console-meta">剩余 ' + esc(w.points || 0) + ' 点' +
-              (w.member_no ? ' · ' + esc(w.member_no) : '') +
-              (w.updated_at ? ' · ' + esc(B8.dateTime(w.updated_at)) : '') +
+              ' <span class="console-dim">' + esc(w.member_no || '') + '</span></div>' +
+            '<div class="console-meta">' +
+              (w.updated_at ? esc(B8.dateTime(w.updated_at)) : '') +
             '</div>' +
+          '</div>' +
+          '<div class="chip-row">' +
+            '<input class="input" type="number" inputmode="numeric" min="0" step="1" style="width:88px" ' +
+              'value="' + esc(w.total) + '" data-w-total="' + esc(w.member_no) + '" ' +
+              'title="累计膜拜次数" aria-label="累计膜拜次数">' +
+            '<input class="input" type="number" inputmode="numeric" min="0" step="1" style="width:88px" ' +
+              'value="' + esc(w.points || 0) + '" data-w-points="' + esc(w.member_no) + '" ' +
+              'title="剩余点数" aria-label="剩余点数">' +
+            '<button class="btn ghost sm" type="button" data-w-save="' + esc(w.member_no) + '">保存</button>' +
           '</div>' +
         '</div>';
       });
@@ -639,6 +678,24 @@
       }
       b.innerHTML = html;
       bindScoreTabs(b);
+
+      var addBtn = document.getElementById('w-add');
+      B8.on(addBtn, 'click', function () {
+        saveWorship(
+          (document.getElementById('w-no') || {}).value,
+          (document.getElementById('w-total') || {}).value,
+          (document.getElementById('w-points') || {}).value,
+          addBtn
+        );
+      });
+      B8.qsa('[data-w-save]', b).forEach(function (btn) {
+        B8.on(btn, 'click', function () {
+          var no = btn.getAttribute('data-w-save');
+          var t = b.querySelector('[data-w-total="' + no + '"]');
+          var p = b.querySelector('[data-w-points="' + no + '"]');
+          saveWorship(no, t ? t.value : 0, p ? p.value : 0, btn);
+        });
+      });
       return;
     }
 
