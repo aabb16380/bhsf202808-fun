@@ -377,6 +377,7 @@
         '</form>' +
         '<div class="gate-hintbox" id="gate-hintbox" hidden></div>' +
         '<button class="btn ghost sm" id="gate-cancel" type="button" style="margin-top:14px">先不登录</button>' +
+        '<a class="btn ghost sm" href="index.html" style="margin-top:8px;display:inline-block">返回游乐场</a>' +
         '<p class="gate-foot">密码只存 sha256，登录状态保存在你自己的浏览器里，30 天有效。</p>' +
       '</div>';
 

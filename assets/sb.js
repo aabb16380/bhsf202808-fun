@@ -14,6 +14,8 @@
 
   var URL_ = (sbCfg.url || '').replace(/\/+$/, '');
   var KEY = sbCfg.anonKey || '';
+  var UA = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  var IS_SAFARI = /safari/i.test(UA) && !/chrome|chromium|crios|fxios|edg|opr|android/i.test(UA);
 
   var sb = B8.sb = {
     ready: !!(URL_ && KEY),
@@ -35,17 +37,72 @@
     try { return JSON.parse(text); } catch (e) { return text; }
   }
 
+  function xhrRequest(method, url, body, extraHeaders, ms) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open(method, url, true);
+      var h = headers(extraHeaders);
+      for (var k in h) {
+        if (Object.prototype.hasOwnProperty.call(h, k)) {
+          try { xhr.setRequestHeader(k, h[k]); } catch (e) {}
+        }
+      }
+      var raw = null;
+      if (body !== undefined && body !== null) {
+        if (typeof Blob !== 'undefined' && body instanceof Blob) raw = body;
+        else {
+          if (!h['Content-Type']) xhr.setRequestHeader('Content-Type', 'application/json');
+          raw = JSON.stringify(body);
+        }
+      }
+      xhr.timeout = ms || 15000;
+      xhr.onload = function () {
+        var data = parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          sb.lastError = null;
+          resolve(data);
+          return;
+        }
+        var msg = (data && (data.message || data.error_description || data.error)) || ('HTTP ' + xhr.status);
+        var err = new Error(msg);
+        err.status = xhr.status;
+        err.detail = data;
+        sb.lastError = err;
+        reject(err);
+      };
+      xhr.onerror = function () {
+        var err = new Error('网络不通（Safari 请求失败，可能是网络、代理或跨域被拦）');
+        err.status = 0;
+        sb.lastError = err;
+        reject(err);
+      };
+      xhr.ontimeout = function () {
+        var err = new Error('请求超时，请检查网络');
+        err.status = 0;
+        sb.lastError = err;
+        reject(err);
+      };
+      xhr.send(raw);
+    });
+  }
+
   /**
    * 底层请求。失败时抛出带可读信息的 Error，
    * 前端要把它原样显示给用户（别只说「失败了」）。
    */
   function request(method, url, body, extraHeaders, ms) {
     if (!sb.ready) return Promise.reject(new Error('未配置 Supabase'));
+    if (IS_SAFARI && typeof XMLHttpRequest !== 'undefined') {
+      return xhrRequest(method, url, body, extraHeaders, ms);
+    }
 
     var ctrl = null;
     var opts = {
       method: method,
-      headers: headers(extraHeaders)
+      headers: headers(extraHeaders),
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'no-store'
     };
     if (body !== undefined && body !== null) {
       opts.headers['Content-Type'] = 'application/json';
@@ -80,7 +137,16 @@
       });
     }, function (e) {
       clearTimeout(timer);
-      var err = new Error(e && e.name === 'AbortError' ? '请求超时，请检查网络' : '网络不通：' + (e && e.message ? e.message : '未知错误'));
+      if (e && e.name === 'AbortError') {
+        var terr = new Error('请求超时，请检查网络');
+        sb.lastError = terr;
+        throw terr;
+      }
+      // Safari 的 fetch 在部分网络/代理下会直接 TypeError；再用 XHR 试一次
+      if (typeof XMLHttpRequest !== 'undefined') {
+        return xhrRequest(method, url, body, extraHeaders, ms);
+      }
+      var err = new Error('网络不通：' + (e && e.message ? e.message : '未知错误'));
       sb.lastError = err;
       throw err;
     });

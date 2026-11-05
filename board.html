@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；3 位数字邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g65" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g65">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g65">
+<link rel="icon" href="assets/favicon.png?v=20261101g66" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g66">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g66">
 <script>
-window.B8_BUILD = '20261101g65';
+window.B8_BUILD = '20261101g66';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g65"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g65">
+<script src="assets/theme.js?v=20261101g66"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g66">
 </head>
 
 <body data-site="fun">
@@ -101,10 +101,10 @@ window.B8_TEST = !!window.B8_T;
 
         <div class="bd-card">
           <h2>进别人的房间</h2>
-          <p class="bd-muted">输入同学发来的 3 位数字邀请码（旧 6 位也能用）。房间还空着就直接坐下，坐满了就是观战。</p>
+          <p class="bd-muted">输入同学发来的 3 位数字邀请码。房间还空着就直接坐下，坐满了就是观战。</p>
           <form class="bd-join" id="bd-join-form">
-            <input id="bd-code" maxlength="6" inputmode="text" autocomplete="off" autocapitalize="characters"
-                   spellcheck="false" placeholder="3 位数字（旧 6 位也可）" aria-label="邀请码">
+            <input id="bd-code" maxlength="3" inputmode="numeric" autocomplete="off"
+                   spellcheck="false" placeholder="123" aria-label="邀请码">
             <button class="bd-btn primary" type="submit">进去</button>
           </form>
           <p class="bd-hint" id="bd-join-note"></p>
@@ -183,6 +183,7 @@ window.B8_TEST = !!window.B8_T;
       <div class="bd-first-banner" id="bd-first-banner" hidden></div>
       <div class="bd-gamebar">
         <button class="bd-back2" id="bd-exit" type="button">← 离开</button>
+          <a class="bd-back2" href="index.html">← 游乐场</a>
         <div class="bd-gname">
           <b id="bd-gname">对局</b>
           <span id="bd-gmeta"></span>
@@ -238,6 +239,7 @@ window.B8_TEST = !!window.B8_T;
                 <button class="bd-btn primary" id="bd-again" type="button">再来一局</button>
                 <button class="bd-btn" id="bd-view-board" type="button">逐手回看</button>
                 <button class="bd-btn" id="bd-back-lobby" type="button">回大厅</button>
+                <a class="bd-btn" href="index.html">回游乐场</a>
               </div>
             </div>
           </div>
@@ -392,7 +394,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g65' + T;
+  var V = '?v=20261101g66' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

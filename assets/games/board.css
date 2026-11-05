@@ -569,6 +569,9 @@ html[data-mode="night"] .bd-first-banner {
   border-radius: 999px;
   cursor: pointer;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 .bd-gname { display: flex; flex-direction: column; gap: 1px; min-width: 0; }

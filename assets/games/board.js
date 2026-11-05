@@ -575,7 +575,7 @@
   function openRoom(code, opts) {
     opts = opts || {};
     code = String(code || '').toUpperCase();
-    if (!/^[0-9]{3}$/.test(code) && !/^[A-Z0-9]{6}$/.test(code)) { toast('邀请码是 3 位数字'); return; }
+    if (!/^[0-9]{3}$/.test(code)) { toast('邀请码是 3 位数字'); return; }
     if (opts.watch) {
       // 观战不坐下、也不需要登录；登录了还能发评论
       enterOnline(code, null, null, 0, { watch: true, review: !!opts.review });
@@ -1675,7 +1675,7 @@
       for (var j = 0; j < legal.length; j++) {
         var sf = legal[j].f != null ? legal[j].f : (legal[j].p && legal[j].p[0]);
         var stt = legal[j].t != null ? legal[j].t : (legal[j].p && legal[j].p[legal[j].p.length - 1]);
-        if (sf === idx && stt != null) S.targets.push(stt);
+        if (sf === idx && stt != null) S.targets.push(st.game === 'draughts' ? stt : legal[j]);
       }
       renderAll();
       return;
@@ -3895,14 +3895,14 @@
     });
     $('bd-join-form').addEventListener('submit', function (e) {
       e.preventDefault();
-      var v = ($('bd-code').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      var v = ($('bd-code').value || '').replace(/[^0-9]/g, '');
       $('bd-code').value = v;
-      if (!((v.length === 3 && /^[0-9]+$/.test(v)) || v.length === 6)) { txt('bd-join-note', '邀请码是 3 位数字（旧 6 位也能用）'); return; }
+      if (v.length !== 3) { txt('bd-join-note', '邀请码是 3 位数字'); return; }
       txt('bd-join-note', '');
       openRoom(v, { watch: false });
     });
     $('bd-code').addEventListener('input', function () {
-      this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+      this.value = this.value.replace(/[^0-9]/g, '').slice(0, 3);
     });
 
     $('bd-canvas').addEventListener('click', onBoardClick);
