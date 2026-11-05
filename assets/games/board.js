@@ -55,7 +55,7 @@
   ];
   var GO_SIZES = [9, 13, 19];
 
-  var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, rooms: [], mine: [], history: [], historyApi: true, dbMissing: false, busy: false };
+  var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, forbid: false, rematch: null, rooms: [], mine: [], history: [], historyApi: true, dbMissing: false, busy: false };
   var LS = { mode1: 'no', mode2: 'no', name1: '', name2: '', resolved1: '', resolved2: '', timer1: 0, timer2: 0, busy: false };
   var DEADSTONES = { loading: null };
   var SPECT = { last: 0, inflight: false };
@@ -216,6 +216,14 @@
       sizeRow.hidden = true;
     }
 
+    // 五子棋禁手
+    var gomokuRow = $('bd-gomoku-row'), forbidBtn = $('bd-forbid');
+    if (gomokuRow) gomokuRow.hidden = g !== 'gomoku';
+    if (forbidBtn) {
+      forbidBtn.setAttribute('aria-pressed', LOBBY.forbid ? 'true' : 'false');
+      forbidBtn.textContent = LOBBY.forbid ? '黑棋禁手：开' : '黑棋禁手：关';
+    }
+
     // 计时
     var times = $('bd-times');
     times.innerHTML = '';
@@ -273,18 +281,18 @@
     main.className = 'bd-room-main';
     var title = document.createElement('b');
     title.textContent = (r.mode === 'local' ? '本机 · ' : '') + GAMES[r.game].name +
-      (r.status === 'wait' ? ' · 等人' : ' · 对弈中');
+      (r.status === 'wait' ? ' · 等人' : (r.dormant ? ' · 休眠' : ' · 对弈中'));
     var sub = document.createElement('span');
     var watchers = r.watchers ? ' · <i>' + r.watchers + ' 人观战</i>' : '';
     sub.innerHTML = B8.esc(roomPlayers(r)) + ' · ' + (r.seq || 0) + ' 手' +
-      (r.timed ? ' · ' + r.minutes + ' 分钟' : ' · 不限时') + watchers;
+      (r.timed ? ' · ' + r.minutes + ' 分钟' : ' · 不限时') + (r.dormant ? ' · 双方离线，等你回来' : '') + watchers;
     main.appendChild(title);
     main.appendChild(sub);
     wrap.appendChild(main);
 
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'bd-room-btn' + (r.status === 'play' ? ' is-live' : '');
+    btn.className = 'bd-room-btn' + (r.status === 'play' && !r.dormant ? ' is-live' : '');
     btn.textContent = opts.mine
       ? (r.status === 'play' ? '继续' : '回到房间')
       : (r.status === 'wait' ? '加入' : '观战');
@@ -487,12 +495,13 @@
      三、建房 / 加入 / 本机开局
      ============================================================ */
   function createRoom(settings) {
+    LOBBY.rematch = null;
     requireLogin(function () {
       if (LOBBY.busy) return;
       LOBBY.busy = true;
       var btn = $('bd-create');
       if (btn) btn.disabled = true;
-      var st = E.init(settings.game, { size: settings.size });
+      var st = E.init(settings.game, { size: settings.size, forbid: settings.forbid });
       B8.sb.rpc('b8_board_create', {
         p_token: token(),
         p_game: settings.game,
@@ -502,6 +511,7 @@
         p_host_color: settings.color
       }).then(function (res) {
         enterOnline(res.room.code, res.room, res.state, res.seat);
+        S.isHost = true;
         toast('房间开好了，把邀请码发给同学');
       }).catch(function (err) {
         var msg = (err && err.message) || '建房失败';
@@ -519,7 +529,7 @@
   function openRoom(code, opts) {
     opts = opts || {};
     code = String(code || '').toUpperCase();
-    if (!/^[A-Z0-9]{6}$/.test(code)) { toast('邀请码是 6 位字母数字'); return; }
+    if (!/^[0-9]{3}$/.test(code) && !/^[A-Z0-9]{6}$/.test(code)) { toast('邀请码是 3 位数字'); return; }
     if (opts.watch) {
       // 观战不坐下、也不需要登录；登录了还能发评论
       enterOnline(code, null, null, 0, { watch: true, review: !!opts.review });
@@ -534,6 +544,81 @@
           toast((err && err.message) || '进不去这个房间');
         });
     });
+  }
+
+  function inviteRematch() {
+    if (!S || S.mode !== 'online' || isLocalRoom()) return;
+    if (S.rematchOffered) { toast('已经邀请了，等对方同意'); return; }
+    B8.sb.rpc('b8_board_rematch', { p_token: token(), p_code: S.code })
+      .then(function () {
+        S.rematchOffered = true;
+        toast('已邀请对方再来一局，等他点同意');
+        showResult();
+        renderActions();
+      })
+      .catch(function (err) {
+        toast((err && err.message) || '邀请没发出去');
+      });
+  }
+
+  function acceptRematch() {
+    if (!S || S.seat === 0) return;
+    var st = E.init(S.game, { size: S.size, forbid: !!(S.state && S.state.forbid) });
+    B8.sb.rpc('b8_board_rematch_accept', {
+      p_token: token(), p_code: S.code, p_state: st
+    }).then(function (res) {
+      if (!res || !res.room) throw new Error('重开没成功');
+      var oldSeat = S.seat;
+      S.room = res.room;
+      S.state = res.state;
+      S.seat = oldSeat ? 3 - oldSeat : 0;
+      S.flip = S.seat === 2;
+      S.moves = [];
+      S.texts = [];
+      S.stack = [];
+      S.score = null;
+      S.scoreBusy = false;
+      S.undo = null;
+      S.offer = null;
+      S.reviewing = false;
+      S.reviewIndex = 0;
+      S.reviewStates = null;
+      S.reviewState = null;
+      S.resultShown = false;
+      S.rematchOffered = false;
+      S.rematchPrompted = false;
+      S.startedAt = Date.now();
+      S.turnStarted = Date.now();
+      S.pendingDead = null;
+      S.clock = { 1: (S.room.minutes || 0) * 60000, 2: (S.room.minutes || 0) * 60000 };
+      S.clockStart = 0;
+      S.clockRunning = 0;
+      show('bd-result', false);
+      renderAll();
+      toast('再来一局！执子已经交换');
+      syncNow();
+    }).catch(function (err) {
+      toast((err && err.message) || '重开没成功');
+    });
+  }
+
+  function leaveGame() {
+    if (!S) { backToLobby(); return; }
+    if (S.mode === 'online' && !isLocalRoom() && S.isHost && S.room && S.room.status === 'wait') {
+      var code = S.code;
+      B8.sb.rpc('b8_board_cancel', { p_token: token(), p_code: code })
+        .then(function () {
+          clearLast();
+          toast('房间已解散');
+          backToLobby();
+        })
+        .catch(function (err) {
+          toast((err && err.message) || '解散没成功，房间还留着');
+          backToLobby();
+        });
+      return;
+    }
+    backToLobby();
   }
 
   function saveLast(code) {
@@ -559,9 +644,12 @@
     writeJSON(LOCAL_KEY, {
       game: S.game,
       size: S.size,
+      forbid: !!(S.state && S.state.forbid),
       minutes: S.minutes,
       names: S.playerNames,
       moves: S.moves.map(function (m) { return m.move; }),
+      moveMeta: S.moves.map(function (m) { return { at: m.at, spent: m.spent }; }),
+      startedAt: S.startedAt,
       clock: S.timed ? [Math.round(S.clock[1]), Math.round(S.clock[2])] : null,
       savedAt: Date.now(),
       status: S.state.status
@@ -582,7 +670,10 @@
       sel: null, targets: [], drPath: null, drMoves: null,
       score: null, scoreBusy: false, pendingDead: null, flip: false, resultShown: false, moveBusy: false, anim: null,
       reviewing: false, reviewIndex: 0, reviewStates: null, reviewState: null,
-      room: null, code: '', playerNames: [name1 || '玩家一', name2 || '玩家二']
+      room: null, code: '', playerNames: [name1 || '玩家一', name2 || '玩家二'],
+      startedAt: Date.now(), turnStarted: Date.now(),
+      practice: false, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
+      rematchOffered: false, rematchPrompted: false
     };
     writeJSON(LOCAL_KEY, null);
     closePromo();
@@ -660,6 +751,16 @@
     return s.replace(/[^0-9]/g, '').slice(0, 8);
   }
 
+  function classStudentNo(v) {
+    var raw = digitsOnly(v);
+    if (/^[0-9]{8}$/.test(raw)) return raw;
+    if (/^[0-9]{1,2}$/.test(raw)) {
+      var n = parseInt(raw, 10);
+      if (n >= 1 && n <= 99) return String(20282305 + n);
+    }
+    return '';
+  }
+
   function setSetupHint(p, text, bad) {
     var hint = $('bd-hint' + p);
     if (!hint) return;
@@ -673,7 +774,7 @@
     if (mode === 'no') {
       input.setAttribute('inputmode', 'numeric');
       input.setAttribute('maxlength', '8');
-      input.setAttribute('placeholder', p === 1 ? '8 位学号（如 20282307）' : '8 位学号（如 20282308）');
+      input.setAttribute('placeholder', p === 1 ? '班学号 1-2 位或 8 位学号' : '班学号 1-2 位或 8 位学号');
     } else {
       input.removeAttribute('inputmode');
       input.setAttribute('maxlength', '12');
@@ -689,8 +790,9 @@
     if (input.value !== raw) input.value = raw;
     if (p === 1) LS.resolved1 = ''; else LS.resolved2 = '';
     if (mode !== 'no') return;
-    if (raw.length !== 8) {
-      setSetupHint(p, raw ? '学号是 8 位数字（现在 ' + raw.length + ' 位）' : '', !!raw);
+    var no = classStudentNo(raw);
+    if (!no) {
+      setSetupHint(p, raw ? '填班学号（1-2 位，如 1）或 8 位学号' : '', !!raw);
       return;
     }
     if (!logged()) {
@@ -698,13 +800,13 @@
       return;
     }
     setSetupHint(p, '查花名册中…', false);
-    B8.sb.rpc('b8_member_lookup', { p_token: token(), p_no: raw })
+    B8.sb.rpc('b8_member_lookup', { p_token: token(), p_no: no })
       .then(function (res) {
         if ((p === 1 ? LS.mode1 : LS.mode2) !== 'no') return;
-        if (digitsOnly(input.value) !== raw) return;
+        if (classStudentNo(input.value) !== no) return;
         if (res && res.ok && res.name) {
           if (p === 1) LS.resolved1 = res.name; else LS.resolved2 = res.name;
-          setSetupHint(p, '✓ ' + res.name, false);
+          setSetupHint(p, '✓ ' + res.name + (raw.length < 8 ? '（' + raw + ' 号 → ' + no + '）' : ''), false);
         } else {
           setSetupHint(p, '花名册里没有这个学号，可以切到「昵称」', true);
         }
@@ -745,7 +847,7 @@
     applySetupInput(1, LS.mode1);
     applySetupInput(2, LS.mode2);
     txt('bd-setup-sub', hasNo
-      ? '这盘也一样公开、可被观战、会进历史。填学号会自动查姓名，也可以直接用昵称。'
+      ? '这盘也一样公开、可被观战、会进历史。填 8 位学号或班学号（1 号 = 20282306）会自动查姓名，也可以直接用昵称。'
       : '没登录（或账号学号不是 8 位）：学号查姓名要先登录；现在可以直接用昵称。');
     var start = $('bd-setup-start');
     if (start) { start.disabled = false; start.textContent = '开始对局'; }
@@ -768,9 +870,10 @@
       if (mode === 'no') {
         raw = digitsOnly(raw);
         if (input.value !== raw) input.value = raw;
+        var no = classStudentNo(raw);
         var resolved = p === 1 ? LS.resolved1 : LS.resolved2;
         if (!resolved) {
-          if (raw.length !== 8) setSetupHint(p, '学号是 8 位数字（现在 ' + raw.length + ' 位）', true);
+          if (!no) setSetupHint(p, '填班学号（1-2 位）或 8 位学号', true);
           else setSetupHint(p, '这个学号没查到姓名，可以切到「昵称」', true);
           input.focus();
           return false;
@@ -802,8 +905,8 @@
       if (mode === 'no') {
         raw = digitsOnly(raw);
         if (input.value !== raw) input.value = raw;
-        if (raw.length !== 8) {
-          setSetupHint(p, '学号是 8 位数字（现在 ' + raw.length + ' 位）', true);
+        if (!classStudentNo(raw)) {
+          setSetupHint(p, '填班学号（1-2 位）或 8 位学号', true);
           input.focus();
           return;
         }
@@ -831,12 +934,13 @@
     pending.forEach(function (p) {
       var input = $('bd-p' + p + 'name');
       var raw = digitsOnly(input.value);
+      var no = classStudentNo(raw);
       setSetupHint(p, '查花名册中…', false);
-      B8.sb.rpc('b8_member_lookup', { p_token: token(), p_no: raw })
+      B8.sb.rpc('b8_member_lookup', { p_token: token(), p_no: no })
         .then(function (res) {
           if (res && res.ok && res.name) {
             if (p === 1) LS.resolved1 = res.name; else LS.resolved2 = res.name;
-            setSetupHint(p, '✓ ' + res.name, false);
+            setSetupHint(p, '✓ ' + res.name + (raw.length < 8 ? '（' + raw + ' 号 → ' + no + '）' : ''), false);
           } else {
             bad = true;
             setSetupHint(p, '花名册里没有这个学号，可以切到「昵称」', true);
@@ -862,7 +966,7 @@
     var moves = saved.moves || [];
     var st;
     try {
-      st = E.replay(saved.game, { size: saved.size }, moves);
+      st = E.replay(saved.game, { size: saved.size, forbid: saved.forbid }, moves);
     } catch (e) {
       writeJSON(LOCAL_KEY, null);
       renderRooms();
@@ -887,13 +991,17 @@
       sel: null, targets: [], drPath: null, drMoves: null,
       score: null, flip: false, resultShown: false,
       room: null, code: '',
-      playerNames: saved.names || ['玩家一', '玩家二']
+      playerNames: saved.names || ['玩家一', '玩家二'],
+      startedAt: saved.startedAt || Date.now(), turnStarted: Date.now(),
+      practice: false, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
+      rematchOffered: false, rematchPrompted: false
     };
     var tmp = E.init(saved.game, { size: saved.size });
     for (var i = 0; i < moves.length; i++) {
       S.texts.push({ seq: tmp.seq + 1, color: tmp.turn, text: E.text(tmp, moves[i]) });
       tmp = E.apply(tmp, moves[i]);
-      S.moves.push({ seq: tmp.seq, color: 3 - tmp.turn, move: moves[i], at: 0 });
+      var meta = saved.moveMeta && saved.moveMeta[i] ? saved.moveMeta[i] : {};
+      S.moves.push({ seq: tmp.seq, color: 3 - tmp.turn, move: moves[i], at: meta.at || 0, spent: meta.spent || 0 });
     }
     showGame();
     renderAll();
@@ -927,7 +1035,11 @@
       commentsHidden: false, moves: [], texts: [], moveBusy: false,
       sel: null, targets: [], drPath: null, drMoves: null,
       score: null, flip: seat === 2, resultShown: false, watch: !!opts.watch, reviewOnOpen: !!opts.review,
-      isHost: false
+      isHost: false,
+      startedAt: room && room.created_at ? Date.parse(room.created_at) || Date.now() : Date.now(),
+      turnStarted: room && room.turn_started ? room.turn_started : Date.now(),
+      practice: false, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
+      rematchOffered: false, rematchPrompted: false
     };
     saveLast(code);
     try {
@@ -1044,10 +1156,33 @@
     S.undo = res.undo || null;
     S.undoBusy = false;
     if (!S.undo) S.undoPrompted = null;
-    if (res.me) S.seat = res.me.seat || 0;
+    if (res.me) { S.seat = res.me.seat || 0; S.flip = S.seat === 2; }
     S.commentsHidden = !!res.comments_hidden;
 
     var undoBack = !!(res.room && res.room.seq < prevSeq);
+    var rematchReset = !!(res.room && res.room.status === 'play' && res.room.seq === 0 && prevSeq > 0);
+    if (rematchReset) {
+      S.moves = [];
+      S.texts = [];
+      S.stack = [];
+      S.score = null;
+      S.scoreBusy = false;
+      S.undo = null;
+      S.offer = null;
+      S.reviewing = false;
+      S.reviewIndex = 0;
+      S.reviewStates = null;
+      S.reviewState = null;
+      S.resultShown = false;
+      S.rematchOffered = false;
+      S.rematchPrompted = false;
+      S.startedAt = Date.now();
+      S.pendingDead = null;
+      S.clock = { 1: (S.room.minutes || 0) * 60000, 2: (S.room.minutes || 0) * 60000 };
+      S.clockStart = 0;
+      S.clockRunning = 0;
+      show('bd-result', false);
+    }
     if (res.state && (!S.state || res.state.seq >= S.state.seq || undoBack || res.room.status === 'over')) {
       S.state = res.state;
     }
@@ -1058,12 +1193,15 @@
 
     var changed = false;
     var added = [];
+    var prevAt = S.moves.length ? S.moves[S.moves.length - 1].at : (S.startedAt || 0);
     (res.moves || []).forEach(function (m) {
       var exists = false;
       for (var i = S.moves.length - 1; i >= 0 && i >= S.moves.length - 8; i--) {
         if (S.moves[i].seq === m.seq) { exists = true; break; }
       }
       if (!exists) {
+        if (!m.spent && m.at && prevAt) m.spent = Math.max(0, m.at - prevAt);
+        prevAt = m.at || prevAt;
         S.moves.push(m);
         added.push(m);
         changed = true;
@@ -1073,6 +1211,8 @@
       S.moves.sort(function (a, b) { return a.seq - b.seq; });
       rebuildTexts();
     }
+    if (res.room && res.room.turn_started) S.turnStarted = res.room.turn_started;
+    if (res.room && !S.startedAt && res.room.created_at) S.startedAt = Date.parse(res.room.created_at) || Date.now();
     if (changed || undoBack) {
       reviewReset();
       S.score = null;
@@ -1082,6 +1222,22 @@
         S.state && S.state.seq === prevState.seq + 1 &&
         S.state.status === 'play' && !added[0].move.pass) {
       S.anim = buildAnim(prevState, added[0].move, S.state);
+    }
+
+    if (res.rematch) {
+      if (res.rematch.mine) {
+        S.rematchOffered = true;
+      } else if (!S.rematchPrompted) {
+        S.rematchPrompted = true;
+        B8.confirm((res.rematch.name || '对方') + ' 邀请你再来一局，同意吗？', {
+          title: '再来一局', okText: '同意'
+        }).then(function (ok) {
+          if (ok) acceptRematch();
+        });
+      }
+    } else {
+      S.rematchOffered = false;
+      S.rematchPrompted = false;
     }
 
     if (S.room.status === 'over' || S.state.status === 'over') {
@@ -1128,7 +1284,7 @@
   }
 
   function rebuildTexts() {
-    var st = E.init(S.game || (S.room && S.room.game), { size: S.size || (S.room && S.room.size) });
+    var st = E.init(S.game || (S.room && S.room.game), { size: S.size || (S.room && S.room.size), forbid: !!(S.state && S.state.forbid) });
     var out = [];
     for (var i = 0; i < S.moves.length; i++) {
       var m = S.moves[i];
@@ -1143,7 +1299,10 @@
   function schedulePoll(delay) {
     clearTimeout(NET.timer);
     if (!S || S.mode !== 'online') return;
-    if (S.room && S.room.status === 'over') return;
+    if (S.room && S.room.status === 'over') {
+      NET.timer = setTimeout(syncNow, 3000);
+      return;
+    }
     if (typeof delay === 'number') {
       NET.timer = setTimeout(syncNow, delay);
       return;
@@ -1188,6 +1347,16 @@
       else if (S.mode === 'online' && S.room && S.room.status === 'wait') toast('还在等对手进来');
       else if (S.mode === 'online') toast('还没轮到你');
       return;
+    }
+    if (S && S.state && S.state.game === 'chess' && mv && mv.f != null && mv.t != null) {
+      var chMoves = E.moves(S.state);
+      for (var cm = 0; cm < chMoves.length; cm++) {
+        if (chMoves[cm].f === mv.f && chMoves[cm].t === mv.t) {
+          if (chMoves[cm].castle) mv.castle = chMoves[cm].castle;
+          if (chMoves[cm].promo) mv.promo = chMoves[cm].promo;
+          break;
+        }
+      }
     }
     if (S && S.state && S.state.game === 'go' && mv.pass && (S.state.passes || 0) === 1) {
       // 第二手停一手：终局前自动标死子；如果刚点过目，就用用户改过的标记
@@ -1279,7 +1448,10 @@
     var ns = E.apply(prev, mv);
     applyPendingDead(ns);
     var keepScore = !!(mv.pass && ns.status === 'play' && S.score && S.score.seq === prev.seq);
-    S.moves.push({ seq: ns.seq, color: prev.turn, move: mv, at: Date.now() });
+    var now = Date.now();
+    var spent = S.turnStarted ? Math.max(0, now - S.turnStarted) : 0;
+    S.moves.push({ seq: ns.seq, color: prev.turn, move: mv, at: now, spent: spent });
+    S.turnStarted = now;
     S.texts.push({ seq: ns.seq, color: prev.turn, text: text });
     S.state = ns;
     reviewReset();
@@ -1300,7 +1472,10 @@
     var ns = E.apply(prev, mv);
     applyPendingDead(ns);
     var keepScore = !!(mv.pass && ns.status === 'play' && S.score && S.score.seq === prev.seq);
-    S.moves.push({ seq: ns.seq, color: prev.turn, move: mv, at: Date.now() });
+    var now = Date.now();
+    var spent = S.turnStarted ? Math.max(0, now - S.turnStarted) : 0;
+    S.moves.push({ seq: ns.seq, color: prev.turn, move: mv, at: now, spent: spent });
+    S.turnStarted = now;
     S.texts.push({ seq: ns.seq, color: prev.turn, text: text });
     S.state = ns;
     reviewReset();
@@ -1378,6 +1553,98 @@
   /* ============================================================
      七、点击棋盘
      ============================================================ */
+  function practiceReset() {
+    if (!S || !S.practice || !S.practiceBase) return;
+    S.practiceState = E.clone(S.practiceBase);
+    S.practiceStack = [];
+    S.practiceLast = null;
+    S.sel = null;
+    S.targets = [];
+    renderAll();
+  }
+
+  function exitPractice() {
+    if (!S) return;
+    S.practice = false;
+    S.practiceBase = null;
+    S.practiceState = null;
+    S.practiceStack = [];
+    S.practiceLast = null;
+    S.sel = null;
+    S.targets = [];
+    renderAll();
+    toast('已退出演练');
+  }
+
+  function togglePractice() {
+    if (!S || !S.state) return;
+    if (S.practice) { exitPractice(); return; }
+    var base = (S.reviewing && S.reviewState) ? S.reviewState : S.state;
+    if (!base) return;
+    S.practice = true;
+    S.practiceBase = E.clone(base);
+    S.practiceState = E.clone(base);
+    S.practiceStack = [];
+    S.practiceLast = null;
+    S.sel = null;
+    S.targets = [];
+    S.score = null;
+    S.scoreBusy = false;
+    show('bd-result', false);
+    renderAll();
+    toast('演练模式：随便走，不会上传；左边「重置演练」可以回到起点');
+  }
+
+  function practiceApply(mv) {
+    if (!S || !S.practice || !S.practiceState) return;
+    var prev = S.practiceState;
+    S.practiceStack.push(prev);
+    S.practiceState = E.apply(E.clone(prev), mv);
+    S.practiceLast = mv;
+    S.sel = null;
+    S.targets = [];
+    renderAll();
+    if (S.practiceState.status === 'over') {
+      toast('演练结束；可以重置或退出演练');
+    }
+  }
+
+  function practiceClick(idx) {
+    if (!S || !S.practiceState) return;
+    var st = S.practiceState;
+    var legal = E.moves(st);
+    var info = E.games[st.game] || E.games[S.game] || {};
+    if (info.kind === 'stone') {
+      var stone = null;
+      for (var i = 0; i < legal.length; i++) if (legal[i].t === idx) { stone = legal[i]; break; }
+      if (stone) practiceApply(stone);
+      return;
+    }
+    if (st.board[idx] && (st.board[idx] < 8 ? 1 : 2) === st.turn) {
+      S.sel = idx;
+      S.targets = [];
+      for (var j = 0; j < legal.length; j++) {
+        var sf = legal[j].f != null ? legal[j].f : (legal[j].p && legal[j].p[0]);
+        var stt = legal[j].t != null ? legal[j].t : (legal[j].p && legal[j].p[legal[j].p.length - 1]);
+        if (sf === idx && stt != null) S.targets.push(stt);
+      }
+      renderAll();
+      return;
+    }
+    if (S.sel != null) {
+      var found = null;
+      for (var k = 0; k < legal.length; k++) {
+        var kf = legal[k].f != null ? legal[k].f : (legal[k].p && legal[k].p[0]);
+        var kt = legal[k].t != null ? legal[k].t : (legal[k].p && legal[k].p[legal[k].p.length - 1]);
+        if (kf === S.sel && kt === idx) { found = legal[k]; break; }
+      }
+      if (found) { practiceApply(found); return; }
+    }
+    S.sel = null;
+    S.targets = [];
+    renderAll();
+  }
+
   function onBoardClick(ev) {
     if (!S || !renderer || !renderer.g) return;
     if (S.moveBusy) { toast('这一步还在上传，上传完成后才能继续落子'); return; }
@@ -1386,6 +1653,7 @@
     var py = (ev.clientY - rect.top) * (renderer.h / rect.height);
     var idx = renderer.g.hit(px, py);
     if (idx < 0) return;
+    if (S.practice) { practiceClick(idx); return; }
     if (S.scoreBusy) { toast('正在点目，稍等一下'); return; }
     if (S.score && S.state.game === 'go' && (S.state.status === 'play' || S.reviewing)) {
       var scoreBoard = scoreState().board;
@@ -1638,6 +1906,7 @@
     }
     bits.push(S.timed ? '每方 ' + S.minutes + ' 分钟' : '不限时');
     if (S.room && S.room.status === 'wait') bits.push('等待对手');
+    if (S.practice) bits.push('演练模式 · 不上传');
     txt('bd-gmeta', bits.join(' · '));
     show('bd-net', S.mode === 'online');
     show('bd-invite', S.mode === 'online' && S.room && S.seat > 0 &&
@@ -1804,6 +2073,15 @@
   }
 
   function renderActions() {
+    show('bd-practice', !!S.state && !(S.room && S.room.status === 'wait'));
+    var practiceBtn = $('bd-practice');
+    if (practiceBtn) practiceBtn.textContent = S.practice ? '退出演练' : '演练';
+    show('bd-practice-reset', !!S.practice);
+    if (S.practice) {
+      var hideInPractice = ['bd-resign','bd-draw','bd-pass','bd-undo','bd-end','bd-restart','bd-score','bd-invite','bd-cancel-room','bd-admin-close'];
+      for (var hp = 0; hp < hideInPractice.length; hp++) show(hideInPractice[hp], false);
+      return;
+    }
     var st = S.state;
     var online = S.mode === 'online';
     var localRoom = isLocalRoom();
@@ -1890,7 +2168,7 @@
   function stateBeforeLast() {
     if (!S || !S.moves || !S.moves.length) return null;
     try {
-      return E.replay(S.game, { size: S.size }, S.moves.slice(0, -1).map(function (m) { return m.move; }));
+      return E.replay(S.game, { size: S.size, forbid: !!(S.state && S.state.forbid) }, S.moves.slice(0, -1).map(function (m) { return m.move; }));
     } catch (e) {
       return null;
     }
@@ -2033,7 +2311,7 @@
   function reviewBuild() {
     if (!S || !S.moves) return [];
     if (S.reviewStates) return S.reviewStates;
-    var arr = [E.init(S.game, { size: S.size })];
+    var arr = [E.init(S.game, { size: S.size, forbid: !!(S.state && S.state.forbid) })];
     var st = arr[0];
     for (var i = 0; i < S.moves.length; i++) {
       if (st.status !== 'play') break;
@@ -2069,7 +2347,7 @@
 
   function renderReview() {
     if (!S) return;
-    var on = !!(S.state && S.state.status === 'over' && S.moves && S.moves.length);
+    var on = !!(S.state && S.state.status === 'over' && S.moves && S.moves.length && !S.practice);
     show('bd-review', on);
     if (!on) return;
     var total = S.moves.length;
@@ -2081,6 +2359,13 @@
     $('bd-review-prev').disabled = i <= 0;
     $('bd-review-next').disabled = i >= total;
     $('bd-review-end').disabled = i >= total;
+  }
+
+  function fmtSpent(ms) {
+    var sec = Math.max(0, Math.round((ms || 0) / 1000));
+    if (sec < 60) return sec + 's';
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
   }
 
   function renderMoves() {
@@ -2132,6 +2417,13 @@
       var who = document.createElement('i');
       who.textContent = colorName(m.color);
       body.appendChild(who);
+      if (m.spent) {
+        var tm = document.createElement('span');
+        tm.className = 'bd-mv-time';
+        tm.textContent = fmtSpent(m.spent);
+        tm.title = '这一步用时 ' + fmtSpent(m.spent);
+        body.appendChild(tm);
+      }
       li2.appendChild(no);
       li2.appendChild(body);
       box.appendChild(li2);
@@ -2154,6 +2446,11 @@
       txt('bd-result-kicker', isLocalGame() ? '本机对局结束' : '对局结束 · ' + S.code);
       txt('bd-result-title', info.title);
       txt('bd-result-sub', info.sub);
+      var again = $('bd-again');
+      if (again) {
+        again.disabled = !!S.rematchOffered;
+        again.textContent = S.rematchOffered ? '已邀请，等对方' : (S.mode === 'online' && !isLocalRoom() ? '邀请再来一局' : '再来一局');
+      }
     }
   }
 
@@ -2178,6 +2475,13 @@
     if (!sub && r && r.reason === 'resign') sub = '认输';
     if (!sub && r && r.reason === 'timeout') sub = '超时';
     if (r && r.reason === 'agreement') sub = '双方同意和棋';
+    if (S.startedAt) {
+      var lastAt = S.moves.length ? (S.moves[S.moves.length - 1].at || Date.now()) : Date.now();
+      var d = new Date(S.startedAt);
+      var hh = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+      var total = Math.max(0, lastAt - S.startedAt);
+      sub += (sub ? ' · ' : '') + '开始 ' + hh + ' · 总用时 ' + fmtSpent(total);
+    }
     return { title: title, sub: sub };
   }
 
@@ -3067,17 +3371,19 @@
 
   function draw() {
     if (!S || !S.state || !renderer) return;
-    var st = (S.reviewing && S.reviewState) ? S.reviewState : S.state;
+    var st = S.practice && S.practiceState ? S.practiceState :
+      ((S.reviewing && S.reviewState) ? S.reviewState : S.state);
     if (!st || !st.board) return;
+    var practicing = !!S.practice;
     renderer.set(st, {
-      sel: S.reviewing ? null : S.sel,
-      targets: S.reviewing ? [] : S.targets,
+      sel: (S.reviewing && !practicing) ? null : S.sel,
+      targets: (S.reviewing && !practicing) ? [] : S.targets,
       flip: S.flip,
-      score: S.score || null,
-      dead: (S.score && S.score.dead) ? S.score.dead : [],
-      anim: S.reviewing ? null : S.anim
+      score: practicing ? null : (S.score || null),
+      dead: (!practicing && S.score && S.score.dead) ? S.score.dead : [],
+      anim: (S.reviewing || practicing) ? null : S.anim
     });
-    renderer.draw(!!S.anim && !S.reviewing);
+    renderer.draw(!!S.anim && !S.reviewing && !practicing);
   }
 
   /* ============================================================
@@ -3114,6 +3420,7 @@
 
   function tick() {
     if (!S) return;
+    if (S.practice) { renderFirstBanner(); return; }
     if (S.timed && S.state && S.state.status === 'play') {
       if (S.mode === 'local') {
         if (S.clockStart && S.clockRunning && clockRemain(S.clockRunning) <= 0) {
@@ -3311,22 +3618,38 @@
   function bind() {
     // 「← 游乐场」是普通链接，直接回首页；「← 离开」才回大厅
     $('bd-back-lobby').addEventListener('click', backToLobby);
-    $('bd-exit').addEventListener('click', backToLobby);
+    $('bd-exit').addEventListener('click', leaveGame);
+    $('bd-practice').addEventListener('click', togglePractice);
+    $('bd-practice-reset').addEventListener('click', practiceReset);
     $('bd-refresh').addEventListener('click', function () { loadLists(true); toast('已刷新'); });
-    $('bd-local').addEventListener('click', openLocalSetup);
+    $('bd-local').addEventListener('click', function () {
+      if (LOBBY.rematch) {
+        var rm = LOBBY.rematch;
+        LOBBY.rematch = null;
+        createLocalRoom(rm[0], rm[1], {
+          game: LOBBY.game, size: LOBBY.size, minutes: LOBBY.minutes, forbid: LOBBY.forbid
+        });
+        return;
+      }
+      openLocalSetup();
+    });
+    $('bd-forbid').addEventListener('click', function () {
+      LOBBY.forbid = !LOBBY.forbid;
+      renderOptions();
+    });
     $('bd-create').addEventListener('click', function () {
-      createRoom({ game: LOBBY.game, size: LOBBY.size, minutes: LOBBY.minutes, color: LOBBY.color });
+      createRoom({ game: LOBBY.game, size: LOBBY.size, minutes: LOBBY.minutes, color: LOBBY.color, forbid: LOBBY.forbid });
     });
     $('bd-join-form').addEventListener('submit', function (e) {
       e.preventDefault();
-      var v = ($('bd-code').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      var v = ($('bd-code').value || '').replace(/[^0-9]/g, '');
       $('bd-code').value = v;
-      if (v.length !== 6) { txt('bd-join-note', '邀请码是 6 位'); return; }
+      if (v.length !== 3) { txt('bd-join-note', '邀请码是 3 位数字'); return; }
       txt('bd-join-note', '');
       openRoom(v, { watch: false });
     });
     $('bd-code').addEventListener('input', function () {
-      this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      this.value = this.value.replace(/[^0-9]/g, '').slice(0, 3);
     });
 
     $('bd-canvas').addEventListener('click', onBoardClick);
@@ -3561,22 +3884,25 @@
     $('bd-again').addEventListener('click', function () {
       if (!S) return;
       if (isOfflineLocal()) {
-        var nm = S.playerNames || ['玩家一', '玩家二'];
-        startOfflineLocal(nm[0], nm[1], { game: S.game, size: S.size, minutes: S.minutes });
+        LOBBY.rematch = (S.playerNames || ['玩家一', '玩家二']).slice();
+        backToLobby();
+        toast('选一种棋，点「本机对局」直接用原来的两位棋手开局');
         return;
       }
       var settings = {
         game: S.room.game,
         size: S.room.size,
         minutes: S.room.timed ? S.room.minutes : 0,
-        color: S.seat || 1
+        color: S.seat || 1,
+        forbid: !!(S.state && S.state.forbid)
       };
       if (isLocalRoom()) {
-        createLocalRoom(S.room.host_name, S.room.guest_name, settings);
+        LOBBY.rematch = [S.room.host_name, S.room.guest_name];
+        backToLobby();
+        toast('选一种棋，点「本机对局」直接用原来的两位棋手开局');
         return;
       }
-      backToLobby();
-      setTimeout(function () { createRoom(settings); }, 180);
+      inviteRematch();
     });
 
     $('bd-chat-form').addEventListener('submit', sendChat);

@@ -233,22 +233,28 @@
   E.games.gomoku = {
     id: 'gomoku', name: '五子棋', en: 'GOMOKU', sizes: [15],
     first: '黑方', second: '白方', kind: 'stone',
-    init: function () {
+    init: function (opts) {
       var n = 225, b = [];
       for (var i = 0; i < n; i++) b.push(0);
-      return mk('gomoku', 15, b, 1, {});
+      return mk('gomoku', 15, b, 1, { forbid: opts && opts.forbid ? 1 : 0 });
     },
     moves: function (st) {
       var out = [];
       if (st.status !== 'play') return out;
-      for (var i = 0; i < 225; i++) if (st.board[i] === 0) out.push({ t: i });
+      for (var i = 0; i < 225; i++) {
+        if (st.board[i] !== 0) continue;
+        if (st.forbid && st.turn === 1 && gomokuForbidden(st.board, i, 1)) continue;
+        out.push({ t: i });
+      }
       return out;
     },
     legal: function (st, mv) {
-      return st.status === 'play' && mv && mv.t != null && st.board[mv.t] === 0;
+      return st.status === 'play' && mv && mv.t != null && st.board[mv.t] === 0 &&
+        !(st.forbid && st.turn === 1 && gomokuForbidden(st.board, mv.t, 1));
     },
     apply: function (st, mv) {
       var color = st.turn;
+      if (st.forbid && color === 1 && gomokuForbidden(st.board, mv.t, 1)) return st;
       st.board[mv.t] = color;
       st.turn = other(color);
       if (gomokuWin(st.board, mv.t, color)) {
@@ -272,6 +278,42 @@
       return (st.winner === 1 ? '黑方' : '白方') + '胜' + (why ? ' · ' + why : '');
     }
   };
+
+  function gomokuRun(b, idx, color, dx, dy) {
+    var x = idx % 15, y = Math.floor(idx / 15), n = 1, k;
+    var left = false, right = false;
+    for (k = 1; k < 6; k++) {
+      var nx = x + dx * k, ny = y + dy * k;
+      if (!inb(nx, ny, 15, 15) || b[ny * 15 + nx] !== color) {
+        right = inb(nx, ny, 15, 15) && b[ny * 15 + nx] === 0;
+        break;
+      }
+      n++;
+    }
+    for (k = 1; k < 6; k++) {
+      var mx = x - dx * k, my = y - dy * k;
+      if (!inb(mx, my, 15, 15) || b[my * 15 + mx] !== color) {
+        left = inb(mx, my, 15, 15) && b[my * 15 + mx] === 0;
+        break;
+      }
+      n++;
+    }
+    return { n: n, left: left, right: right };
+  }
+
+  function gomokuForbidden(b, idx, color) {
+    if (color !== 1) return false;
+    if (b[idx] !== 0) return false;
+    var dirs = [[1, 0], [0, 1], [1, 1], [1, -1]], fours = 0, threes = 0;
+    for (var d = 0; d < 4; d++) {
+      var r = gomokuRun(b, idx, color, dirs[d][0], dirs[d][1]);
+      if (r.n >= 6) return true;           // 长连
+      if (r.n === 5) return false;         // 正好五连，先赢
+      if (r.n === 4 && (r.left || r.right)) fours++;
+      if (r.n === 3 && r.left && r.right) threes++;
+    }
+    return fours >= 2 || threes >= 2;
+  }
 
   function gomokuWin(b, idx, color) {
     var x = idx % 15, y = Math.floor(idx / 15);

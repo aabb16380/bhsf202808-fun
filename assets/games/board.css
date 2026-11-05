@@ -976,7 +976,14 @@ html[data-mode="night"] .bd-first-banner {
   text-align: right;
 }
 
-.bd-moves .bd-mv-body { min-width: 0; overflow-wrap: anywhere; }
+.bd-moves .bd-mv-time {
+  margin-left: 6px;
+  font-size: 9.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.bd-mv-body { min-width: 0; overflow-wrap: anywhere; }
 
 .bd-moves .bd-mv-body i {
   font-style: normal;

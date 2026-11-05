@@ -95,7 +95,7 @@
     lastLoad = Date.now();
     B8.sb.rpc('b8_board_list', { p_token: null })
       .then(function (res) {
-        var rooms = (res && res.rooms) || [];
+        var rooms = ((res && res.rooms) || []).filter(function (r) { return !r.dormant; });
         rooms.sort(function (a, b) {
           if (a.status !== b.status) return a.status === 'play' ? -1 : 1;
           return new Date(b.updated_at) - new Date(a.updated_at);

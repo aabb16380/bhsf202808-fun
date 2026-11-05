@@ -15,6 +15,9 @@
   var B8 = window.B8 = window.B8 || {};
   var KEY_BEST = 'b8.2048.best';
   var KEY_MODE = 'b8.2048.mode';
+  var KEY_STATE = 'b8.2048.state';
+  var saveBtn, localKey = KEY_STATE, cloudTimer = 0, cloudBusy = false;
+  var dirty = false, saveSeq = 0, localAt = 0;
   var N = 4;
 
   var board, layerEl, scoreEl, bestEl, maxEl, restartBtn, stateEl, noteEl, modeBtn;
@@ -128,11 +131,133 @@
     if (bestEl) bestEl.textContent = String(best);
   }
 
+  /* ---------- 本机 / 云端存档 ---------- */
+  function snapshot() {
+    var cells = [];
+    for (var i = 0; i < N * N; i++) cells.push(slots[i] ? slots[i].v : 0);
+    return {
+      v: 1, cells: cells, score: score, over: over, won: won,
+      cheated: cheated, savedAt: Date.now()
+    };
+  }
+
+  function saveLocal() {
+    try {
+      localStorage.setItem(localKey, JSON.stringify(snapshot()));
+      localAt = Date.now();
+    } catch (e) {}
+    dirty = true;
+    saveSeq++;
+  }
+
+  function readLocal() {
+    try {
+      var s = JSON.parse(localStorage.getItem(localKey) || 'null');
+      if (s && s.cells && s.cells.length === N * N) return s;
+    } catch (e) {}
+    return null;
+  }
+
+  function restoreSnapshot(s) {
+    if (!s || !s.cells || s.cells.length !== N * N) return false;
+    slots = [];
+    for (var i = 0; i < N * N; i++) slots.push(null);
+    layerEl.innerHTML = '';
+    uid = 0;
+    for (var j = 0; j < N * N; j++) {
+      var v = Number(s.cells[j]) || 0;
+      if (v > 0) slots[j] = makeTile(j, v);
+    }
+    score = Math.max(0, Math.floor(Number(s.score) || 0));
+    over = !!s.over;
+    won = !!s.won;
+    cheated = !!s.cheated;
+    cheatOn = false;
+    picked = [];
+    started = true;
+    submitted = over ? score : 0;
+    gameSubmitted = over;
+    localAt = Number(s.savedAt) || Date.now();
+    dirty = false;
+    board.classList.toggle('is-over', over);
+    var ce = cheatEls();
+    if (ce.panel) ce.panel.hidden = true;
+    if (ce.toggle) {
+      ce.toggle.setAttribute('aria-pressed', 'false');
+      ce.toggle.textContent = '作弊模式';
+    }
+    updateScore();
+    updateMax();
+    if (over) {
+      stopReportTimer();
+      setState('这是上次没下完/已经结束的一局，点重开可以新开。', false);
+    } else {
+      setState('已恢复上次的 2048。方向键 / WASD 继续。', false);
+      startReportTimer();
+    }
+    setNote('本机已自动保存；点「保存」或每 30 秒会把局面同步到云端。');
+    return true;
+  }
+
+  function saveCloud(manual) {
+    if (!writable || !B8.auth || !B8.auth.token()) {
+      if (manual) setNote('没登录或数据库没接：这局只保存在本机。', true);
+      return;
+    }
+    if (cloudBusy) return;
+    if (!manual && !dirty) return;
+    cloudBusy = true;
+    var rev = saveSeq;
+    var st = snapshot();
+    B8.sb.rpc('b8_2048_save', { p_token: B8.auth.token(), p_state: st })
+      .then(function (res) {
+        cloudBusy = false;
+        if (rev === saveSeq) dirty = false;
+        if (manual) {
+          setNote('已保存到云端 · ' + new Date().toLocaleTimeString());
+          B8.toast('2048 局面已保存到云端');
+        }
+      })
+      .catch(function (err) {
+        cloudBusy = false;
+        setNote('云端保存失败：' + (err && err.message ? err.message : '未知错误'), true);
+      });
+  }
+
+  function loadCloud(done) {
+    function finish(found) { if (done) done(found); }
+    if (!writable || !B8.auth || !B8.auth.token()) { finish(false); return; }
+    B8.sb.rpc('b8_2048_load', { p_token: B8.auth.token() })
+      .then(function (res) {
+        if (!res || !res.state) { finish(false); return; }
+        var at = res.updated_at ? Date.parse(res.updated_at) : 0;
+        if (!at || at >= localAt) {
+          if (restoreSnapshot(res.state)) {
+            localAt = at || localAt;
+            dirty = false;
+            try { localStorage.setItem(localKey, JSON.stringify(snapshot())); } catch (e) {}
+            setNote('已从云端恢复上次的 2048 局面。');
+            finish(true);
+            return;
+          }
+        }
+        finish(true);
+      })
+      .catch(function () { finish(false); });
+  }
+
+  function startCloudTimer() {
+    if (cloudTimer) return;
+    cloudTimer = setInterval(function () {
+      if (dirty) saveCloud(false);
+    }, 30000);
+  }
+
   /* ---------- 上传成绩 ---------- */
   // 不再等一局结束才上榜：每 30 秒把当前分送一次。
   // 服务端一个人一个游戏只留一行（b8_score_add 是覆盖式），
   // 所以反复提交不会堆出一堆重复记录。
-  var REPORT_EVERY = 30000;
+  var REPORT_EVERY = 10000;
   var reportTimer = 0;
 
   function startReportTimer() {
@@ -147,7 +272,7 @@
   function reportTick() {
     if (!started || !writable || cheated) return;
     if (!B8.auth || !B8.auth.token()) return;
-    if (score <= 0 || over) return;
+    if (score <= 0) return;
     submitScore(score);
   }
 
@@ -308,11 +433,13 @@
       board.classList.add('is-over');
       setState('没有可走的方向了。这一局 ' + score + ' 分，点重开再来。', false);
       stopReportTimer();
+      if (!cheated) submitScore(score);
     } else if (!won) {
       setState('得分 ' + score + ' · 最大方块 ' + max + '。', false);
     } else {
       setState('已合成 2048 · 得分 ' + score + ' · 最大方块 ' + max + '。', true);
     }
+    saveLocal();
   }
 
   function canMove() {
@@ -358,9 +485,11 @@
     updateMax();
     setState('新的一局。方向键 / WASD 移动，手机上直接滑。');
     setNote(writable
-      ? '每 30 秒把当前成绩更新到排行榜（同一个人只占一行，覆盖旧的）；开过作弊的这一局不算。'
-      : '成绩只存在这台设备：数据库还没接，暂时不上传排行榜。');
+      ? '每 10 秒更新排行榜；本机自动保存，每 30 秒（有变化时）同步云端，点「保存」立即上传。'
+      : '成绩和局面只存在这台设备：数据库还没接，暂时不上传。');
+    saveLocal();
     startReportTimer();
+    startCloudTimer();
   }
 
   /* ---------- 输入 ---------- */
@@ -591,6 +720,7 @@
     bestEl = B8.qs('#g2048-best');
     maxEl = B8.qs('#g2048-max');
     restartBtn = B8.qs('#g2048-restart');
+    saveBtn = B8.qs('#g2048-save');
     stateEl = B8.qs('#g2048-state');
     noteEl = B8.qs('#g2048-note');
     modeBtn = B8.qs('#g2048-mode');
@@ -601,6 +731,7 @@
     } catch (e) {}
     applyMode();
     B8.on(modeBtn, 'click', function () { setMode(mode === 'img' ? 'plain' : 'img'); });
+    B8.on(saveBtn, 'click', function () { saveCloud(true); });
 
     buildGrid();
     best = readBest();
@@ -612,7 +743,18 @@
     B8.auth.ready(function (st) {
       try {
         writable = !!B8.sb.ready && st.kind !== 'preview';
-        reset();
+        localKey = KEY_STATE + '.' + ((B8.auth.no && B8.auth.no()) || 'anon');
+        var local = readLocal();
+        if (local) restoreSnapshot(local);
+        if (!writable) {
+          if (!local) reset();
+        } else {
+          loadCloud(function (found) {
+            if (!found && !started) reset();
+            startCloudTimer();
+          });
+        }
+        startCloudTimer();
       } catch (err) {
         report('开局失败：' + (err && err.message ? err.message : err));
       }

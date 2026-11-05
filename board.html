@@ -4,22 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>棋类对弈 · 中国象棋 / 国际象棋 / 围棋 / 五子棋 / 国际跳棋 · 八班游乐场</title>
-<meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；6 位邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
+<meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；3 位数字邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g62" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g62">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g62">
+<link rel="icon" href="assets/favicon.png?v=20261101g63" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g63">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g63">
 <script>
-window.B8_BUILD = '20261101g62';
+window.B8_BUILD = '20261101g63';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g62"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g62">
+<script src="assets/theme.js?v=20261101g63"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g63">
 </head>
 
 <body data-site="fun">
@@ -79,6 +79,13 @@ window.B8_TEST = !!window.B8_T;
             <div class="chips" id="bd-times" role="group" aria-label="计时方式"></div>
           </div>
 
+          <div class="bd-opt" id="bd-gomoku-row" hidden>
+            <span class="bd-opt-label">五子棋</span>
+            <div class="chips" role="group" aria-label="五子棋禁手">
+              <button class="chip" id="bd-forbid" type="button" aria-pressed="false">黑棋禁手</button>
+            </div>
+          </div>
+
           <div class="bd-opt" id="bd-color-row">
             <span class="bd-opt-label">执子</span>
             <div class="chips" id="bd-colors" role="group" aria-label="执先或执后"></div>
@@ -88,16 +95,16 @@ window.B8_TEST = !!window.B8_T;
             <button class="bd-btn" id="bd-local" type="button">本机对局</button>
             <button class="bd-btn primary" id="bd-create" type="button">创建网络对局</button>
           </div>
-          <p class="bd-hint" id="bd-create-note">本机对局会先问两位棋手是谁；它也会进历史、能被观战。网络对局会生成 6 位邀请码，登录后可用。</p>
+          <p class="bd-hint" id="bd-create-note">本机对局会先问两位棋手是谁；它也会进历史、能被观战。网络对局会生成 3 位数字邀请码，登录后可用。</p>
           <p class="bd-hint is-warn" id="bd-db-note" hidden></p>
         </div>
 
         <div class="bd-card">
           <h2>进别人的房间</h2>
-          <p class="bd-muted">输入同学发来的 6 位邀请码。房间还空着就直接坐下，坐满了就是观战。</p>
+          <p class="bd-muted">输入同学发来的 3 位数字邀请码。房间还空着就直接坐下，坐满了就是观战。</p>
           <form class="bd-join" id="bd-join-form">
-            <input id="bd-code" maxlength="6" autocomplete="off" autocapitalize="characters"
-                   spellcheck="false" placeholder="ABC123" aria-label="邀请码">
+            <input id="bd-code" maxlength="3" inputmode="numeric" autocomplete="off"
+                   spellcheck="false" placeholder="123" aria-label="邀请码">
             <button class="bd-btn primary" type="submit">进去</button>
           </form>
           <p class="bd-hint" id="bd-join-note"></p>
@@ -129,7 +136,7 @@ window.B8_TEST = !!window.B8_T;
           </div>
           <div>
             <b>国际象棋</b>
-            <p>王车易位、吃过路兵、兵升变（可选后 / 车 / 象 / 马）；将死、逼和、50 回合、子力不足都能判。</p>
+            <p>短易位 / 长易位、吃过路兵、兵升变（可选后 / 车 / 象 / 马）；将死、逼和、50 回合、子力不足都能判。</p>
           </div>
           <div>
             <b>围棋</b>
@@ -139,7 +146,7 @@ window.B8_TEST = !!window.B8_T;
           </div>
           <div>
             <b>五子棋</b>
-            <p>15×15，黑先，无禁手；横竖斜任意方向连成五子即胜。</p>
+            <p>15×15，黑先；横竖斜任意方向连成五子即胜。开局可以勾选「黑棋禁手」（三三、四四、长连）。</p>
           </div>
           <div>
             <b>国际跳棋</b>
@@ -151,6 +158,7 @@ window.B8_TEST = !!window.B8_T;
               网络对局悔棋要对方同意；计时超时由服务器判负。</p>
           </div>
         </div>
+        <p class="bd-hint">对局中和复盘时都可以点「演练」：从当前局面随便走，不会上传，也不会影响棋谱。</p>
       </div>
     </section>
 
@@ -238,6 +246,8 @@ window.B8_TEST = !!window.B8_T;
             <button class="bd-mini" id="bd-end" type="button" hidden>结束</button>
             <button class="bd-mini" id="bd-restart" type="button" hidden>重开</button>
             <button class="bd-mini" id="bd-invite" type="button" hidden>邀请码</button>
+            <button class="bd-mini" id="bd-practice" type="button" hidden>演练</button>
+            <button class="bd-mini" id="bd-practice-reset" type="button" hidden>重置演练</button>
             <button class="bd-mini bd-admin-close" id="bd-admin-close" type="button" hidden>强制关闭</button>
           </div>
 
@@ -305,7 +315,7 @@ window.B8_TEST = !!window.B8_T;
 <div class="bd-promo" id="bd-local-setup" hidden>
   <div class="bd-setup-card" role="dialog" aria-modal="true" aria-labelledby="bd-setup-title">
     <h3 id="bd-setup-title">本机对局 · 两位棋手</h3>
-    <p class="bd-setup-sub" id="bd-setup-sub">这盘也一样公开、可被观战、会进历史。填学号会自动查姓名，也可以直接用昵称。</p>
+    <p class="bd-setup-sub" id="bd-setup-sub">这盘也一样公开、可被观战、会进历史。填 8 位学号或班学号（1 号 = 20282306）会自动查姓名，也可以直接用昵称。</p>
 
     <div class="bd-setup-row" data-p="1">
       <div class="bd-setup-head">
@@ -316,7 +326,7 @@ window.B8_TEST = !!window.B8_T;
         </div>
       </div>
       <input class="bd-setup-input" id="bd-p1name" maxlength="12" autocomplete="off"
-             inputmode="numeric" placeholder="8 位学号（如 20282307）">
+             inputmode="numeric" placeholder="班学号 1-2 位或 8 位学号">
       <p class="bd-setup-hint" id="bd-hint1"></p>
     </div>
 
@@ -329,7 +339,7 @@ window.B8_TEST = !!window.B8_T;
         </div>
       </div>
       <input class="bd-setup-input" id="bd-p2name" maxlength="12" autocomplete="off"
-             inputmode="numeric" placeholder="8 位学号（如 20282308）">
+             inputmode="numeric" placeholder="班学号 1-2 位或 8 位学号">
       <p class="bd-setup-hint" id="bd-hint2"></p>
     </div>
 
@@ -356,7 +366,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g62' + T;
+  var V = '?v=20261101g63' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
