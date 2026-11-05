@@ -593,8 +593,11 @@
       S.clock = { 1: (S.room.minutes || 0) * 60000, 2: (S.room.minutes || 0) * 60000 };
       S.clockStart = 0;
       S.clockRunning = 0;
+      CHAT.items = [];
+      CHAT.lastId = 0;
       show('bd-result', false);
       renderAll();
+      initChat();
       toast('再来一局！执子已经交换');
       syncNow();
     }).catch(function (err) {
@@ -3642,14 +3645,14 @@
     });
     $('bd-join-form').addEventListener('submit', function (e) {
       e.preventDefault();
-      var v = ($('bd-code').value || '').replace(/[^0-9]/g, '');
+      var v = ($('bd-code').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
       $('bd-code').value = v;
-      if (v.length !== 3) { txt('bd-join-note', '邀请码是 3 位数字'); return; }
+      if (!((v.length === 3 && /^[0-9]+$/.test(v)) || v.length === 6)) { txt('bd-join-note', '邀请码是 3 位数字（旧 6 位也能用）'); return; }
       txt('bd-join-note', '');
       openRoom(v, { watch: false });
     });
     $('bd-code').addEventListener('input', function () {
-      this.value = this.value.replace(/[^0-9]/g, '').slice(0, 3);
+      this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     });
 
     $('bd-canvas').addEventListener('click', onBoardClick);
