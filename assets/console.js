@@ -31,7 +31,7 @@
     { key: 'suika', name: '合成小辉辉' },
     { key: 'memnum', name: '记忆数字' },
     { key: 'reflex', name: '反应速度' },
-    { key: 'clickspeed', name: '手速测试' },
+    { key: 'clickspeed2', name: '手速测试' },
     { key: 'sudoku', name: '数独' }
   ];
 
@@ -475,8 +475,15 @@
 
   function gameLabel(g) {
     var map = { easy: '简单', normal: '普通', hard: '困难', expert: '极难' };
-    if (String(g).indexOf('sudoku:') === 0) return '数独 · ' + (map[String(g).slice(7)] || '');
-    return g;
+    var key = String(g);
+    if (key.indexOf('sudoku:') === 0) return '数独 · ' + (map[key.slice(7)] || '');
+    if (key.indexOf('piano:') === 0) return '钢琴辉';
+    var names = {
+      '2048': '2048', memory: '记忆翻牌', schulte: '舒尔特方格',
+      suika: '合成小辉辉', memnum: '记忆数字', reflex: '反应速度',
+      clickspeed2: '手速测试', clickspeed: '手速测试'
+    };
+    return names[key] || key;
   }
 
   function paintDeletions() {

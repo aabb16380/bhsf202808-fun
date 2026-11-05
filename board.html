@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；3 位数字邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g68" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g68">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g68">
+<link rel="icon" href="assets/favicon.png?v=20261101g69" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g69">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g69">
 <script>
-window.B8_BUILD = '20261101g68';
+window.B8_BUILD = '20261101g69';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g68"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g68">
+<script src="assets/theme.js?v=20261101g69"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g69">
 </head>
 
 <body data-site="fun">
@@ -121,7 +121,7 @@ window.B8_TEST = !!window.B8_T;
       <div class="bd-card bd-history-card">
         <div class="bd-history-head">
           <h2>历史对局</h2>
-          <span>所有人可见 · 最近 1000 局 · 时间 / 人物 / 结果 · 点开看棋谱</span>
+          <span id="bd-history-meta">所有人可见 · 最近 1000 局 · 时间 / 人物 / 结果 · 点开看棋谱</span>
         </div>
         <div class="bd-history-filter" id="bd-history-filter" role="group" aria-label="按棋类筛选历史">
           <button class="chip is-on" type="button" data-hg="">全部</button>
@@ -258,6 +258,15 @@ window.B8_TEST = !!window.B8_T;
               <button class="bd-mini" id="bd-score" type="button" hidden>点目</button>
             </div>
           </div>
+          <button class="bd-winbar" id="bd-winbar" type="button" hidden
+                  title="局面胜率（本地估算）。点开看整盘折线图">
+            <span class="bd-winbar-p" id="bd-winbar-p1">先手 —</span>
+            <span class="bd-winbar-track" aria-hidden="true">
+              <i id="bd-winbar-fill"></i>
+              <b class="bd-winbar-mid"></b>
+            </span>
+            <span class="bd-winbar-p is-second" id="bd-winbar-p2">— 后手</span>
+          </button>
           <div class="bd-scorepanel" id="bd-scorepanel" hidden></div>
         </div>
         </div>
@@ -285,8 +294,13 @@ window.B8_TEST = !!window.B8_T;
               <b>局面胜率</b>
               <span id="bd-analysis-label">—</span>
             </div>
-            <canvas id="bd-win-chart" height="120"></canvas>
-            <p class="bd-analysis-note">本地局面估算，仅供参考</p>
+            <div class="bd-an-legend">
+              <span class="bd-an-side is-first"><i></i><b id="bd-an-name1">先手</b><em id="bd-an-p1">—</em></span>
+              <span class="bd-an-side is-second"><i></i><b id="bd-an-name2">后手</b><em id="bd-an-p2">—</em></span>
+            </div>
+            <canvas id="bd-win-chart" height="170"
+                    aria-label="整盘胜率折线图"></canvas>
+            <p class="bd-analysis-note" id="bd-analysis-note">本地局面估算，仅供参考 · 回看 / 演练时按当前分支重画</p>
           </div>
 
           <div class="bd-review" id="bd-review" hidden>
@@ -299,6 +313,7 @@ window.B8_TEST = !!window.B8_T;
               <button class="bd-mini" id="bd-review-prev" type="button">← 上一手</button>
               <button class="bd-mini" id="bd-review-next" type="button">下一手 →</button>
               <button class="bd-mini" id="bd-review-end" type="button">终局</button>
+              <button class="bd-mini" id="bd-review-exit" type="button">退出回看</button>
             </div>
           </div>
 
@@ -401,7 +416,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g68' + T;
+  var V = '?v=20261101g69' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

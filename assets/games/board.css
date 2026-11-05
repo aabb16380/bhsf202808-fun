@@ -613,6 +613,7 @@ html[data-mode="night"] .bd-first-banner {
 
 .bd-net.is-wait i { background: var(--gold); box-shadow: 0 0 0 3px rgba(192, 140, 44, .16); }
 .bd-net.is-bad i { background: var(--seal); box-shadow: 0 0 0 3px rgba(193, 82, 47, .16); }
+.bd-net.is-pause i { background: var(--ink-3); box-shadow: 0 0 0 3px rgba(120, 110, 95, .12); }
 
 /* 对手/自己 */
 .bd-players {
@@ -742,7 +743,7 @@ html[data-mode="night"] .bd-first-banner {
 
 .bd-analysis {
   margin-top: 10px;
-  padding: 9px 10px 7px;
+  padding: 10px 11px 8px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--card);
@@ -753,7 +754,7 @@ html[data-mode="night"] .bd-first-banner {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 5px;
 }
 
 .bd-analysis-head b {
@@ -767,16 +768,132 @@ html[data-mode="night"] .bd-first-banner {
   text-align: right;
 }
 
+.bd-an-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.bd-an-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 10px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.bd-an-side i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+  background: var(--seal);
+}
+
+.bd-an-side.is-second i { background: #44536a; }
+
+html[data-mode="night"] .bd-an-side.is-second i { background: #8fa6c4; }
+
+.bd-an-side b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.bd-an-side em {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  font-weight: 700;
+}
+
 #bd-win-chart {
   display: block;
   width: 100%;
-  height: 120px;
+  height: 170px;
+  cursor: crosshair;
+  touch-action: pan-y;
 }
 
 .bd-analysis-note {
-  margin: 2px 0 0;
+  margin: 3px 0 0;
   color: var(--ink-3);
   font-size: 9.5px;
+  line-height: 1.5;
+}
+
+/* 棋盘下方的常驻胜率条：观战者也能一眼看到 */
+.bd-winbar[hidden] { display: none; }
+
+.bd-winbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  margin: 7px 0 0;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.bd-winbar:hover { border-color: var(--line-2); }
+
+.bd-winbar:focus-visible {
+  outline: 2px solid var(--seal);
+  outline-offset: 2px;
+}
+
+.bd-winbar-p {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--seal);
+  font-weight: 700;
+}
+
+.bd-winbar-p.is-second {
+  color: #44536a;
+  text-align: right;
+}
+
+html[data-mode="night"] .bd-winbar-p.is-second { color: #8fa6c4; }
+
+.bd-winbar-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 40px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgba(68, 83, 106, .35);
+}
+
+.bd-winbar-track i {
+  display: block;
+  width: 50%;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--seal-2), var(--seal));
+  transition: width .25s ease;
+}
+
+.bd-winbar-mid {
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  width: 1px;
+  height: 8px;
+  background: var(--paper);
+  opacity: .9;
 }
 
 .bd-uploading {

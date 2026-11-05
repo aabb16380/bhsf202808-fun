@@ -58,11 +58,16 @@
   var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, forbid: false, rematch: null, historyFilter: '', rankGame: 'xiangqi', rankSort: 'wins', rankRows: [], rooms: [], mine: [], history: [], historyApi: true, dbMissing: false, busy: false };
   var LS = { mode1: 'no', mode2: 'no', name1: '', name2: '', resolved1: '', resolved2: '', timer1: 0, timer2: 0, busy: false };
   var DEADSTONES = { loading: null };
-  var ANALYSIS = { on: false, data: [], cur: 0 };
+  var ANALYSIS = {
+    on: false, data: [], cur: 0, hover: -1,
+    liveKey: '', liveCode: '', liveStates: null,
+    practiceKey: '', practiceStates: null,
+    baseSig: '', lastSig: ''
+  };
   var SPECT = { last: 0, inflight: false };
   var S = null;                 // 当前对局
-  var NET = { offset: 0, lastOk: 0, fails: 0, timer: 0, inflight: false, again: false, lastPing: 0, started: 0 };
-  var CHAT = { timer: 0, lastId: 0, inflight: false, items: [], hidden: false, inited: false };
+  var NET = { offset: 0, lastOk: 0, fails: 0, timer: 0, inflight: false, again: false, lastPing: 0, started: 0, paused: false };
+  var CHAT = { timer: 0, lastId: 0, inflight: false, items: [], hidden: false, inited: false, sig: null };
   var LOCAL_KEY = 'b8.board.local.v1';
   var LAST_KEY = 'b8.board.last.v1';
   var pendingLogin = null;
@@ -425,12 +430,21 @@
     var box = $('bd-history');
     if (!box) return;
     box.innerHTML = '';
-    var list = (LOBBY.history || []).filter(function (r) {
+    var all = LOBBY.history || [];
+    var list = all.filter(function (r) {
       return !LOBBY.historyFilter || r.game === LOBBY.historyFilter;
     });
     var hbtns = document.querySelectorAll('#bd-history-filter [data-hg]');
     for (var hi = 0; hi < hbtns.length; hi++) {
-      hbtns[hi].className = 'chip' + ((hbtns[hi].getAttribute('data-hg') || '') === (LOBBY.historyFilter || '') ? ' is-on' : '');
+      var on = (hbtns[hi].getAttribute('data-hg') || '') === (LOBBY.historyFilter || '');
+      hbtns[hi].className = 'chip' + (on ? ' is-on' : '');
+      hbtns[hi].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    var meta = $('bd-history-meta');
+    if (meta) {
+      var label = LOBBY.historyFilter ? (GAMES[LOBBY.historyFilter] ? GAMES[LOBBY.historyFilter].name : LOBBY.historyFilter) : '全部棋类';
+      meta.textContent = '所有人可见 · 最近 1000 局 · 当前 ' + label + ' ' + list.length + ' / ' + all.length + ' 局' +
+        (LOBBY.historyApi === false ? ' · 数据库待更新' : '');
     }
     if (!list.length) {
       var empty = document.createElement('p');
@@ -467,8 +481,9 @@
       btn.type = 'button';
       btn.className = 'bd-room-btn';
       btn.textContent = '看棋谱';
+      btn.title = /^[0-9]{3}$/.test(r.code) ? '只读回看这盘棋' : '旧版 6 位棋谱 · 只读回看';
       btn.addEventListener('click', function () {
-        openRoom(r.code, { watch: true, review: true });
+        openRoom(r.code, { watch: true, review: true, legacy: !/^[0-9]{3}$/.test(r.code) });
       });
 
       row.appendChild(main);
@@ -581,7 +596,9 @@
   function openRoom(code, opts) {
     opts = opts || {};
     code = String(code || '').toUpperCase();
-    if (!/^[0-9]{3}$/.test(code)) { toast('邀请码是 3 位数字'); return; }
+    // 输入框只收 3 位；老棋谱（6 位码）只允许从历史里只读回看，不能坐下
+    if (!/^[0-9]{3}$/.test(code) && !opts.legacy) { toast('邀请码是 3 位数字'); return; }
+    if (!/^[0-9]{3}$/.test(code) && !opts.watch) { toast('旧版 6 位棋谱只能观战回看'); return; }
     if (opts.watch) {
       // 观战不坐下、也不需要登录；登录了还能发评论
       enterOnline(code, null, null, 0, { watch: true, review: !!opts.review });
@@ -648,6 +665,7 @@
       CHAT.items = [];
       CHAT.lastId = 0;
       CHAT.inited = false;
+      CHAT.sig = null;
       show('bd-result', false);
       renderAll();
       initChat();
@@ -725,10 +743,10 @@
       clockStart: 0, clockRunning: 0,
       sel: null, targets: [], drPath: null, drMoves: null,
       score: null, scoreBusy: false, pendingDead: null, flip: false, resultShown: false, moveBusy: false, anim: null,
-      reviewing: false, reviewIndex: 0, reviewStates: null, reviewState: null,
+      reviewing: false, reviewClosed: false, reviewIndex: 0, reviewStates: null, reviewState: null,
       room: null, code: '', playerNames: [name1 || '玩家一', name2 || '玩家二'],
       startedAt: Date.now(), turnStarted: Date.now(),
-      practice: false, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
+      practice: false, practicePrefix: null, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
       rematchOffered: false, rematchPrompted: false
     };
     writeJSON(LOCAL_KEY, null);
@@ -1048,10 +1066,11 @@
       clockStart: 0, clockRunning: 0,
       sel: null, targets: [], drPath: null, drMoves: null,
       score: null, flip: false, resultShown: false,
+      reviewing: false, reviewClosed: false, reviewIndex: 0, reviewStates: null, reviewState: null,
       room: null, code: '',
       playerNames: saved.names || ['玩家一', '玩家二'],
       startedAt: saved.startedAt || Date.now(), turnStarted: Date.now(),
-      practice: false, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
+      practice: false, practicePrefix: null, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
       rematchOffered: false, rematchPrompted: false
     };
     var tmp = E.init(saved.game, { size: saved.size });
@@ -1079,10 +1098,17 @@
     CHAT.lastId = 0;
     CHAT.hidden = false;
     CHAT.inited = false;
+    CHAT.sig = null;
     NET.inflight = false;
     NET.again = false;
     NET.fails = 0;
     NET.lastOk = 0;
+    NET.paused = false;
+    ANALYSIS.hover = -1;
+    ANALYSIS.liveKey = '';
+    ANALYSIS.liveStates = null;
+    ANALYSIS.practiceKey = '';
+    ANALYSIS.practiceStates = null;
     S = {
       mode: 'online', code: code, room: room || null, state: state || null,
       game: room ? room.game : '', size: room ? room.size : 0,
@@ -1090,14 +1116,14 @@
       seat: seat || 0, me: null, watchers: 0, presence: null, offer: null, undo: null, undoPrompted: null, undoBusy: false, anim: null,
       scoreBusy: false, pendingDead: null,
       spectators: [], spectatorError: '',
-      reviewing: false, reviewIndex: 0, reviewStates: null, reviewState: null,
+      reviewing: false, reviewClosed: false, reviewIndex: 0, reviewStates: null, reviewState: null,
       commentsHidden: false, moves: [], texts: [], moveBusy: false,
       sel: null, targets: [], drPath: null, drMoves: null,
       score: null, flip: seat === 2, resultShown: false, watch: !!opts.watch, reviewOnOpen: !!opts.review,
       isHost: false,
       startedAt: room && room.created_at ? Date.parse(room.created_at) || Date.now() : Date.now(),
       turnStarted: room && room.turn_started ? room.turn_started : Date.now(),
-      practice: false, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
+      practice: false, practicePrefix: null, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
       rematchOffered: false, rematchPrompted: false
     };
     saveLast(code);
@@ -1124,6 +1150,8 @@
     show('bd-spectators', false);
     stopChat();
     clearTimeout(NET.timer);
+    NET.paused = false;
+    ANALYSIS.hover = -1;
     closePromo();
     S = null;
     show('bd-game', false);
@@ -1147,9 +1175,26 @@
     if (s) s.textContent = label;
   }
 
+  // 回看 / 演练时不再轮询：把红点收掉，明确显示「已暂停同步」
+  function netPause(label) {
+    if (!S || S.mode !== 'online') return;
+    NET.paused = true;
+    clearTimeout(NET.timer);
+    setNet('pause', label || '已暂停同步');
+  }
+
+  function netResume() {
+    if (!S || S.mode !== 'online') return;
+    var was = NET.paused;
+    NET.paused = false;
+    if (was) setNet('', '已同步');
+    syncNow();
+  }
+
   function syncNow() {
     if (!S || S.mode !== 'online') return;
-    if (S.reviewing || S.practice) { clearTimeout(NET.timer); return; }
+    if (NET.paused || S.reviewing || S.practice) { clearTimeout(NET.timer); return; }
+    NET.paused = false;
     if (NET.inflight) { NET.again = true; return; }
     if (navigator.onLine === false) {
       setNet('bad', '离线');
@@ -1159,7 +1204,8 @@
     NET.inflight = true;
     NET.started = Date.now();
     var myCode = S.code;
-    setNet('', S.room && S.room.status === 'wait' ? '等人中' : '同步中');
+    // 已经同步过就一直显示「已同步」，不要每 1 秒闪一次「同步中」
+    setNet('', S.room && S.room.status === 'wait' ? '等人中' : (NET.lastOk ? '已同步' : '同步中'));
     var since = (S.moves && S.moves.length) ? (S.state.seq || 0) : 0;
     var ping = Date.now() - NET.lastPing > 6000;
     if (ping) NET.lastPing = Date.now();
@@ -1306,13 +1352,15 @@
         S.resultShown = true;
         setTimeout(showResult, 160);
       }
-      if (CHAT.timer) stopChat();
-      initChat();
+      // 只在「刚结束」这一刻打开评论；之后每 3 秒的同步不要再清空重载
+      if (!prevState || prevState.status !== 'over') initChat();
     } else if (S.room.status === 'wait') {
       setNet('wait', '等人中');
     }
 
     renderAll();
+    if (S.reviewing) setNet('pause', '回看中 · 已暂停同步');
+    else if (S.practice) setNet('pause', '演练中 · 不上传');
     promptUndoRequest();
     if (S.reviewOnOpen && S.state && S.state.status === 'over' && S.moves.length) {
       S.reviewOnOpen = false;
@@ -1359,7 +1407,7 @@
   function schedulePoll(delay) {
     clearTimeout(NET.timer);
     if (!S || S.mode !== 'online') return;
-    if (S.reviewing || S.practice) return;
+    if (NET.paused || S.reviewing || S.practice) return;
     if (S.room && S.room.status === 'over') {
       NET.timer = setTimeout(syncNow, 3000);
       return;
@@ -1626,7 +1674,9 @@
 
   function exitPractice() {
     if (!S) return;
+    var wasReview = S.reviewing;
     S.practice = false;
+    S.practicePrefix = null;
     S.practiceBase = null;
     S.practiceState = null;
     S.practiceStack = [];
@@ -1634,8 +1684,9 @@
     S.sel = null;
     S.targets = [];
     renderAll();
-    if (S.mode === 'online' && !S.reviewing) syncNow();
-    toast('已退出演练');
+    if (wasReview) netPause('回看中 · 已暂停同步');
+    else netResume();
+    toast(wasReview ? '已退出演练，回到棋谱回看' : '已退出演练');
   }
 
   function togglePractice() {
@@ -1643,8 +1694,13 @@
     if (S.practice) { exitPractice(); return; }
     var base = (S.reviewing && S.reviewState) ? S.reviewState : S.state;
     if (!base) return;
+    var fullStates = analysisStates();
+    var prefix = S.reviewing
+      ? fullStates.slice(0, Math.min(fullStates.length, (S.reviewIndex || 0) + 1))
+      : fullStates.slice();
     clearTimeout(NET.timer);
     S.practice = true;
+    S.practicePrefix = prefix;
     S.practiceBase = E.clone(base);
     S.practiceState = E.clone(base);
     S.practiceStack = [];
@@ -1654,8 +1710,11 @@
     S.score = null;
     S.scoreBusy = false;
     show('bd-result', false);
+    // 演练是纯本地的分支，不轮询、不上传；顺带把胜率图打开
+    netPause('演练中 · 不上传');
+    ANALYSIS.on = true;
     renderAll();
-    toast('演练模式：随便走，不会上传；左边「重置演练」可以回到起点');
+    toast('演练模式：随便走，不会上传；「重置演练」回到起点，胜率图会按这条分支重画');
   }
 
   function practiceApply(mv) {
@@ -2391,8 +2450,10 @@
     if (!S || !S.state || S.state.status !== 'over' || !S.moves.length) return;
     var arr = reviewBuild();
     if (!arr.length) return;
+    var was = S.reviewing;
     i = Math.max(0, Math.min(arr.length - 1, i));
     S.reviewing = true;
+    S.reviewClosed = false;
     S.reviewIndex = i;
     S.reviewState = arr[i];
     S.anim = null;
@@ -2400,7 +2461,23 @@
     S.score = null;
     S.scoreBusy = false;
     show('bd-result', false);
+    if (!was) {
+      // 回看时停掉轮询：红点收掉，胜率图自动打开
+      netPause('回看中 · 已暂停同步');
+      ANALYSIS.on = true;
+    }
     renderAll();
+  }
+
+  function exitReview() {
+    if (!S) return;
+    reviewReset();
+    S.reviewClosed = true;
+    S.anim = null;
+    S.resultShown = false;
+    renderAll();
+    showResult();
+    netResume();
   }
 
   function reviewStep(d) {
@@ -2412,7 +2489,8 @@
 
   function renderReview() {
     if (!S) return;
-    var on = !!(S.state && S.state.status === 'over' && S.moves && S.moves.length && !S.practice);
+    var on = !!(S.state && S.state.status === 'over' && S.moves && S.moves.length &&
+      !S.practice && !S.reviewClosed);
     show('bd-review', on);
     if (!on) return;
     var total = S.moves.length;
@@ -2497,117 +2575,410 @@
       if (st.winner === 2) return 0;
       return 0.5;
     }
-    var raw, scale;
-    if (st.game === 'go') {
-      var sc = E.scoreGo(st, []);
-      raw = sc.diff;
-      scale = 24;
-    } else if (st.game === 'gomoku') {
-      raw = evalGomoku(st);
-      scale = 18;
-    } else {
-      raw = evalMaterial(st);
-      scale = st.game === 'chess' ? 2.8 : (st.game === 'xiangqi' ? 3.2 : 2.2);
+    var raw = 0, scale = 1;
+    try {
+      if (st.game === 'go') {
+        var sc = E.scoreGo(st, []);
+        raw = sc.diff;
+        scale = 22;
+      } else if (st.game === 'gomoku') {
+        raw = evalGomoku(st);
+        scale = 16;
+      } else {
+        raw = evalMaterial(st);
+        scale = st.game === 'chess' ? 2.6 : (st.game === 'xiangqi' ? 3.0 : 2.0);
+      }
+    } catch (e) {
+      raw = 0;
+      scale = 1;
     }
-    raw += st.turn === 1 ? 0.25 : -0.25;
+    raw += st.turn === 1 ? 0.2 : -0.2;
     var p = 1 / (1 + Math.exp(-raw / scale));
     return Math.max(0.02, Math.min(0.98, p));
   }
 
+  function stateSig(st) {
+    if (!st) return '';
+    return (st.game || '') + '|' + (st.size || 0) + '|' + (st.seq || 0) + '|' +
+      (st.turn || 0) + '|' + (st.status || '') + '|' + (st.winner || 0);
+  }
+
+  // 回看 / 演练 / 实战都在这里取「整盘的局面序列」。
+  // 实战是增量长的，缓存住上一份，只 apply 新走的几步。
   function analysisStates() {
-    if (S.practice && S.practiceStack && S.practiceState) {
-      return S.practiceStack.concat([S.practiceState]);
+    if (!S) return [];
+    if (S.practice && S.practiceState) {
+      var prefix = (S.practicePrefix && S.practicePrefix.length) ? S.practicePrefix.slice() : [S.practiceBase || S.practiceState];
+      // practiceStack 的第一项就是起点；prefix 已经以起点结尾，跳过它
+      for (var pi = 1; pi < (S.practiceStack || []).length; pi++) prefix.push(S.practiceStack[pi]);
+      var tail = prefix[prefix.length - 1];
+      if (!tail || tail.seq !== S.practiceState.seq) prefix.push(S.practiceState);
+      var pk = 'p|' + (S.code || 'local') + '|' + stateSig(prefix[0]) + '|' + prefix.length + '|' + stateSig(prefix[prefix.length - 1]);
+      if (ANALYSIS.practiceKey === pk && ANALYSIS.practiceStates) return ANALYSIS.practiceStates;
+      ANALYSIS.practiceKey = pk;
+      ANALYSIS.practiceStates = prefix;
+      return prefix;
     }
     if (S.reviewStates && S.reviewStates.length) return S.reviewStates;
-    var st = E.init(S.game || (S.room && S.room.game), {
-      size: S.size || (S.room && S.room.size),
-      forbid: !!(S.state && S.state.forbid)
-    });
-    var arr = [st];
-    for (var i = 0; i < S.moves.length && i < 400; i++) {
-      if (st.status !== 'play') break;
-      try { st = E.apply(st, S.moves[i].move); } catch (e) { break; }
-      arr.push(st);
+
+    var game = S.game || (S.room && S.room.game);
+    var size = S.size || (S.room && S.room.size);
+    var mlen = (S.moves && S.moves.length) || 0;
+    var lk = 'l|' + (S.code || 'local') + '|' + game + '|' + size + '|' + mlen + '|' + (S.state ? S.state.seq : -1);
+    if (ANALYSIS.liveKey === lk && ANALYSIS.liveStates) return ANALYSIS.liveStates;
+
+    var prev = ANALYSIS.liveStates;
+    var arr = null;
+    if (prev && prev.length && ANALYSIS.liveCode === (S.code || 'local') &&
+        prev[0].game === game && prev[0].size === size &&
+        prev.length - 1 <= mlen &&
+        (S.state ? (S.state.seq || 0) : 0) + 1 >= (prev[prev.length - 1].seq || 0)) {
+      arr = prev.slice();
+      var st = arr[arr.length - 1];
+      var from = arr.length - 1;
+      for (var j = from; j < mlen && st.status === 'play'; j++) {
+        try { st = E.apply(st, S.moves[j].move); } catch (e) { arr = null; break; }
+        arr.push(st);
+      }
     }
+    if (!arr) {
+      var init = E.init(game, { size: size, forbid: !!(S.state && S.state.forbid) });
+      arr = [init];
+      var cur = init;
+      for (var i = 0; i < mlen; i++) {
+        if (cur.status !== 'play') break;
+        try { cur = E.apply(cur, S.moves[i].move); } catch (e) { break; }
+        arr.push(cur);
+      }
+    }
+    ANALYSIS.liveKey = lk;
+    ANALYSIS.liveCode = S.code || 'local';
+    ANALYSIS.liveStates = arr;
     return arr;
+  }
+
+  // 评估只做新增的那一段；回看切手、评论同步都不会把整盘重算一遍。
+  function ensureAnalysisData(states) {
+    if (!states || !states.length) {
+      ANALYSIS.data = [];
+      ANALYSIS.baseSig = '';
+      ANALYSIS.lastSig = '';
+      return;
+    }
+    var base = stateSig(states[0]);
+    var last = stateSig(states[states.length - 1]);
+    if (ANALYSIS.data.length === states.length && ANALYSIS.baseSig === base && ANALYSIS.lastSig === last) return;
+    var reuse = 0;
+    if (ANALYSIS.data.length && ANALYSIS.data.length <= states.length &&
+        ANALYSIS.baseSig === base &&
+        ANALYSIS.lastSig === stateSig(states[ANALYSIS.data.length - 1])) {
+      reuse = ANALYSIS.data.length;
+    }
+    var data = reuse ? ANALYSIS.data.slice(0, reuse) : [];
+    for (var i = reuse; i < states.length; i++) data.push(evalState(states[i]));
+    ANALYSIS.data = data;
+    ANALYSIS.baseSig = base;
+    ANALYSIS.lastSig = last;
+  }
+
+  function shortName(c) {
+    var n = nameForColor(c) || ((E.games[S.game] && E.games[S.game].colors) ? E.games[S.game].colors[c - 1] : (c === 1 ? '先手' : '后手'));
+    n = String(n || '').trim();
+    if (n.length > 8) n = n.slice(0, 8) + '…';
+    return n;
+  }
+
+  function chartPalette() {
+    if (isNight()) {
+      return {
+        grid: 'rgba(255,255,255,.10)', axis: 'rgba(255,255,255,.18)',
+        text: 'rgba(233,227,215,.72)', first: '#e0795a', second: '#8fa6c4',
+        firstFill: 'rgba(224,121,90,.16)', secondFill: 'rgba(143,166,196,.14)',
+        line: 'rgba(240,235,224,.9)', tipBg: 'rgba(18,20,25,.96)', tipText: '#f3eee2',
+        tipEdge: 'rgba(255,255,255,.16)'
+      };
+    }
+    return {
+      grid: 'rgba(35,33,28,.09)', axis: 'rgba(35,33,28,.2)',
+      text: 'rgba(91,87,77,.88)', first: '#c1522f', second: '#44536a',
+      firstFill: 'rgba(193,82,47,.14)', secondFill: 'rgba(68,83,106,.11)',
+      line: 'rgba(35,33,28,.82)', tipBg: 'rgba(35,33,28,.94)', tipText: '#f8f4e9',
+      tipEdge: 'rgba(255,255,255,.14)'
+    };
+  }
+
+  function chartGeom(w, h, n) {
+    var padL = 32, padR = 10, padT = 12, padB = 21;
+    var iw = Math.max(12, w - padL - padR), ih = Math.max(12, h - padT - padB);
+    return {
+      padL: padL, padR: padR, padT: padT, padB: padB, iw: iw, ih: ih,
+      x: function (i) { return padL + (n <= 1 ? iw / 2 : iw * i / (n - 1)); },
+      y: function (p) { return padT + ih * (1 - p); }
+    };
   }
 
   function drawWinChart() {
     var cv = $('bd-win-chart');
     if (!cv) return;
-    var w = Math.max(180, Math.floor(cv.clientWidth || 240)), h = 120;
+    var data = ANALYSIS.data || [];
+    var w = Math.max(200, Math.floor(cv.clientWidth || cv.parentNode.clientWidth || 280));
+    var h = Math.max(120, Math.floor(cv.clientHeight || 170));
     var dpr = Math.min(2, window.devicePixelRatio || 1);
-    cv.width = Math.floor(w * dpr);
-    cv.height = Math.floor(h * dpr);
+    if (cv.width !== Math.floor(w * dpr) || cv.height !== Math.floor(h * dpr)) {
+      cv.width = Math.floor(w * dpr);
+      cv.height = Math.floor(h * dpr);
+    }
     var ctx = cv.getContext('2d');
+    if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    var data = ANALYSIS.data || [];
     if (!data.length) return;
-    var padL = 24, padR = 8, padT = 8, padB = 16;
-    var iw = w - padL - padR, ih = h - padT - padB;
-    function xx(i) { return padL + (data.length <= 1 ? iw / 2 : iw * i / (data.length - 1)); }
-    function yy(p) { return padT + ih * (1 - p); }
 
-    ctx.strokeStyle = 'rgba(120,110,95,.25)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + ih); ctx.lineTo(padL + iw, padT + ih);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(120,110,95,.75)';
-    ctx.font = '9px sans-serif';
-    ctx.fillText('100%', 2, padT + 7);
-    ctx.fillText('50%', 8, padT + ih / 2 + 3);
-    ctx.fillText('0%', 14, padT + ih);
+    var pal = chartPalette();
+    var n = data.length;
+    var g = chartGeom(w, h, n);
+    var cur = Math.max(0, Math.min(ANALYSIS.cur, n - 1));
+    var hover = (ANALYSIS.hover >= 0 && ANALYSIS.hover < n) ? ANALYSIS.hover : -1;
 
-    ctx.beginPath();
-    for (var i = 0; i < data.length; i++) {
-      var px = xx(i), py = yy(data[i]);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    // 上下半区：先手占优 / 后手占优
+    ctx.fillStyle = pal.firstFill;
+    ctx.fillRect(g.padL, g.padT, g.iw, g.ih / 2);
+    ctx.fillStyle = pal.secondFill;
+    ctx.fillRect(g.padL, g.padT + g.ih / 2, g.iw, g.ih / 2);
+
+    // 横网格与刻度
+    ctx.font = '9px ui-monospace, Menlo, Consolas, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    var marks = [0, 0.25, 0.5, 0.75, 1];
+    for (var m = 0; m < marks.length; m++) {
+      var gy = g.y(marks[m]);
+      ctx.strokeStyle = marks[m] === 0.5 ? pal.axis : pal.grid;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      if (marks[m] === 0.5) ctx.setLineDash([4, 4]);
+      ctx.moveTo(g.padL, gy);
+      ctx.lineTo(g.padL + g.iw, gy);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
-    ctx.strokeStyle = '#b5522f';
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
-    ctx.lineTo(xx(data.length - 1), padT + ih);
-    ctx.lineTo(xx(0), padT + ih);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(181,82,47,.10)';
-    ctx.fill();
+    ctx.fillStyle = pal.text;
+    ctx.fillText('100', g.padL - 5, g.padT + 1);
+    ctx.fillText('50', g.padL - 5, g.padT + g.ih / 2);
+    ctx.fillText('0', g.padL - 5, g.padT + g.ih);
 
-    var cur = Math.max(0, Math.min(ANALYSIS.cur, data.length - 1));
-    ctx.strokeStyle = 'rgba(181,82,47,.45)';
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath();
-    ctx.moveTo(xx(cur), padT);
-    ctx.lineTo(xx(cur), padT + ih);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#b5522f';
-    ctx.beginPath();
-    ctx.arc(xx(cur), yy(data[cur]), 3.2, 0, Math.PI * 2);
-    ctx.fill();
+    // 折线：按当前领先方分段上色
+    for (var i = 1; i < n; i++) {
+      var x0 = g.x(i - 1), y0 = g.y(data[i - 1]);
+      var x1 = g.x(i), y1 = g.y(data[i]);
+      var above = (data[i - 1] + data[i]) / 2 >= 0.5;
+      ctx.strokeStyle = above ? pal.first : pal.second;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+    }
+    if (n === 1) {
+      ctx.fillStyle = pal.first;
+      ctx.beginPath();
+      ctx.arc(g.x(0), g.y(data[0]), 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function marker(idx, color, radius, dashed) {
+      var mx = g.x(idx), my = g.y(data[idx]);
+      ctx.strokeStyle = dashed ? pal.axis : color;
+      ctx.lineWidth = 1;
+      if (dashed) ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(mx, g.padT);
+      ctx.lineTo(mx, g.padT + g.ih);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (!dashed) {
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(mx, my, radius + 1.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(mx, my, radius, 0, Math.PI * 2);
+      ctx.fill();
+      return [mx, my];
+    }
+
+    // 当前手
+    var curColor = data[cur] >= 0.5 ? pal.first : pal.second;
+    marker(cur, curColor, 3.2, true);
+
+    // 悬停 / 点击查看的那一手
+    if (hover >= 0 && hover !== cur) {
+      var hc = isNight() ? '#d9b86a' : '#c08c2c';
+      var hp = marker(hover, hc, 3.4, false);
+      var pw = Math.round(data[hover] * 100);
+      var lines = ['第 ' + hover + ' 手', shortName(1) + ' ' + pw + '%', shortName(2) + ' ' + (100 - pw) + '%'];
+      ctx.font = '9.5px ui-monospace, Menlo, Consolas, monospace';
+      var tw = 0;
+      for (var t = 0; t < lines.length; t++) tw = Math.max(tw, ctx.measureText(lines[t]).width);
+      var bw = Math.ceil(tw + 16), bh = 46;
+      var bx = Math.min(g.padL + g.iw - bw - 2, Math.max(g.padL + 2, hp[0] - bw / 2));
+      var by = g.padT + 3;
+      if (hp[1] < g.padT + bh + 8) by = Math.min(g.padT + g.ih - bh - 3, hp[1] + 10);
+      ctx.fillStyle = pal.tipBg;
+      ctx.strokeStyle = pal.tipEdge;
+      ctx.lineWidth = 1;
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(bx, by, bw, bh, 6);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.strokeRect(bx, by, bw, bh);
+      }
+      ctx.fillStyle = pal.tipText;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      for (var q = 0; q < lines.length; q++) {
+        ctx.fillText(lines[q], bx + 8, by + 11 + q * 12);
+      }
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+    }
+
+    // 当前手百分比小药丸（鼠标正在看别的某一手时让位给 tooltip）
+    var pct = Math.round(data[cur] * 100);
+    if (hover < 0) {
+      var label = pct + '%';
+      ctx.font = '700 10px ui-monospace, Menlo, Consolas, monospace';
+      var lw = ctx.measureText(label).width + 12;
+      var lx = Math.min(g.padL + g.iw - lw, Math.max(g.padL, g.x(cur) - lw / 2));
+      var ly = data[cur] > 0.6 ? g.padT + g.ih - 19 : g.padT + 2;
+      ctx.fillStyle = curColor;
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(lx, ly, lw, 16, 8);
+        ctx.fill();
+      } else {
+        ctx.fillRect(lx, ly, lw, 16);
+      }
+      ctx.fillStyle = '#fffdf7';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, lx + lw / 2, ly + 8.5);
+    }
+
+    // 横轴：0 与最后一手
+    ctx.font = '9px ui-monospace, Menlo, Consolas, monospace';
+    ctx.fillStyle = pal.text;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('0', g.padL, g.padT + g.ih + 11);
+    ctx.textAlign = 'right';
+    ctx.fillText(String(n - 1), g.padL + g.iw, g.padT + g.ih + 11);
+    if (n > 2) {
+      ctx.textAlign = 'center';
+      ctx.fillText('第 ' + cur + ' 手', g.padL + g.iw / 2, g.padT + g.ih + 11);
+    }
+
+    cv.setAttribute('aria-label',
+      '胜率折线图：第 ' + cur + ' 手，' + shortName(1) + ' ' + pct + '%，' + shortName(2) + ' ' + (100 - pct) + '%');
+  }
+
+  function chartIndexAt(clientX) {
+    var cv = $('bd-win-chart');
+    var data = ANALYSIS.data || [];
+    if (!cv || !data.length) return -1;
+    var rect = cv.getBoundingClientRect();
+    if (!rect.width) return -1;
+    var w = cv.clientWidth || rect.width;
+    var g = chartGeom(w, Math.max(120, cv.clientHeight || 170), data.length);
+    var x = clientX - rect.left;
+    if (data.length <= 1) return 0;
+    if (x < g.padL - 10 || x > g.padL + g.iw + 10) return -1;
+    var i = Math.round((x - g.padL) / g.iw * (data.length - 1));
+    return Math.max(0, Math.min(data.length - 1, i));
+  }
+
+  function renderWinBar(p, cur) {
+    var bar = $('bd-winbar');
+    if (!bar || !S || !S.state) { show('bd-winbar', false); return; }
+    var pct = Math.round(p * 100);
+    var n1 = shortName(1), n2 = shortName(2);
+    txt('bd-winbar-p1', n1 + ' ' + pct + '%');
+    txt('bd-winbar-p2', (100 - pct) + '% ' + n2);
+    var fill = $('bd-winbar-fill');
+    if (fill) fill.style.width = Math.max(2, Math.min(98, pct)) + '%';
+    bar.title = '局面胜率（本地估算） · 第 ' + cur + ' 手 · 点开看整盘折线图';
+    bar.setAttribute('aria-label',
+      '局面胜率：' + n1 + ' ' + pct + '%，' + n2 + ' ' + (100 - pct) + '%。点开看折线图');
+    show('bd-winbar', true);
   }
 
   function renderAnalysis() {
-    show('bd-analysis', !!S && !!S.state);
+    var has = !!(S && S.state);
+    show('bd-analysis', has);
     var btn = $('bd-analysis');
-    if (btn) btn.textContent = ANALYSIS.on ? '收起胜率' : '胜率';
-    show('bd-analysis-panel', !!ANALYSIS.on);
-    if (!S || !S.state || !ANALYSIS.on) return;
+    if (btn) {
+      btn.textContent = ANALYSIS.on ? '收起胜率' : '胜率';
+      btn.setAttribute('aria-pressed', ANALYSIS.on ? 'true' : 'false');
+    }
+    if (!has) {
+      show('bd-analysis-panel', false);
+      show('bd-winbar', false);
+      return;
+    }
     var states = analysisStates();
-    ANALYSIS.data = states.map(evalState);
-    ANALYSIS.cur = S.practice ? states.length - 1 :
-      (S.reviewing ? Math.min(S.reviewIndex, states.length - 1) : states.length - 1);
-    var p = Math.round(ANALYSIS.data[ANALYSIS.cur] * 100);
-    var color = (E.games[S.game] && E.games[S.game].colors) ? E.games[S.game].colors[0] : '先手';
-    txt('bd-analysis-label', color + '胜率 ' + p + '% · 第 ' + ANALYSIS.cur + ' 手');
+    ensureAnalysisData(states);
+    var last = Math.max(0, (ANALYSIS.data || []).length - 1);
+    ANALYSIS.cur = S.practice ? last : (S.reviewing ? Math.min(S.reviewIndex, last) : last);
+    var p = (ANALYSIS.data && ANALYSIS.data.length) ? ANALYSIS.data[ANALYSIS.cur] : 0.5;
+    var pct = Math.round(p * 100);
+
+    txt('bd-an-name1', shortName(1));
+    txt('bd-an-name2', shortName(2));
+    txt('bd-an-p1', pct + '%');
+    txt('bd-an-p2', (100 - pct) + '%');
+    txt('bd-analysis-label', '第 ' + ANALYSIS.cur + ' / ' + last + ' 手');
+    renderWinBar(p, ANALYSIS.cur);
+
+    show('bd-analysis-panel', !!ANALYSIS.on);
+    if (!ANALYSIS.on) return;
     drawWinChart();
+  }
+
+  function openAnalysis() {
+    if (!S || !S.state) return;
+    ANALYSIS.on = true;
+    renderAnalysis();
+    var panel = $('bd-analysis-panel');
+    if (panel && panel.scrollIntoView && window.innerWidth < 900) {
+      try { panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {}
+    }
   }
 
   function toggleAnalysis() {
     ANALYSIS.on = !ANALYSIS.on;
+    if (!ANALYSIS.on) ANALYSIS.hover = -1;
     renderAnalysis();
+    if (ANALYSIS.on) {
+      var panel = $('bd-analysis-panel');
+      if (panel && panel.scrollIntoView && window.innerWidth < 900) {
+        try { panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {}
+      }
+    }
   }
+
+  var chartResizeTimer = 0;
+  window.addEventListener('resize', function () {
+    if (!ANALYSIS.on) return;
+    clearTimeout(chartResizeTimer);
+    chartResizeTimer = setTimeout(drawWinChart, 120);
+  });
 
   function renderMoves() {
     var box = $('bd-moves');
@@ -3734,11 +4105,11 @@
       CHAT.items = [];
       CHAT.lastId = 0;
       CHAT.inited = false;
+      CHAT.sig = null;
       stopChat();
       return;
     }
     if (!CHAT.inited) {
-      CHAT.inited = true;
       refreshChat(true);
     } else {
       scheduleChat();
@@ -3780,6 +4151,7 @@
       show('bd-chat-locked', false);
       show('bd-chat-list', true);
       show('bd-chat-form', true);
+      CHAT.inited = true;
       (res.comments || []).forEach(function (c) {
         if (CHAT.lastId && c.id <= CHAT.lastId) return;
         CHAT.items.push(c);
@@ -3795,9 +4167,16 @@
     });
   }
 
-  function renderChatList() {
+  function renderChatList(force) {
     var box = $('bd-chat-list');
     if (!box) return;
+    // 同步每 1 秒跑一次，评论没变就别重建 DOM——否则正在看旧评论会被顶回顶部
+    var sig = CHAT.items.map(function (c) { return c.id; }).join(',');
+    if (!force && sig === CHAT.sig) {
+      txt('bd-chat-count', String(CHAT.items.length));
+      return;
+    }
+    CHAT.sig = sig;
     var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
     box.innerHTML = '';
     if (!CHAT.items.length) {
@@ -3882,6 +4261,38 @@
     $('bd-practice').addEventListener('click', togglePractice);
     $('bd-analysis').addEventListener('click', toggleAnalysis);
     $('bd-practice-reset').addEventListener('click', practiceReset);
+    $('bd-review-exit').addEventListener('click', exitReview);
+    $('bd-winbar').addEventListener('click', openAnalysis);
+    $('bd-winbar').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAnalysis(); }
+    });
+
+    // 胜率折线图：鼠标悬停看每一手，点击直接跳到那一手（回看 / 演练）
+    var chartCv = $('bd-win-chart');
+    if (chartCv) {
+      chartCv.addEventListener('pointermove', function (e) {
+        if (e.pointerType && e.pointerType !== 'mouse' && e.pointerType !== 'pen') return;
+        var i = chartIndexAt(e.clientX);
+        if (i === ANALYSIS.hover) return;
+        ANALYSIS.hover = i;
+        drawWinChart();
+      });
+      chartCv.addEventListener('pointerleave', function () {
+        if (ANALYSIS.hover < 0) return;
+        ANALYSIS.hover = -1;
+        drawWinChart();
+      });
+      chartCv.addEventListener('click', function (e) {
+        var i = chartIndexAt(e.clientX);
+        if (i < 0) return;
+        ANALYSIS.hover = i;
+        if (S && S.state && S.state.status === 'over' && S.moves && S.moves.length) {
+          reviewGoto(i);
+        } else {
+          drawWinChart();
+        }
+      });
+    }
     $('bd-refresh').addEventListener('click', function () { loadLists(true); toast('已刷新'); });
     $('bd-history-filter').addEventListener('click', function (e) {
       var btn = e.target;

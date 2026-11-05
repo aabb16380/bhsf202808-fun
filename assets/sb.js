@@ -67,6 +67,11 @@
         var err = new Error(msg);
         err.status = xhr.status;
         err.detail = data;
+        if (xhr.status === 404 && /relation|does not exist|schema/i.test(msg)) {
+          err.message = '数据表还没建好（' + msg + '）。请先执行 supabase/schema.sql。';
+        } else if (xhr.status === 404 && /function|schema cache/i.test(msg)) {
+          err.message = 'RPC 函数还没建好（' + msg + '）。请先执行 supabase/schema.sql。';
+        }
         sb.lastError = err;
         reject(err);
       };
@@ -89,13 +94,20 @@
   /**
    * 底层请求。失败时抛出带可读信息的 Error，
    * 前端要把它原样显示给用户（别只说「失败了」）。
+   *
+   * 传输统一走 XMLHttpRequest：Safari / iOS 微信里 fetch 偶尔会直接
+   * TypeError（表现为「一登录就网络不通」），XHR 在同样的网络下更稳。
+   * 只有极老的、没有 XHR 的环境才退回 fetch。
    */
   function request(method, url, body, extraHeaders, ms) {
     if (!sb.ready) return Promise.reject(new Error('未配置 Supabase'));
-    if (IS_SAFARI && typeof XMLHttpRequest !== 'undefined') {
+    if (typeof XMLHttpRequest !== 'undefined') {
       return xhrRequest(method, url, body, extraHeaders, ms);
     }
+    return fetchRequest(method, url, body, extraHeaders, ms);
+  }
 
+  function fetchRequest(method, url, body, extraHeaders, ms) {
     var ctrl = null;
     var opts = {
       method: method,
@@ -141,10 +153,6 @@
         var terr = new Error('请求超时，请检查网络');
         sb.lastError = terr;
         throw terr;
-      }
-      // Safari 的 fetch 在部分网络/代理下会直接 TypeError；再用 XHR 试一次
-      if (typeof XMLHttpRequest !== 'undefined') {
-        return xhrRequest(method, url, body, extraHeaders, ms);
       }
       var err = new Error('网络不通：' + (e && e.message ? e.message : '未知错误'));
       sb.lastError = err;
