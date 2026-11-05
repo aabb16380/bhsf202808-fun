@@ -279,15 +279,26 @@
       (r.guest_name ? '（' + GAMES[r.game].colors[r.guest_color - 1] + '）' : '');
   }
 
+  function isShortCode(code) {
+    return /^[0-9]{3}$/.test(String(code == null ? '' : code).toUpperCase());
+  }
+
+  // 旧版 6 位房间只能只读回看：不坐下、不参与对局，避免「邀请码是 3 位数字」
+  function openLegacy(code, review) {
+    openRoom(code, { watch: true, review: review !== false, legacy: true });
+  }
+
   function roomRow(r, opts) {
     opts = opts || {};
+    var legacy = !isShortCode(r.code);
     var wrap = document.createElement('div');
     wrap.className = 'bd-room';
     var main = document.createElement('div');
     main.className = 'bd-room-main';
     var title = document.createElement('b');
     title.textContent = (r.mode === 'local' ? '本机 · ' : '') + GAMES[r.game].name +
-      (r.status === 'wait' ? ' · 等人' : (r.dormant ? ' · 休眠' : ' · 对弈中'));
+      (r.status === 'wait' ? ' · 等人' : (r.dormant ? ' · 休眠' : ' · 对弈中')) +
+      (legacy ? ' · 旧版' : '');
     var sub = document.createElement('span');
     var watchers = r.watchers ? ' · <i>' + r.watchers + ' 人观战</i>' : '';
     sub.innerHTML = B8.esc(roomPlayers(r)) + ' · ' + (r.seq || 0) + ' 手' +
@@ -299,10 +310,14 @@
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'bd-room-btn' + (r.status === 'play' && !r.dormant ? ' is-live' : '');
-    btn.textContent = opts.mine
-      ? (r.status === 'play' ? '继续' : '回到房间')
-      : (r.status === 'wait' ? '加入' : '观战');
+    btn.textContent = legacy
+      ? (r.status === 'over' ? '看棋谱' : '观战')
+      : (opts.mine
+        ? (r.status === 'play' ? '继续' : '回到房间')
+        : (r.status === 'wait' ? '加入' : '观战'));
+    btn.title = legacy ? '旧版 6 位房间 · 只读回看' : '';
     btn.addEventListener('click', function () {
+      if (legacy) { openLegacy(r.code, r.status === 'over'); return; }
       if (opts.mine) openRoom(r.code, { watch: false });
       else openRoom(r.code, { watch: r.status !== 'wait' });
     });
@@ -596,9 +611,13 @@
   function openRoom(code, opts) {
     opts = opts || {};
     code = String(code || '').toUpperCase();
-    // 输入框只收 3 位；老棋谱（6 位码）只允许从历史里只读回看，不能坐下
-    if (!/^[0-9]{3}$/.test(code) && !opts.legacy) { toast('邀请码是 3 位数字'); return; }
-    if (!/^[0-9]{3}$/.test(code) && !opts.watch) { toast('旧版 6 位棋谱只能观战回看'); return; }
+    // 输入框只收 3 位；老棋谱（6 位码）只允许只读回看，不能坐下
+    if (!isShortCode(code)) {
+      if (!opts.legacy && !opts.watch) { toast('邀请码是 3 位数字'); return; }
+      opts.legacy = true;
+      opts.watch = true;
+      if (opts.review == null) opts.review = true;
+    }
     if (opts.watch) {
       // 观战不坐下、也不需要登录；登录了还能发评论
       enterOnline(code, null, null, 0, { watch: true, review: !!opts.review });
@@ -4698,13 +4717,21 @@
     // 邀请码：登录后自动进房
     var code = query('code');
     if (code) {
-      pendingOpen = { code: code.toUpperCase(), watch: query('watch') === '1' };
+      var upCode = code.toUpperCase();
+      var legacyCode = !isShortCode(upCode);
+      pendingOpen = { code: upCode, watch: query('watch') === '1' || legacyCode };
       B8.auth.ready(function () {
         var o = pendingOpen;
         if (!o) return;
+        if (legacyCode) {
+          // 旧链接 / 刷新后的 6 位房间：直接只读回看，不弹登录、不报 3 位错误
+          pendingOpen = null;
+          openRoom(o.code, { watch: true, review: true, legacy: true });
+          return;
+        }
         if (o.watch) {
           pendingOpen = null;
-          openRoom(o.code, { watch: true });
+          openRoom(o.code, { watch: true, review: query('review') === '1' });
           return;
         }
         if (logged()) {

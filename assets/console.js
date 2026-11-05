@@ -18,6 +18,7 @@
   var members = [];
   var keys = [];
   var scores = [];
+  var worship = [];
   var scoreGame = '';
   var deletions = [];
   var visits = [];
@@ -32,7 +33,8 @@
     { key: 'memnum', name: '记忆数字' },
     { key: 'reflex', name: '反应速度' },
     { key: 'clickspeed2', name: '手速测试' },
-    { key: 'sudoku', name: '数独' }
+    { key: 'sudoku', name: '数独' },
+    { key: '__worship', name: '膜宙金' }
   ];
 
   function tok() { return B8.auth.token(); }
@@ -121,7 +123,7 @@
 
   /* ---------- 成员 ---------- */
   function loadMembers() {
-    B8.sb.rpc('b8_super_members', { p_token: tok() }).then(function (rows) {
+    return B8.sb.rpc('b8_super_members', { p_token: tok() }).then(function (rows) {
       members = rows || [];
       paintMembers();
     }, fail);
@@ -162,7 +164,8 @@
           '</div>' +
         '</div>' +
         '<div class="chip-row">' +
-          '<button class="btn ghost sm" type="button" data-reset="' + esc(m.student_no) + '">重置密码</button>' +
+          '<button class="btn ghost sm" type="button" data-reset="' + esc(m.student_no) + '" title="生成一个随机临时密码">临时密码</button>' +
+          '<button class="btn ghost sm" type="button" data-clear-pass="' + esc(m.student_no) + '" title="清空密码，变成未注册状态">清空密码</button>' +
           '<button class="btn ghost sm" type="button" data-toggle="' + esc(m.student_no) + '" data-active="' + (m.active ? '1' : '0') + '">' +
             (m.active ? '停用' : '启用') + '</button>' +
         '</div>' +
@@ -190,17 +193,52 @@
       B8.on(btn, 'click', function () {
         var no = btn.getAttribute('data-reset');
         // 原密码是 sha256，取不回来，只能重置成一个新的临时密码
-        B8.confirm('把 ' + no + ' 的密码重置成随机临时密码？\n原密码是哈希，取不回来，只能重置。', {
-          title: '重置密码', okText: '重置', danger: true
+        B8.confirm('把 ' + no + ' 的密码重置成随机临时密码？\n原密码是哈希，取不回来，只能重置。\n\n重置后临时密码会显示在列表最上面，复制转告本人。', {
+          title: '重置成临时密码', okText: '重置', danger: true
         }).then(function (ok) {
           if (!ok) return;
           btn.disabled = true;
           B8.sb.rpc('b8_super_temp_pass', { p_token: tok(), p_no: no })
             .then(function (res) {
-              showTemp(res.student_no, res.temp_pass);
-              loadMembers();
+              var tempNo = res.student_no;
+              var tempPwd = res.temp_pass;
+              // 必须等列表重画完再插临时密码，否则会被 paintMembers 的 innerHTML 冲掉
+              return loadMembers().then(function () {
+                showTemp(tempNo, tempPwd);
+                B8.toast('临时密码已生成，看列表最上面');
+                // 再弹一次，避免列表刷新或切 tab 后找不到；点「复制密码」直接进剪贴板
+                B8.confirm('临时密码（' + tempNo + '）：\n\n' + tempPwd +
+                  '\n\n把它告诉本人。本人登录后可以在右上角姓名 →「修改密码」里自己改。', {
+                  title: '临时密码', okText: '复制密码', cancelText: '关闭'
+                }).then(function (copyIt) {
+                  if (copyIt) B8.copy(tempPwd);
+                });
+              });
             })
             .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+        });
+      });
+    });
+
+    B8.qsa('[data-clear-pass]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        var no = btn.getAttribute('data-clear-pass');
+        B8.confirm('把 ' + no + ' 的密码清空，变成「未注册」？\n\n' +
+          '本人下次用学号登录时，会重新核对姓名并设置新密码；' +
+          '当前所有登录会话也会被踢掉。', {
+          title: '清空密码', okText: '清空', danger: true
+        }).then(function (ok) {
+          if (!ok) return;
+          btn.disabled = true;
+          B8.sb.rpc('b8_super_pass_clear', { p_token: tok(), p_no: no })
+            .then(function () {
+              B8.toast(no + ' 已变成未注册，等本人重新设置密码');
+              loadMembers();
+            })
+            .catch(function (err) {
+              btn.disabled = false;
+              B8.toast(errText(err));
+            });
         });
       });
     });
@@ -532,11 +570,27 @@
 
   /* ---------- 排行 ---------- */
   function loadScores() {
+    if (scoreGame === '__worship') {
+      B8.sb.rpc('b8_super_worship', { p_token: tok(), p_limit: 500 }).then(function (rows) {
+        worship = rows || [];
+        paintScores();
+      }, fail);
+      return;
+    }
     B8.sb.rpc('b8_super_scores', { p_token: tok(), p_game: scoreGame || null, p_limit: 100 })
       .then(function (rows) {
         scores = rows || [];
         paintScores();
       }, fail);
+  }
+
+  function bindScoreTabs(b) {
+    B8.qsa('[data-game]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        scoreGame = btn.getAttribute('data-game');
+        loadScores();
+      });
+    });
   }
 
   function paintScores() {
@@ -549,6 +603,30 @@
         g.key + '" aria-pressed="' + (scoreGame === g.key) + '">' + g.name + '</button>';
     });
     html += '</div>';
+
+    if (scoreGame === '__worship') {
+      html += '<p class="form-note">膜宙金按每个人累计膜拜的次数排序，括号里是当前剩余点数。</p>';
+      html += '<div class="console-list">';
+      if (!worship.length) {
+        html += '<p class="form-note">还没有人膜过。</p>';
+      }
+      worship.forEach(function (w, i) {
+        html += '<div class="console-row">' +
+          '<div class="console-main">' +
+            '<div class="console-title">' + (i + 1) + '. ' + esc(w.nick || '同学') +
+              ' <span class="console-dim">' + esc(w.total) + ' 次</span></div>' +
+            '<div class="console-meta">剩余 ' + esc(w.points || 0) + ' 点' +
+              (w.member_no ? ' · ' + esc(w.member_no) : '') +
+              (w.updated_at ? ' · ' + esc(B8.dateTime(w.updated_at)) : '') +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+      b.innerHTML = html;
+      bindScoreTabs(b);
+      return;
+    }
 
     html += '<div class="console-list">';
     if (!scores.length) {
@@ -563,6 +641,10 @@
             (s.member_no ? ' · ' + esc(s.member_no) : '') + '</div>' +
         '</div>' +
         '<div class="chip-row">' +
+          '<input class="input" type="number" inputmode="numeric" min="0" max="10000000" step="1" ' +
+            'style="width:110px" value="' + esc(s.score) + '" data-score-input="' + s.id + '" ' +
+            'aria-label="修改 ' + esc(s.nick || '匿名') + ' 的分数">' +
+          '<button class="btn ghost sm" type="button" data-score-save="' + s.id + '">保存分数</button>' +
           '<button class="btn ghost sm" type="button" data-score-del="' + s.id + '">删除</button>' +
         '</div>' +
       '</div>';
@@ -576,10 +658,22 @@
       '</button></div>';
     b.innerHTML = html;
 
-    B8.qsa('[data-game]', b).forEach(function (btn) {
+    bindScoreTabs(b);
+
+    B8.qsa('[data-score-save]', b).forEach(function (btn) {
       B8.on(btn, 'click', function () {
-        scoreGame = btn.getAttribute('data-game');
-        loadScores();
+        var id = Number(btn.getAttribute('data-score-save'));
+        var input = b.querySelector('[data-score-input="' + id + '"]');
+        var v = Math.floor(Number(input ? input.value : NaN));
+        if (!isFinite(v) || v < 0 || v > 10000000) {
+          B8.toast('分数要是 0–10000000 的整数');
+          if (input) input.focus();
+          return;
+        }
+        btn.disabled = true;
+        B8.sb.rpc('b8_super_score_set', { p_token: tok(), p_id: id, p_score: v })
+          .then(function () { B8.toast('已改成分数 ' + v); loadScores(); })
+          .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
       });
     });
 

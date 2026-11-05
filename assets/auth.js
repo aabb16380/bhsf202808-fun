@@ -600,6 +600,22 @@
     }
 
     html +=
+      '<div class="acct-pass" style="margin-top:18px;border-top:1px solid var(--line,#e2d9c6);padding-top:14px">' +
+        '<p class="mine-title">修改密码</p>' +
+        '<div class="field"><label for="acct-old">原密码</label>' +
+          '<input class="input" id="acct-old" type="password" autocomplete="current-password" maxlength="64"></div>' +
+        '<div class="field"><label for="acct-new">新密码（至少 6 位）</label>' +
+          '<input class="input" id="acct-new" type="password" autocomplete="new-password" maxlength="64"></div>' +
+        '<div class="field"><label for="acct-new2">再输一次新密码</label>' +
+          '<input class="input" id="acct-new2" type="password" autocomplete="new-password" maxlength="64"></div>' +
+        '<div class="modal-actions">' +
+          '<button class="btn sm" type="button" id="acct-pass-save">保存新密码</button>' +
+        '</div>' +
+        '<p class="form-status" id="acct-pass-status"></p>' +
+        '<p class="modal-note" style="margin-top:2px">改完密码，其它设备上的登录会自动失效。</p>' +
+      '</div>';
+
+    html +=
       '<div class="mine-wrap" style="margin-top:22px;border-top:1px solid var(--line,#e2d9c6);padding-top:16px">' +
         '<p class="mine-title">我发过的</p>' +
         '<div id="acct-mine"></div>' +
@@ -614,6 +630,39 @@
       st.textContent = msg;
       st.className = 'form-status ' + (kind || '');
     }
+
+    var passSt = $('acct-pass-status');
+    function passStatus(msg, kind) {
+      if (!passSt) return;
+      passSt.textContent = msg;
+      passSt.className = 'form-status ' + (kind || '');
+    }
+
+    B8.on($('acct-pass-save'), 'click', function () {
+      var oldPass = ($('acct-old').value || '');
+      var newPass = ($('acct-new').value || '');
+      var newPass2 = ($('acct-new2').value || '');
+      var saveBtn = $('acct-pass-save');
+      if (!oldPass) { passStatus('先输原密码', 'err'); $('acct-old').focus(); return; }
+      if (newPass.length < 6) { passStatus('新密码至少 6 位', 'err'); $('acct-new').focus(); return; }
+      if (newPass !== newPass2) { passStatus('两次新密码不一致', 'err'); $('acct-new2').focus(); return; }
+      if (newPass === oldPass) { passStatus('新密码不能和原密码一样', 'err'); $('acct-new').focus(); return; }
+      saveBtn.disabled = true;
+      passStatus('正在保存…');
+      B8.sb.rpc('b8_change_pass', {
+        p_token: auth.memberToken() || auth.token(), p_old: oldPass, p_new: newPass
+      }).then(function () {
+        saveBtn.disabled = false;
+        $('acct-old').value = '';
+        $('acct-new').value = '';
+        $('acct-new2').value = '';
+        passStatus('密码已修改；其它设备需要重新登录。', 'ok');
+        B8.toast('密码已修改');
+      }).catch(function (err) {
+        saveBtn.disabled = false;
+        passStatus((err && err.message) || '改密码失败', 'err');
+      });
+    });
 
     var keyInput = $('acct-key');
     if (keyInput) {
