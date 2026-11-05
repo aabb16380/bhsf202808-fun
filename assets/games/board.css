@@ -737,6 +737,45 @@ html[data-mode="night"] .bd-first-banner {
 
 .bd-boardbox { min-width: 0; }
 
+.bd-analysis {
+  margin-top: 10px;
+  padding: 9px 10px 7px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+.bd-analysis-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.bd-analysis-head b {
+  font-family: var(--serif);
+  font-size: 13px;
+}
+
+.bd-analysis-head span {
+  color: var(--ink-3);
+  font-size: 10.5px;
+  text-align: right;
+}
+
+#bd-win-chart {
+  display: block;
+  width: 100%;
+  height: 120px;
+}
+
+.bd-analysis-note {
+  margin: 2px 0 0;
+  color: var(--ink-3);
+  font-size: 9.5px;
+}
+
 .bd-uploading {
   display: inline-flex;
   align-items: center;
@@ -1424,6 +1463,71 @@ html[data-mode="night"] .bd-room-btn.is-live {
 .bd-history-head span {
   font-size: 10.5px;
   color: var(--ink-3);
+}
+
+.bd-rank-title {
+  margin-top: 18px;
+}
+
+.bd-rank-controls {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin: 6px 0;
+}
+
+.bd-rank-controls select {
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink-2);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 9px;
+}
+
+.bd-board-rank {
+  display: grid;
+  gap: 4px;
+}
+
+.bd-board-rank-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 11px;
+}
+
+.bd-board-rank-row b {
+  font-family: var(--serif);
+  font-size: 12px;
+}
+
+.bd-board-rank-row span {
+  color: var(--ink-3);
+  font-size: 10px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bd-history-filter {
+  display: flex;
+  justify-content: flex-end;
+  margin: 6px 0 2px;
+}
+
+.bd-history-filter select {
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink-2);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
 }
 
 .bd-history {

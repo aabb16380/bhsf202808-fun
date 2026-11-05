@@ -27,6 +27,11 @@
     { key: '2048', name: '2048' },
     { key: 'memory', name: '记忆翻牌' },
     { key: 'schulte', name: '舒尔特方格' },
+    { key: 'piano', name: '钢琴辉' },
+    { key: 'suika', name: '合成小辉辉' },
+    { key: 'memnum', name: '记忆数字' },
+    { key: 'reflex', name: '反应速度' },
+    { key: 'clickspeed', name: '手速测试' },
     { key: 'sudoku', name: '数独' }
   ];
 

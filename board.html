@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；3 位数字邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g64" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g64">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g64">
+<link rel="icon" href="assets/favicon.png?v=20261101g65" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g65">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g65">
 <script>
-window.B8_BUILD = '20261101g64';
+window.B8_BUILD = '20261101g65';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g64"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g64">
+<script src="assets/theme.js?v=20261101g65"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g65">
 </head>
 
 <body data-site="fun">
@@ -121,9 +121,25 @@ window.B8_TEST = !!window.B8_T;
       <div class="bd-card bd-history-card">
         <div class="bd-history-head">
           <h2>历史对局</h2>
-          <span>所有人可见 · 最近 100 盘 · 时间 / 人物 / 结果 · 点开看棋谱</span>
+          <span>所有人可见 · 最近 1000 盘 · 时间 / 人物 / 结果 · 点开看棋谱</span>
         </div>
+        <div class="bd-history-filter"><select id="bd-history-filter" aria-label="按棋类筛选历史"><option value="">全部棋类</option><option value="xiangqi">中国象棋</option><option value="chess">国际象棋</option><option value="go">围棋</option><option value="gomoku">五子棋</option><option value="draughts">国际跳棋</option></select></div>
         <div class="bd-history" id="bd-history"></div>
+        <h2 class="bd-h2 bd-rank-title">棋类排行榜</h2>
+        <div class="bd-rank-controls">
+          <select id="bd-rank-game" aria-label="排行榜棋种">
+            <option value="xiangqi">中国象棋</option>
+            <option value="chess">国际象棋</option>
+            <option value="go">围棋</option>
+            <option value="gomoku">五子棋</option>
+            <option value="draughts">国际跳棋</option>
+          </select>
+          <select id="bd-rank-sort" aria-label="排名方式">
+            <option value="wins">按胜场</option>
+            <option value="rate">按胜率</option>
+          </select>
+        </div>
+        <div class="bd-board-rank" id="bd-board-rank"></div>
       </div>
 
       <div class="bd-rules">
@@ -249,10 +265,20 @@ window.B8_TEST = !!window.B8_T;
             <button class="bd-mini" id="bd-practice" type="button" hidden>演练</button>
             <button class="bd-mini" id="bd-practice-reset" type="button" hidden>重置演练</button>
             <button class="bd-mini bd-admin-close" id="bd-admin-close" type="button" hidden>强制关闭</button>
+            <button class="bd-mini" id="bd-analysis" type="button">胜率</button>
           </div>
 
           <div class="bd-offer" id="bd-offer" hidden></div>
           <div class="bd-offer" id="bd-undo-box" hidden></div>
+
+          <div class="bd-analysis" id="bd-analysis-panel" hidden>
+            <div class="bd-analysis-head">
+              <b>局面胜率</b>
+              <span id="bd-analysis-label">—</span>
+            </div>
+            <canvas id="bd-win-chart" height="120"></canvas>
+            <p class="bd-analysis-note">本地局面估算，仅供参考</p>
+          </div>
 
           <div class="bd-review" id="bd-review" hidden>
             <div class="bd-review-head">
@@ -366,7 +392,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g64' + T;
+  var V = '?v=20261101g65' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

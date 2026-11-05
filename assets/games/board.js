@@ -55,9 +55,10 @@
   ];
   var GO_SIZES = [9, 13, 19];
 
-  var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, forbid: false, rematch: null, rooms: [], mine: [], history: [], historyApi: true, dbMissing: false, busy: false };
+  var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, forbid: false, rematch: null, historyFilter: '', rankGame: 'xiangqi', rankSort: 'wins', rankRows: [], rooms: [], mine: [], history: [], historyApi: true, dbMissing: false, busy: false };
   var LS = { mode1: 'no', mode2: 'no', name1: '', name2: '', resolved1: '', resolved2: '', timer1: 0, timer2: 0, busy: false };
   var DEADSTONES = { loading: null };
+  var ANALYSIS = { on: false, data: [], cur: 0 };
   var SPECT = { last: 0, inflight: false };
   var S = null;                 // 当前对局
   var NET = { offset: 0, lastOk: 0, fails: 0, timer: 0, inflight: false, again: false, lastPing: 0, started: 0 };
@@ -373,6 +374,51 @@
     if (!r.winner || r.winner === 3) return '和棋';
     var name = r.winner === r.host_color ? r.host_name : r.guest_name;
     return (name || '') + ' 胜';
+  }
+
+  function renderBoardRank() {
+    var box = $('bd-board-rank');
+    if (!box) return;
+    box.innerHTML = '';
+    var rows = (LOBBY.rankRows || []).slice(0, 40);
+    if (!rows.length) {
+      var p = document.createElement('p');
+      p.className = 'bd-muted';
+      p.textContent = '还没有这个棋种的下棋记录。';
+      box.appendChild(p);
+      return;
+    }
+    rows.forEach(function (r, i) {
+      var row = document.createElement('div');
+      row.className = 'bd-board-rank-row';
+      var left = document.createElement('b');
+      left.textContent = (i + 1) + '. ' + (r.name || r.no || '棋手');
+      var right = document.createElement('span');
+      right.innerHTML = r.wins + ' 胜 · ' + r.losses + ' 负' +
+        (r.draws ? ' · ' + r.draws + ' 和' : '') +
+        ' · ' + r.games + ' 场 · 胜率 ' + Number(r.rate || 0).toFixed(1) + '%';
+      row.appendChild(left);
+      row.appendChild(right);
+      box.appendChild(row);
+    });
+  }
+
+  function loadBoardRank() {
+    if (!B8.sb || !B8.sb.ready) return;
+    B8.sb.rpc('b8_board_leaderboard', {
+      p_game: LOBBY.rankGame || 'xiangqi',
+      p_sort: LOBBY.rankSort || 'wins'
+    }).then(function (res) {
+      LOBBY.rankRows = (res && res.rows) || [];
+      renderBoardRank();
+    }).catch(function (err) {
+      LOBBY.rankRows = [];
+      renderBoardRank();
+      var box = $('bd-board-rank');
+      if (box && /does not exist|Could not find the function|schema cache/i.test((err && err.message) || '')) {
+        box.innerHTML = '<p class="bd-muted">排行榜还没初始化：先跑最新 install-all.sql。</p>';
+      }
+    });
   }
 
   function renderHistory() {
@@ -1824,6 +1870,7 @@
     renderOffer();
     renderUndoBox();
     renderMoves();
+    renderAnalysis();
     renderChat();
     renderStatus();
     renderOverlays();
@@ -2076,6 +2123,7 @@
   }
 
   function renderActions() {
+    show('bd-analysis', !!S.state);
     show('bd-practice', !!S.state && !(S.room && S.room.status === 'wait'));
     var practiceBtn = $('bd-practice');
     if (practiceBtn) practiceBtn.textContent = S.practice ? '退出演练' : '演练';
@@ -2371,6 +2419,182 @@
     return m + ':' + (s < 10 ? '0' : '') + s;
   }
 
+  function evalMaterial(st) {
+    var b = st.board, i, v, diff = 0;
+    var chess = [0, 1, 3, 3, 5, 9, 0];
+    var xiangqi = [0, 9, 2, 2, 4.5, 9, 4.5, 1];
+    var n = b.length, size = st.size;
+    for (i = 0; i < n; i++) {
+      v = b[i];
+      if (!v) continue;
+      var color = v < 8 ? 1 : 2, type = v < 8 ? v : v - 8, val = 0;
+      if (st.game === 'chess') {
+        val = chess[type] || 0;
+        if (type === 1) {
+          var y = Math.floor(i / 8);
+          val += color === 1 ? (6 - y) * 0.08 : (y - 1) * 0.08;
+        }
+        if (type === 6) val += 0.2;
+      } else if (st.game === 'xiangqi') {
+        val = xiangqi[type] || 0;
+        var xx = i % 9, yy = Math.floor(i / 9);
+        if (type === 1 || type === 2) val += 0.2;
+        if (type === 7) val += color === 1 ? (6 - yy) * 0.1 : (yy - 3) * 0.1;
+      } else { // draughts
+        val = type === 2 ? 2.6 : 1;
+        var dy = Math.floor(i / 10);
+        if (type === 1) val += color === 1 ? (9 - dy) * 0.04 : dy * 0.04;
+      }
+      diff += color === 1 ? val : -val;
+    }
+    return diff;
+  }
+
+  function evalGomoku(st) {
+    function side(color) {
+      var b = st.board, dirs = [[1, 0], [0, 1], [1, 1], [1, -1]], total = 0;
+      for (var i = 0; i < 225; i++) {
+        if (b[i] !== color) continue;
+        var x = i % 15, y = Math.floor(i / 15);
+        for (var d = 0; d < 4; d++) {
+          var dx = dirs[d][0], dy = dirs[d][1];
+          var px = x - dx, py = y - dy;
+          if (px >= 0 && px < 15 && py >= 0 && py < 15 && b[py * 15 + px] === color) continue;
+          var n = 0, ax = x, ay = y;
+          while (ax >= 0 && ax < 15 && ay >= 0 && ay < 15 && b[ay * 15 + ax] === color) {
+            n++; ax += dx; ay += dy;
+          }
+          var open = 0;
+          if (ax >= 0 && ax < 15 && ay >= 0 && ay < 15 && b[ay * 15 + ax] === 0) open++;
+          var bx = x - dx, by = y - dy;
+          if (bx >= 0 && bx < 15 && by >= 0 && by < 15 && b[by * 15 + bx] === 0) open++;
+          total += Math.pow(2.2, n) * (open === 2 ? 1.5 : (open === 1 ? 1 : 0.35));
+        }
+      }
+      return total;
+    }
+    return side(1) - side(2);
+  }
+
+  function evalState(st) {
+    if (!st) return 0.5;
+    if (st.status === 'over') {
+      if (st.winner === 1) return 1;
+      if (st.winner === 2) return 0;
+      return 0.5;
+    }
+    var raw, scale;
+    if (st.game === 'go') {
+      var sc = E.scoreGo(st, []);
+      raw = sc.diff;
+      scale = 24;
+    } else if (st.game === 'gomoku') {
+      raw = evalGomoku(st);
+      scale = 18;
+    } else {
+      raw = evalMaterial(st);
+      scale = st.game === 'chess' ? 2.8 : (st.game === 'xiangqi' ? 3.2 : 2.2);
+    }
+    raw += st.turn === 1 ? 0.25 : -0.25;
+    var p = 1 / (1 + Math.exp(-raw / scale));
+    return Math.max(0.02, Math.min(0.98, p));
+  }
+
+  function analysisStates() {
+    if (S.practice && S.practiceStack && S.practiceState) {
+      return S.practiceStack.concat([S.practiceState]);
+    }
+    if (S.reviewStates && S.reviewStates.length) return S.reviewStates;
+    var st = E.init(S.game || (S.room && S.room.game), {
+      size: S.size || (S.room && S.room.size),
+      forbid: !!(S.state && S.state.forbid)
+    });
+    var arr = [st];
+    for (var i = 0; i < S.moves.length && i < 400; i++) {
+      if (st.status !== 'play') break;
+      try { st = E.apply(st, S.moves[i].move); } catch (e) { break; }
+      arr.push(st);
+    }
+    return arr;
+  }
+
+  function drawWinChart() {
+    var cv = $('bd-win-chart');
+    if (!cv) return;
+    var w = Math.max(180, Math.floor(cv.clientWidth || 240)), h = 120;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.floor(w * dpr);
+    cv.height = Math.floor(h * dpr);
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    var data = ANALYSIS.data || [];
+    if (!data.length) return;
+    var padL = 24, padR = 8, padT = 8, padB = 16;
+    var iw = w - padL - padR, ih = h - padT - padB;
+    function xx(i) { return padL + (data.length <= 1 ? iw / 2 : iw * i / (data.length - 1)); }
+    function yy(p) { return padT + ih * (1 - p); }
+
+    ctx.strokeStyle = 'rgba(120,110,95,.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + ih); ctx.lineTo(padL + iw, padT + ih);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(120,110,95,.75)';
+    ctx.font = '9px sans-serif';
+    ctx.fillText('100%', 2, padT + 7);
+    ctx.fillText('50%', 8, padT + ih / 2 + 3);
+    ctx.fillText('0%', 14, padT + ih);
+
+    ctx.beginPath();
+    for (var i = 0; i < data.length; i++) {
+      var px = xx(i), py = yy(data[i]);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = '#b5522f';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.lineTo(xx(data.length - 1), padT + ih);
+    ctx.lineTo(xx(0), padT + ih);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(181,82,47,.10)';
+    ctx.fill();
+
+    var cur = Math.max(0, Math.min(ANALYSIS.cur, data.length - 1));
+    ctx.strokeStyle = 'rgba(181,82,47,.45)';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(xx(cur), padT);
+    ctx.lineTo(xx(cur), padT + ih);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#b5522f';
+    ctx.beginPath();
+    ctx.arc(xx(cur), yy(data[cur]), 3.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function renderAnalysis() {
+    show('bd-analysis', !!S && !!S.state);
+    var btn = $('bd-analysis');
+    if (btn) btn.textContent = ANALYSIS.on ? '收起胜率' : '胜率';
+    show('bd-analysis-panel', !!ANALYSIS.on);
+    if (!S || !S.state || !ANALYSIS.on) return;
+    var states = analysisStates();
+    ANALYSIS.data = states.map(evalState);
+    ANALYSIS.cur = S.practice ? states.length - 1 :
+      (S.reviewing ? Math.min(S.reviewIndex, states.length - 1) : states.length - 1);
+    var p = Math.round(ANALYSIS.data[ANALYSIS.cur] * 100);
+    var color = (E.games[S.game] && E.games[S.game].colors) ? E.games[S.game].colors[0] : '先手';
+    txt('bd-analysis-label', color + '胜率 ' + p + '% · 第 ' + ANALYSIS.cur + ' 手');
+    drawWinChart();
+  }
+
+  function toggleAnalysis() {
+    ANALYSIS.on = !ANALYSIS.on;
+    renderAnalysis();
+  }
+
   function renderMoves() {
     var box = $('bd-moves');
     if (!box) return;
@@ -2566,6 +2790,19 @@
         }
       }
       out.sort(function (a, b) { return a - b; });
+
+      // 自动死子偶尔会把整片同色棋子都判死，点目就会整盘只剩一种颜色。
+      // 这种明显不合理的估计直接丢掉，改为让用户点棋子手动标。
+      var stones = [0, 0], deadByColor = [0, 0];
+      for (var q = 0; q < st.board.length; q++) {
+        if (st.board[q]) stones[st.board[q] - 1]++;
+      }
+      for (var w = 0; w < out.length; w++) deadByColor[st.board[out[w]] - 1]++;
+      if (out.length > st.board.length * 0.5) return [];
+      if ((stones[0] > 0 && deadByColor[0] === stones[0] && stones[1] > 0) ||
+          (stones[1] > 0 && deadByColor[1] === stones[1] && stones[0] > 0)) {
+        return [];
+      }
       return out;
     });
   }
@@ -3623,8 +3860,21 @@
     $('bd-back-lobby').addEventListener('click', backToLobby);
     $('bd-exit').addEventListener('click', leaveGame);
     $('bd-practice').addEventListener('click', togglePractice);
+    $('bd-analysis').addEventListener('click', toggleAnalysis);
     $('bd-practice-reset').addEventListener('click', practiceReset);
     $('bd-refresh').addEventListener('click', function () { loadLists(true); toast('已刷新'); });
+    $('bd-history-filter').addEventListener('change', function () {
+      LOBBY.historyFilter = this.value || '';
+      renderHistory();
+    });
+    $('bd-rank-game').addEventListener('change', function () {
+      LOBBY.rankGame = this.value || 'xiangqi';
+      loadBoardRank();
+    });
+    $('bd-rank-sort').addEventListener('change', function () {
+      LOBBY.rankSort = this.value || 'wins';
+      loadBoardRank();
+    });
     $('bd-local').addEventListener('click', function () {
       if (LOBBY.rematch) {
         var rm = LOBBY.rematch;
@@ -3846,13 +4096,11 @@
     });
     $('bd-admin-close').addEventListener('click', function () {
       if (!S || !S.room) return;
-      B8.confirm('强制关闭这盘？对局会按和棋记录，双方都不能再走，不能恢复。', {
-        title: '强制关闭', danger: true, okText: '关闭'
-      }).then(function (ok) {
-        if (!ok) return;
+      function closeAs(winner) {
         B8.sb.rpc('b8_board_admin_close', {
           p_token: (B8.auth && B8.auth.token && B8.auth.token()) || '',
-          p_code: S.code
+          p_code: S.code,
+          p_winner: winner
         }).then(function (res) {
           if (!res || !res.ok) throw new Error('关闭没成功');
           if (res.closed === 'wait') {
@@ -3867,9 +4115,31 @@
           S.scoreBusy = false;
           renderAll();
           showResult();
-          toast('已强制关闭，记和棋');
+          toast(winner === 3 ? '已强制关闭，记和棋' : '已强制关闭，判 ' + nameForColor(winner) + ' 胜');
         }).catch(function (err) {
           toast((err && err.message) || '关闭没成功');
+        });
+      }
+      if (S.room.status === 'wait') {
+        B8.confirm('关闭这个还没人进来的房间？', { title: '强制关闭', danger: true, okText: '关闭' })
+          .then(function (ok) { if (ok) closeAs(3); });
+        return;
+      }
+      B8.confirm('强制结束这盘？下一步选择谁胜 / 和棋，不能恢复。', {
+        title: '强制关闭', danger: true, okText: '继续'
+      }).then(function (ok) {
+        if (!ok) return;
+        B8.confirm('判 ' + nameForColor(1) + '（先手）胜？\n\n点「取消」可以继续选后手胜或和棋。', {
+          title: '选择胜方', okText: nameForColor(1) + ' 胜'
+        }).then(function (ok1) {
+          if (ok1) { closeAs(1); return; }
+          B8.confirm('判 ' + nameForColor(2) + '（后手）胜？\n\n点「取消」可以记和棋。', {
+            title: '选择胜方', okText: nameForColor(2) + ' 胜'
+          }).then(function (ok2) {
+            if (ok2) { closeAs(2); return; }
+            B8.confirm('记和棋并结束？', { title: '选择结果', danger: true, okText: '和棋' })
+              .then(function (ok3) { if (ok3) closeAs(3); });
+          });
         });
       });
     });
@@ -3963,6 +4233,7 @@
     renderHistory();
     renderer = new Renderer($('bd-canvas'));
     bind();
+    setTimeout(loadBoardRank, 1200);
     document.addEventListener('keydown', function (e) {
       if (!S || !S.reviewing) return;
       var tag = (e.target && e.target.tagName) || '';
