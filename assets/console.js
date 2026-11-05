@@ -19,6 +19,7 @@
   var keys = [];
   var scores = [];
   var worship = [];
+  var scoreError = '';
   var scoreGame = '';
   var deletions = [];
   var visits = [];
@@ -572,11 +573,21 @@
   function loadScores() {
     if (scoreGame === '__worship') {
       B8.sb.rpc('b8_super_worship', { p_token: tok(), p_limit: 500 }).then(function (rows) {
+        scoreError = '';
         worship = rows || [];
         paintScores();
-      }, fail);
+      }).catch(function (err) {
+        var msg = errText(err);
+        if (/function|schema cache|does not exist|Could not find|函数还没建好/i.test(msg)) {
+          msg = '膜宙金排行还没初始化：先跑一遍最新 install-all.sql（新增 b8_super_worship）。';
+        }
+        scoreError = msg;
+        worship = [];
+        paintScores();
+      });
       return;
     }
+    scoreError = '';
     B8.sb.rpc('b8_super_scores', { p_token: tok(), p_game: scoreGame || null, p_limit: 100 })
       .then(function (rows) {
         scores = rows || [];
@@ -623,6 +634,9 @@
         '</div>';
       });
       html += '</div>';
+      if (scoreError) {
+        html += '<p class="form-status err">' + esc(scoreError) + '</p>';
+      }
       b.innerHTML = html;
       bindScoreTabs(b);
       return;
