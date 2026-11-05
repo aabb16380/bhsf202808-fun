@@ -3327,7 +3327,7 @@
     (opts.targets || []).forEach(function (m) {
       var p2 = P(m.t);
       if (st.board[m.t]) ring(ctx, p2[0], p2[1], r * 1.12, 'rgba(193,82,47,.75)', 2);
-      else dot(ctx, p2[0], p2[1], Math.max(2.4, cell * 0.09), 'rgba(193,82,47,.65)');
+      else dot(ctx, p2[0], p2[1], Math.max(2.4, cell * 0.09), 'rgba(47,111,94,.72)');
     });
 
     this.g = {
