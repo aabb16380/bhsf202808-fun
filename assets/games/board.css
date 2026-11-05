@@ -1658,6 +1658,93 @@ html[data-mode="night"] .bd-room-btn.is-live {
   padding: 4px 10px;
 }
 
+.bd-dormant-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.bd-history-sort {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 4px 0 8px;
+}
+
+.bd-history-sort > span {
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.bd-history-sort .chip {
+  min-height: 26px;
+  padding: 2px 9px;
+  font-size: 10.5px;
+}
+
+.bd-hsocial {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 5px;
+}
+
+.bd-hlike,
+.bd-hview {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 22px;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.bd-hlike:hover,
+.bd-hview:hover { border-color: var(--line-2); color: var(--ink); }
+
+.bd-hlike.is-on {
+  color: var(--seal);
+  border-color: rgba(193, 82, 47, .45);
+  background: rgba(193, 82, 47, .07);
+}
+
+.bd-hview { cursor: default; }
+
+.bd-hstars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.bd-star {
+  padding: 0 1px;
+  border: 0;
+  background: transparent;
+  color: var(--line-2);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bd-star:hover { color: var(--gold); }
+.bd-star.is-on { color: var(--gold); }
+
+.bd-hstat {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
 .bd-history {
   display: flex;
   flex-direction: column;
@@ -1702,7 +1789,7 @@ html[data-mode="night"] .bd-room-btn.is-live {
   vertical-align: 1px;
 }
 
-.bd-hrow-main span {
+.bd-hrow-main > span {
   display: block;
   margin-top: 3px;
   font-size: 10.5px;
@@ -1712,7 +1799,7 @@ html[data-mode="night"] .bd-room-btn.is-live {
   white-space: nowrap;
 }
 
-.bd-hrow-main span em {
+.bd-hrow-main > span em {
   font-style: normal;
   color: var(--ink-2);
 }

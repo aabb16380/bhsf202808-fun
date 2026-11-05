@@ -24,7 +24,21 @@
   var E = { version: 1, games: {} };
 
   /* ---------- 小工具 ---------- */
-  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  // 局面对象只有棋盘数组和少量小对象；JSON 深拷贝在搜索 / 每步落子里太慢。
+  // 数组直接 slice，小对象再走 JSON，Primitive 原样返回。
+  function clone(o) {
+    if (o == null || typeof o !== 'object') return o;
+    if (Array.isArray(o)) return o.slice();
+    var n = {};
+    for (var k in o) {
+      if (!Object.prototype.hasOwnProperty.call(o, k)) continue;
+      var v = o[k];
+      if (Array.isArray(v)) n[k] = v.slice();
+      else if (v && typeof v === 'object') n[k] = JSON.parse(JSON.stringify(v));
+      else n[k] = v;
+    }
+    return n;
+  }
   function inb(x, y, w, h) { return x >= 0 && y >= 0 && x < w && y < h; }
   function ix(x, y, w) { return y * w + x; }
   function un(i, w) { return [i % w, Math.floor(i / w)]; }

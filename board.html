@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；3 位数字邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g71" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g71">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g71">
+<link rel="icon" href="assets/favicon.png?v=20261101g72" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g72">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g72">
 <script>
-window.B8_BUILD = '20261101g71';
+window.B8_BUILD = '20261101g72';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g71"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g71">
+<script src="assets/theme.js?v=20261101g72"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g72">
 </head>
 
 <body data-site="fun">
@@ -114,6 +114,10 @@ window.B8_TEST = !!window.B8_T;
 
           <h2 class="bd-h2">正在对弈 <span class="bd-live-dot" id="bd-live-dot" hidden></span></h2>
           <div class="bd-rooms" id="bd-live"></div>
+
+          <h2 class="bd-h2">休眠对局 <span class="bd-dormant-count" id="bd-dormant-count"></span></h2>
+          <p class="bd-hint">双方都离线超过 90 秒就休眠，所有人可见；可以只读查看棋局。</p>
+          <div class="bd-rooms" id="bd-dormant"></div>
           <button class="bd-link" id="bd-refresh" type="button">刷新列表</button>
         </div>
       </div>
@@ -131,7 +135,14 @@ window.B8_TEST = !!window.B8_T;
           <button class="chip" type="button" data-hg="gomoku">五子棋</button>
           <button class="chip" type="button" data-hg="draughts">国际跳棋</button>
         </div>
+        <div class="bd-history-sort" id="bd-history-sort" role="group" aria-label="历史对局排序">
+          <span>排序</span>
+          <button class="chip is-on" type="button" data-hs="time" aria-pressed="true">最新</button>
+          <button class="chip" type="button" data-hs="likes" aria-pressed="false">点赞</button>
+          <button class="chip" type="button" data-hs="rating" aria-pressed="false">评分</button>
+        </div>
         <div class="bd-history" id="bd-history"></div>
+        <button class="bd-link" id="bd-history-more" type="button" hidden>再显示 100 局</button>
         <h2 class="bd-h2 bd-rank-title">棋类排行榜</h2>
         <div class="bd-rank-controls">
           <select id="bd-rank-game" aria-label="排行榜棋种">
@@ -190,7 +201,6 @@ window.B8_TEST = !!window.B8_T;
       <div class="bd-first-banner" id="bd-first-banner" hidden></div>
       <div class="bd-gamebar">
         <button class="bd-back2" id="bd-exit" type="button">← 离开</button>
-          <a class="bd-back2" href="index.html">← 游乐场</a>
         <div class="bd-gname">
           <b id="bd-gname">对局</b>
           <span id="bd-gmeta"></span>
@@ -300,7 +310,7 @@ window.B8_TEST = !!window.B8_T;
             </div>
             <canvas id="bd-win-chart" height="170"
                     aria-label="整盘胜率折线图"></canvas>
-            <p class="bd-analysis-note" id="bd-analysis-note">本地局面估算，仅供参考 · 回看 / 演练时按当前分支重画</p>
+            <p class="bd-analysis-note" id="bd-analysis-note">本地战术搜索 + 位置评估（国象/象棋 1 层、国跳 2 层；围棋影响力）· 仅供参考</p>
           </div>
 
           <div class="bd-review" id="bd-review" hidden>
@@ -416,7 +426,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g71' + T;
+  var V = '?v=20261101g72' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

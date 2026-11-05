@@ -55,7 +55,13 @@
   ];
   var GO_SIZES = [9, 13, 19];
 
-  var LOBBY = { game: 'xiangqi', size: 19, minutes: 0, color: 1, forbid: false, rematch: null, historyFilter: '', rankGame: 'xiangqi', rankSort: 'wins', rankRows: [], rooms: [], mine: [], history: [], historyApi: true, dbMissing: false, busy: false };
+  var LOBBY = {
+    game: 'xiangqi', size: 19, minutes: 0, color: 1, forbid: false, rematch: null,
+    historyFilter: '', historySort: 'time', historyLimit: 100,
+    rankGame: 'xiangqi', rankSort: 'wins', rankRows: [],
+    rooms: [], dormant: [], mine: [], history: [], historyApi: true, dormantApi: true,
+    dbMissing: false, busy: false
+  };
   var LS = { mode1: 'no', mode2: 'no', name1: '', name2: '', resolved1: '', resolved2: '', timer1: 0, timer2: 0, busy: false };
   var DEADSTONES = { loading: null };
   var ANALYSIS = {
@@ -293,6 +299,7 @@
     var legacy = !isShortCode(r.code);
     var wrap = document.createElement('div');
     wrap.className = 'bd-room';
+    wrap.setAttribute('data-code', r.code);
     var main = document.createElement('div');
     main.className = 'bd-room-main';
     var title = document.createElement('b');
@@ -312,12 +319,15 @@
     btn.className = 'bd-room-btn' + (r.status === 'play' && !r.dormant ? ' is-live' : '');
     btn.textContent = legacy
       ? (r.status === 'over' ? '看棋谱' : '观战')
-      : (opts.mine
-        ? (r.status === 'play' ? '继续' : '回到房间')
-        : (r.status === 'wait' ? '加入' : '观战'));
-    btn.title = legacy ? '旧版 6 位房间 · 只读回看' : '';
+      : (opts.dormant
+        ? '查看'
+        : (opts.mine
+          ? (r.status === 'play' ? '继续' : '回到房间')
+          : (r.status === 'wait' ? '加入' : '观战')));
+    btn.title = legacy ? '旧版 6 位房间 · 只读回看' : (opts.dormant ? '双方离线 · 只读查看' : '');
     btn.addEventListener('click', function () {
       if (legacy) { openLegacy(r.code, r.status === 'over'); return; }
+      if (opts.dormant) { openRoom(r.code, { watch: true }); return; }
       if (opts.mine) openRoom(r.code, { watch: false });
       else openRoom(r.code, { watch: r.status !== 'wait' });
     });
@@ -380,6 +390,20 @@
       live.appendChild(q);
     }
     show('bd-live-dot', (LOBBY.rooms || []).some(function (r) { return r.status === 'play'; }));
+
+    // 休眠对局：单独一栏，所有人可见（数据库没更新时就是空）
+    var dorm = $('bd-dormant');
+    dorm.innerHTML = '';
+    (LOBBY.dormant || []).forEach(function (r) { dorm.appendChild(roomRow(r, { dormant: true })); });
+    if (!dorm.childNodes.length) {
+      var dq = document.createElement('p');
+      dq.className = 'bd-empty';
+      dq.textContent = LOBBY.dormantApi === false
+        ? '休眠对局要等数据库更新（重跑 install-all.sql）后才有。'
+        : '现在没有休眠中的对局。';
+      dorm.appendChild(dq);
+    }
+    txt('bd-dormant-count', (LOBBY.dormant || []).length ? '（' + LOBBY.dormant.length + ' 盘）' : '');
   }
 
   function historyReason(r) {
@@ -441,6 +465,88 @@
     });
   }
 
+  function historyTime(r) {
+    var t = Date.parse(r.ended_at || r.created_at);
+    return isNaN(t) ? 0 : t;
+  }
+
+  function historySortList(list) {
+    var arr = list.slice();
+    var sort = LOBBY.historySort || 'time';
+    if (sort === 'likes') {
+      arr.sort(function (a, b) {
+        return (b.likes || 0) - (a.likes || 0) || historyTime(b) - historyTime(a);
+      });
+    } else if (sort === 'rating') {
+      arr.sort(function (a, b) {
+        return (b.rating_avg || 0) - (a.rating_avg || 0) ||
+          (b.rating_count || 0) - (a.rating_count || 0) ||
+          historyTime(b) - historyTime(a);
+      });
+    } else {
+      arr.sort(function (a, b) { return historyTime(b) - historyTime(a); });
+    }
+    return arr;
+  }
+
+  function historyRowByCode(code) {
+    var arr = LOBBY.history || [];
+    for (var i = 0; i < arr.length; i++) if (arr[i].code === code) return arr[i];
+    return null;
+  }
+
+  function redrawHistoryKeepScroll() {
+    var box = $('bd-history');
+    var top = box ? box.scrollTop : 0;
+    renderHistory();
+    if (box) box.scrollTop = top;
+  }
+
+  function toggleHistoryLike(code) {
+    if (!logged()) {
+      requireLogin(function () { toggleHistoryLike(code); });
+      return;
+    }
+    B8.sb.rpc('b8_board_like', { p_token: token(), p_code: code })
+      .then(function (res) {
+        var r = historyRowByCode(code);
+        if (r && res) {
+          r.likes = res.likes || 0;
+          r.mine_like = !!res.liked;
+        }
+        redrawHistoryKeepScroll();
+        toast(res && res.liked ? '已点赞' : '已取消点赞');
+      })
+      .catch(function (err) { toast((err && err.message) || '点赞失败'); });
+  }
+
+  function rateHistory(code, stars) {
+    if (!logged()) {
+      requireLogin(function () { rateHistory(code, stars); });
+      return;
+    }
+    B8.sb.rpc('b8_board_rate', { p_token: token(), p_code: code, p_stars: stars })
+      .then(function (res) {
+        var r = historyRowByCode(code);
+        if (r && res) {
+          r.rating_avg = Number(res.avg) || 0;
+          r.rating_count = res.count || 0;
+          r.my_stars = stars;
+        }
+        redrawHistoryKeepScroll();
+        toast('已评 ' + stars + ' 星');
+      })
+      .catch(function (err) { toast((err && err.message) || '评分失败'); });
+  }
+
+  function bumpHistoryView(code) {
+    if (!B8.sb || !B8.sb.ready) return;
+    B8.sb.rpc('b8_board_view', { p_code: code }).then(function (n) {
+      var r = historyRowByCode(code);
+      if (r) r.views = Number(n) || (r.views || 0) + 1;
+    }).catch(function () {});
+  }
+
   function renderHistory() {
     var box = $('bd-history');
     if (!box) return;
@@ -449,18 +555,29 @@
     var list = all.filter(function (r) {
       return !LOBBY.historyFilter || r.game === LOBBY.historyFilter;
     });
+    list = historySortList(list);
+
     var hbtns = document.querySelectorAll('#bd-history-filter [data-hg]');
     for (var hi = 0; hi < hbtns.length; hi++) {
       var on = (hbtns[hi].getAttribute('data-hg') || '') === (LOBBY.historyFilter || '');
       hbtns[hi].className = 'chip' + (on ? ' is-on' : '');
       hbtns[hi].setAttribute('aria-pressed', on ? 'true' : 'false');
     }
+    var sbtns = document.querySelectorAll('#bd-history-sort [data-hs]');
+    for (var si = 0; si < sbtns.length; si++) {
+      var son = (sbtns[si].getAttribute('data-hs') || 'time') === (LOBBY.historySort || 'time');
+      sbtns[si].className = 'chip' + (son ? ' is-on' : '');
+      sbtns[si].setAttribute('aria-pressed', son ? 'true' : 'false');
+    }
+
     var meta = $('bd-history-meta');
     if (meta) {
       var label = LOBBY.historyFilter ? (GAMES[LOBBY.historyFilter] ? GAMES[LOBBY.historyFilter].name : LOBBY.historyFilter) : '全部棋类';
-      meta.textContent = '所有人可见 · 最近 1000 局 · 当前 ' + label + ' ' + list.length + ' / ' + all.length + ' 局' +
-        (LOBBY.historyApi === false ? ' · 数据库待更新' : '');
+      var sortLabel = LOBBY.historySort === 'likes' ? '按点赞' : (LOBBY.historySort === 'rating' ? '按评分' : '按时间');
+      meta.textContent = '所有人可见 · ' + label + ' ' + list.length + ' / ' + all.length + ' 局 · ' + sortLabel +
+        (LOBBY.historyApi === false ? ' · 数据库待更新' : ' · 最多保留 1000 局');
     }
+
     if (!list.length) {
       var empty = document.createElement('p');
       empty.className = 'bd-empty';
@@ -469,12 +586,17 @@
         : (LOBBY.historyApi ? '还没有下完的棋。下完一盘，这里会留下棋谱。'
           : '历史对局要等数据库更新（重跑 install-all.sql）后才有。');
       box.appendChild(empty);
+      show('bd-history-more', false);
       return;
     }
-    list.forEach(function (r) {
+
+    var limit = Math.max(50, LOBBY.historyLimit || 100);
+    var shown = list.slice(0, limit);
+    shown.forEach(function (r) {
       var info = GAMES[r.game] || { name: r.game, colors: ['先', '后'] };
       var row = document.createElement('div');
       row.className = 'bd-hrow';
+      row.setAttribute('data-code', r.code);
       var main = document.createElement('div');
       main.className = 'bd-hrow-main';
       var title = document.createElement('b');
@@ -488,6 +610,48 @@
       main.appendChild(title);
       main.appendChild(sub);
 
+      // 点赞 / 评分 / 浏览量
+      var social = document.createElement('div');
+      social.className = 'bd-hsocial';
+
+      var like = document.createElement('button');
+      like.type = 'button';
+      like.className = 'bd-hlike' + (r.mine_like ? ' is-on' : '');
+      like.textContent = '👍 ' + (r.likes || 0);
+      like.title = r.mine_like ? '取消点赞' : '点赞';
+      like.addEventListener('click', function () { toggleHistoryLike(r.code); });
+      social.appendChild(like);
+
+      var stars = document.createElement('span');
+      stars.className = 'bd-hstars';
+      stars.title = r.my_stars ? '我的评分：' + r.my_stars + ' 星' : '点星星评分';
+      var filled = Math.round(r.my_stars || r.rating_avg || 0);
+      for (var s = 1; s <= 5; s++) {
+        var star = document.createElement('button');
+        star.type = 'button';
+        star.className = 'bd-star' + (s <= filled ? ' is-on' : '');
+        star.textContent = '★';
+        star.setAttribute('aria-label', s + ' 星');
+        star.addEventListener('click', (function (n) {
+          return function () { rateHistory(r.code, n); };
+        })(s));
+        stars.appendChild(star);
+      }
+      social.appendChild(stars);
+
+      var rateTxt = document.createElement('span');
+      rateTxt.className = 'bd-hstat';
+      rateTxt.textContent = (r.rating_count ? Number(r.rating_avg || 0).toFixed(1) + ' 分（' + r.rating_count + ' 人）' : '还没评分');
+      social.appendChild(rateTxt);
+
+      var view = document.createElement('span');
+      view.className = 'bd-hview';
+      view.textContent = '👁 ' + (r.views || 0);
+      view.title = '浏览量：点开棋谱的次数';
+      social.appendChild(view);
+
+      main.appendChild(social);
+
       var res = document.createElement('span');
       res.className = 'bd-hrow-result' + (!r.winner || r.winner === 3 ? ' is-draw' : '');
       res.textContent = historyResult(r);
@@ -498,6 +662,7 @@
       btn.textContent = '看棋谱';
       btn.title = /^[0-9]{3}$/.test(r.code) ? '只读回看这盘棋' : '旧版 6 位棋谱 · 只读回看';
       btn.addEventListener('click', function () {
+        bumpHistoryView(r.code);
         openRoom(r.code, { watch: true, review: true, legacy: !/^[0-9]{3}$/.test(r.code) });
       });
 
@@ -517,6 +682,10 @@
       }
       box.appendChild(row);
     });
+
+    show('bd-history-more', list.length > limit);
+    var more = $('bd-history-more');
+    if (more) more.textContent = '再显示 100 局（还有 ' + (list.length - limit) + ' 局）';
   }
 
   function deleteHistory(code) {
@@ -545,6 +714,8 @@
       .then(function (res) {
         LOBBY.dbMissing = false;
         LOBBY.rooms = res.rooms || [];
+        LOBBY.dormant = res.dormant || [];
+        LOBBY.dormantApi = Object.prototype.hasOwnProperty.call(res, 'dormant');
         LOBBY.mine = res.mine || [];
         LOBBY.history = res.history || [];
         LOBBY.historyApi = Object.prototype.hasOwnProperty.call(res, 'history');
@@ -557,6 +728,7 @@
         if (dbMissing(err)) {
           LOBBY.dbMissing = true;
           LOBBY.rooms = [];
+          LOBBY.dormant = [];
           LOBBY.mine = [];
           LOBBY.history = [];
           var n = $('bd-db-note');
@@ -2532,34 +2704,156 @@
     return m + ':' + (s < 10 ? '0' : '') + s;
   }
 
+  var MATE_SCORE = 100000;
+  var INF_SCORE = 1000000;
+
+  function positionBonus(st, i, color, type) {
+    if (st.game === 'chess') {
+      var x = i % 8, y = Math.floor(i / 8);
+      if (color === 2) y = 7 - y;
+      var cx = Math.abs(x - 3.5), cy = Math.abs(y - 3.5);
+      if (type === 1) return (6 - y) * 10 + Math.round((3.5 - cx) * 4) + (y <= 3 ? 12 : 0);
+      if (type === 2 || type === 3) return Math.round((7 - (cx + cy)) * 6);
+      if (type === 4) return (y === 1 ? 22 : 0) + Math.round((3.5 - cx) * 3);
+      if (type === 5) return Math.round((7 - (cx + cy)) * 3);
+      if (type === 6) return (y === 0 && (x === 6 || x === 2) ? 30 : 0) - Math.round(cx * 4);
+      return 0;
+    }
+    if (st.game === 'xiangqi') {
+      var xx = i % 9, yy = Math.floor(i / 9);
+      if (color === 2) yy = 9 - yy;
+      var adv = 9 - yy;
+      if (type === 7) return adv * 8 + Math.round((4 - Math.abs(xx - 4)) * 3) + (yy <= 4 ? 15 : 0);
+      if (type === 4) return Math.round((4 - Math.abs(xx - 4)) * 3) + Math.round((4 - Math.abs(yy - 4)) * 2);
+      if (type === 5) return Math.round((4 - Math.abs(xx - 4)) * 2);
+      if (type === 2) return yy >= 7 ? 10 : 0;
+      if (type === 3) return yy >= 7 ? 8 : 0;
+      if (type === 1) return yy >= 8 ? 15 : 0;
+      return 0;
+    }
+    // draughts
+    var dx = i % 10, dy = Math.floor(i / 10);
+    if (color === 2) { dx = 9 - dx; dy = 9 - dy; }
+    if (type === 1) return (9 - dy) * 6 + Math.round((4.5 - Math.abs(dx - 4.5)) * 2);
+    return 12 + Math.round((4.5 - Math.abs(dx - 4.5)) * 2);
+  }
+
   function evalMaterial(st) {
     var b = st.board, i, v, diff = 0;
-    var chess = [0, 1, 3, 3, 5, 9, 0];
-    var xiangqi = [0, 9, 2, 2, 4.5, 9, 4.5, 1];
-    var n = b.length, size = st.size;
-    for (i = 0; i < n; i++) {
+    var vals = {
+      chess: [0, 100, 320, 330, 500, 900, 0],
+      xiangqi: [0, 900, 200, 200, 450, 900, 450, 100],
+      draughts: [0, 100, 175]
+    }[st.game] || [0];
+    for (i = 0; i < b.length; i++) {
       v = b[i];
       if (!v) continue;
-      var color = v < 8 ? 1 : 2, type = v < 8 ? v : v - 8, val = 0;
-      if (st.game === 'chess') {
-        val = chess[type] || 0;
-        if (type === 1) {
-          var y = Math.floor(i / 8);
-          val += color === 1 ? (6 - y) * 0.08 : (y - 1) * 0.08;
-        }
-        if (type === 6) val += 0.2;
-      } else if (st.game === 'xiangqi') {
-        val = xiangqi[type] || 0;
-        var xx = i % 9, yy = Math.floor(i / 9);
-        if (type === 1 || type === 2) val += 0.2;
-        if (type === 7) val += color === 1 ? (6 - yy) * 0.1 : (yy - 3) * 0.1;
-      } else { // draughts
-        val = type === 2 ? 2.6 : 1;
-        var dy = Math.floor(i / 10);
-        if (type === 1) val += color === 1 ? (9 - dy) * 0.04 : dy * 0.04;
-      }
+      var color = v < 8 ? 1 : 2;
+      var type = v < 8 ? v : v - 8;
+      var val = (vals[type] || 0) + positionBonus(st, i, color, type);
       diff += color === 1 ? val : -val;
     }
+    return diff;
+  }
+
+  function sideScore(st) {
+    var d = evalMaterial(st);
+    return st.turn === 1 ? d : -d;
+  }
+
+  function captureValue(st, mv) {
+    if (!mv) return 0;
+    if (st.game === 'draughts') return (mv.c ? mv.c.length : 0) * 100;
+    var pc = mv.t != null ? st.board[mv.t] : 0;
+    if (!pc) return 0;
+    return (pc < 8 ? pc : pc - 8) * 10 + (mv.promo ? 50 : 0);
+  }
+
+  function negamax(st, depth, alpha, beta) {
+    if (st.status === 'over') {
+      if (!st.winner || st.winner === 3) return 0;
+      return st.winner === st.turn ? MATE_SCORE : -MATE_SCORE;
+    }
+    if (depth <= 0) return sideScore(st);
+    var moves = E.moves(st);
+    if (!moves.length) return -MATE_SCORE;
+    moves.sort(function (a, b) { return captureValue(st, b) - captureValue(st, a); });
+    var best = -INF_SCORE;
+    for (var i = 0; i < moves.length; i++) {
+      var ns = E.apply(st, moves[i]);
+      var v = -negamax(ns, depth - 1, -beta, -alpha);
+      if (v > best) best = v;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+
+  // 1 层（国跳 2 层）alpha-beta：至少能看见「这步会丢子 / 能把子吃回来」，
+  // 比纯子力静态分稳得多，又不会把手机卡死。
+  function searchScore(st) {
+    var depth = st.game === 'draughts' ? 2 : 1;
+    var v = negamax(st, depth, -INF_SCORE, INF_SCORE);
+    return st.turn === 1 ? v : -v;
+  }
+
+  function gomokuFiveAt(b, idx, color) {
+    var x = idx % 15, y = Math.floor(idx / 15);
+    if (b[idx] !== 0) return false;
+    b[idx] = color;
+    var dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    for (var d = 0; d < 4; d++) {
+      var dx = dirs[d][0], dy = dirs[d][1], n = 1;
+      for (var s = -1; s <= 1; s += 2) {
+        var ax = x + dx * s, ay = y + dy * s;
+        while (ax >= 0 && ax < 15 && ay >= 0 && ay < 15 && b[ay * 15 + ax] === color) {
+          n++; ax += dx * s; ay += dy * s;
+        }
+      }
+      if (n >= 5) { b[idx] = 0; return true; }
+    }
+    b[idx] = 0;
+    return false;
+  }
+
+  function gomokuImmediate(st) {
+    var b = st.board, me = st.turn, opp = 3 - me;
+    for (var i = 0; i < 225; i++) {
+      if (b[i]) continue;
+      if (gomokuFiveAt(b, i, me)) return 1;
+    }
+    for (var j = 0; j < 225; j++) {
+      if (b[j]) continue;
+      if (gomokuFiveAt(b, j, opp)) return -1;
+    }
+    return 0;
+  }
+
+  function goInfluence(st) {
+    var n = st.size, N = n * n, b = st.board;
+    var inf = new Float64Array(N);
+    var i, x, y;
+    for (i = 0; i < N; i++) inf[i] = b[i] === 1 ? 1 : (b[i] === 2 ? -1 : 0);
+    for (var it = 0; it < 5; it++) {
+      var next = new Float64Array(N);
+      for (i = 0; i < N; i++) {
+        if (b[i]) { next[i] = inf[i]; continue; }
+        x = i % n; y = (i - x) / n;
+        var sum = 0, cnt = 0;
+        for (var dx = -1; dx <= 1; dx++) {
+          for (var dy = -1; dy <= 1; dy++) {
+            if (!dx && !dy) continue;
+            var nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+            sum += inf[ny * n + nx]; cnt++;
+          }
+        }
+        next[i] = cnt ? Math.max(-1, Math.min(1, sum / cnt)) : 0;
+      }
+      inf = next;
+    }
+    var diff = 0;
+    for (i = 0; i < N; i++) if (!b[i]) diff += inf[i];
     return diff;
   }
 
@@ -2596,24 +2890,30 @@
       if (st.winner === 2) return 0;
       return 0.5;
     }
-    var raw = 0, scale = 1;
+    var raw = 0, scale = 1, tempo = 0;
     try {
       if (st.game === 'go') {
         var sc = E.scoreGo(st, []);
-        raw = sc.diff;
-        scale = 22;
-      } else if (st.game === 'gomoku') {
-        raw = evalGomoku(st);
+        var inf = goInfluence(st);
+        raw = sc.diff * 0.6 + inf * 0.8;
         scale = 16;
+      } else if (st.game === 'gomoku') {
+        var im = gomokuImmediate(st);
+        if (im > 0) return 0.99;
+        if (im < 0) return 0.01;
+        raw = evalGomoku(st);
+        scale = 9;
+        tempo = 2;
       } else {
-        raw = evalMaterial(st);
-        scale = st.game === 'chess' ? 2.6 : (st.game === 'xiangqi' ? 3.0 : 2.0);
+        raw = searchScore(st);
+        scale = st.game === 'chess' ? 300 : (st.game === 'xiangqi' ? 360 : 220);
+        tempo = 15;
       }
     } catch (e) {
       raw = 0;
       scale = 1;
     }
-    raw += st.turn === 1 ? 0.2 : -0.2;
+    raw += st.turn === 1 ? tempo : -tempo;
     var p = 1 / (1 + Math.exp(-raw / scale));
     return Math.max(0.02, Math.min(0.98, p));
   }
@@ -4320,6 +4620,19 @@
       while (btn && btn !== this && !(btn.getAttribute && btn.getAttribute('data-hg') !== null)) btn = btn.parentNode;
       if (!btn || btn === this) return;
       LOBBY.historyFilter = btn.getAttribute('data-hg') || '';
+      LOBBY.historyLimit = 100;
+      renderHistory();
+    });
+    $('bd-history-sort').addEventListener('click', function (e) {
+      var btn = e.target;
+      while (btn && btn !== this && !(btn.getAttribute && btn.getAttribute('data-hs') !== null)) btn = btn.parentNode;
+      if (!btn || btn === this) return;
+      LOBBY.historySort = btn.getAttribute('data-hs') || 'time';
+      LOBBY.historyLimit = 100;
+      renderHistory();
+    });
+    $('bd-history-more').addEventListener('click', function () {
+      LOBBY.historyLimit = (LOBBY.historyLimit || 100) + 100;
       renderHistory();
     });
     $('bd-rank-game').addEventListener('change', function () {
