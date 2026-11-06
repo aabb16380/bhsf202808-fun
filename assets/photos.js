@@ -19,15 +19,15 @@
   var EMPTY_TEXT = '还没有合影。传第一张，把今天留下来。';
   var PHOTO_LIMIT = 200;
   var PREVIEW_COUNT = 3;      // 默认只露三张
-  var showAllPhotos = false;
+  var photoVisible = PREVIEW_COUNT;   // 照片墙一次只加载这么多张，避免一口气拉 200 张原图
   var curCat = '';            // '' = 全部
   var curSort = 'best';       // best | stars | likes | new
   var MAX_BYTES = 10 * 1024 * 1024;   // storage 桶硬上限
-  var MAX_EDGE = 1600;
+  var MAX_EDGE = 1280;
   // 原来只有 >10MB 才压，结果照片墙上是 1.6MB 一张的大图，整面墙 128MB。
-  // 现在超过 800KB 就压到 1600px，目标 300KB 以内。
+  // 现在超过 800KB 就压到 1600px，目标 200KB 以内。
   var COMPRESS_OVER = 800 * 1024;
-  var TARGET_BYTES  = 300 * 1024;
+  var TARGET_BYTES  = 200 * 1024;
   var ALLOWED = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1, 'image/gif': 1 };
 
   var writable = false;      // 数据库可用且不是预览态，才允许写
@@ -434,6 +434,7 @@
   function loadPhotos() {
     renderGen++;
     var g = renderGen;
+    photoVisible = PREVIEW_COUNT;
     setStatus('');
 
     if (!writable) {
@@ -529,7 +530,11 @@
 
     if (more) {
       B8.on(more, 'click', function () {
-        showAllPhotos = !showAllPhotos;
+        if (photoVisible >= photos.length) {
+          photoVisible = PREVIEW_COUNT;      // 全部展开了就收起
+        } else {
+          photoVisible = Math.min(photos.length, photoVisible + 12);  // 一次只多拉 12 张
+        }
         paintPhotos(renderGen);
       });
     }
@@ -746,7 +751,7 @@
     grid.innerHTML = '';
     shown = [];
 
-    var limit = showAllPhotos ? photos.length : Math.min(PREVIEW_COUNT, photos.length);
+    var limit = Math.min(photoVisible, photos.length);
     var broken = 0;
     var pending = 0;
 
@@ -784,13 +789,15 @@
       grid.appendChild(card);
     }
 
-    if (grid) grid.classList.toggle('scroll-box', showAllPhotos);
+    if (grid) grid.classList.toggle('scroll-box', photoVisible > PREVIEW_COUNT);
 
     var more = B8.qs('#photo-more');
     if (more) {
       var extra = photos.length - limit;
-      more.hidden = extra <= 0 && !showAllPhotos;
-      more.textContent = showAllPhotos ? '收起' : ('展开全部（还有 ' + Math.max(extra, 0) + ' 张）');
+      more.hidden = photos.length <= PREVIEW_COUNT;
+      more.textContent = extra <= 0
+        ? '收起'
+        : ('再显示 ' + Math.min(12, extra) + ' 张（还有 ' + extra + ' 张）');
     }
 
     emptyEl.hidden = shown.length > 0;
@@ -1064,6 +1071,7 @@
         apikey: key,
         Authorization: 'Bearer ' + key,
         'x-upsert': 'false',
+        'cache-control': 'max-age=31536000, immutable',
         'Content-Type': blob.type || 'image/jpeg'
       },
       body: blob
