@@ -413,7 +413,8 @@
       B8.on(els.shopSync, 'click', function () {
         setShopNote('正在同步…');
         loadUserState().then(function () {
-          setShopNote('已同步', 'ok');
+          if (economy < 2) setShopNote('服务器还是旧膜宙金公式：请重跑最新 install-all.sql。', 'err');
+          else setShopNote('已同步', 'ok');
         });
         loadTotal();
       });
