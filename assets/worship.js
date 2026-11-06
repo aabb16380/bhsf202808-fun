@@ -74,7 +74,16 @@
   }
 
   function pointGain() {
-    return Math.pow(2, pointLv - 1);
+    // Lv1 = 1 点/次；之后每级 +2 点/次
+    return 1 + 2 * (pointLv - 1);
+  }
+
+  function catCount() {
+    return 36 + catLv;
+  }
+
+  function pointsPerSecond() {
+    return (catCount() / catDur) * pointGain();
   }
 
   function speedSeconds() {
@@ -201,8 +210,7 @@
     if (els.superTotal) els.superTotal.textContent = totalText;
     if (els.superLocal) els.superLocal.textContent = fmt(local);
     if (els.superSpeed) {
-      els.superSpeed.textContent = '当前速度：每 ' + catDur.toFixed(1) + ' 秒一次 · ' +
-        (1 / catDur).toFixed(2) + ' 次/秒 · 每次 +' + fmt(pointGain()) + ' 点';
+      els.superSpeed.textContent = '当前膜速：' + fmt(pointsPerSecond()) + ' 点/秒';
     }
 
     [els.total, els.totalM, els.superTotal].forEach(function (el) {
@@ -382,6 +390,7 @@
     els.shop = $('mo-shop');
     els.shopClose = $('mo-shop-close');
     els.shopPoints = $('mo-shop-points');
+    els.shopRate = $('mo-shop-rate');
     els.shopNote = $('mo-shop-note');
     els.shopSpeedDesc = $('shop-speed-desc');
     els.shopSpeedCost = $('shop-speed-cost');
@@ -472,7 +481,7 @@
   function upgradeCost(kind) {
     if (kind === 'speed') return 200 * Math.pow(2, speedLv - 1);
     if (kind === 'cat') return 1000 * Math.pow(2, catLv);
-    if (kind === 'point') return 50000 * Math.pow(4, pointLv - 1);
+    if (kind === 'point') return 10 * Math.pow(2, pointLv - 1);
     return 0;
   }
 
@@ -490,17 +499,21 @@
     var catCost = upgradeCost('cat');
     var pointCost = upgradeCost('point');
 
+    if (els.shopRate) {
+      els.shopRate.textContent = '当前膜速：' + fmt(pointsPerSecond()) + ' 点/秒';
+    }
+
     if (els.shopSpeedDesc) {
       els.shopSpeedDesc.textContent = speedLv >= 13
-        ? '已满级 · 每轮 ' + catDur.toFixed(1) + 's'
-        : '每轮 ' + catDur.toFixed(1) + 's（升级 −0.1s）';
+        ? '已满级'
+        : '升一级：每轮 −0.1s';
     }
     if (els.shopSpeedCost) els.shopSpeedCost.textContent = speedLv >= 13 ? '满级' : fmt(speedCost) + ' 点';
 
-    if (els.shopCatDesc) els.shopCatDesc.textContent = '当前 ' + (36 + catLv) + ' 只';
+    if (els.shopCatDesc) els.shopCatDesc.textContent = '小猫自动帮你膜';
     if (els.shopCatCost) els.shopCatCost.textContent = catLv >= 20 ? '满级' : fmt(catCost) + ' 点';
 
-    if (els.shopPointDesc) els.shopPointDesc.textContent = '每次 ' + fmt(pointGain()) + ' 点';
+    if (els.shopPointDesc) els.shopPointDesc.textContent = '升一级：每次 +2 点';
     if (els.shopPointCost) els.shopPointCost.textContent = pointLv >= 10 ? '满级' : fmt(pointCost) + ' 点';
 
     var can = loggedIn && userKnown;

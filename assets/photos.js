@@ -1323,7 +1323,10 @@
       var rt = 1000000 - n;
       return rt > 0 ? { text: (rt / 1000).toFixed(0), unit: 'ms' } : { text: String(n), unit: '分' };
     }
-    if (game === 'clickspeed' || game === 'worship') {
+    if (game === 'worship') {
+      return { text: rankInt(n), unit: '点' };
+    }
+    if (game === 'clickspeed') {
       return { text: rankInt(n), unit: '次' };
     }
     if (game === 'memnum') {
