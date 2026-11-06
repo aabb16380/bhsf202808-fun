@@ -2217,6 +2217,18 @@ body.mo-super-open { overflow: hidden; }
   opacity: 0.9;
 }
 
+.mo-shop-sync {
+  margin-left: 8px;
+  padding: 2px 9px;
+  border: 1px solid rgba(246, 217, 143, 0.35);
+  border-radius: 999px;
+  background: rgba(246, 217, 143, 0.08);
+  color: #f6d98f;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 .mo-shop-list {
   display: flex;
   flex-direction: column;

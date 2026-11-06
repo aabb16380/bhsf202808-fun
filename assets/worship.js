@@ -135,9 +135,9 @@
 
   function loadUserState() {
     var t = authToken();
-    if (!t) { loggedIn = false; renderShop(); return; }
+    if (!t) { loggedIn = false; renderShop(); return Promise.resolve(); }
     loggedIn = true;
-    B8.sb.rpc('b8_worship_state', { p_token: t }).then(function (s) {
+    return B8.sb.rpc('b8_worship_state', { p_token: t }).then(function (s) {
       applyUserState(s);
     }).catch(function (err) {
       var msg = err && err.message ? err.message : '';
@@ -393,6 +393,7 @@
     els.shopClose = $('mo-shop-close');
     els.shopPoints = $('mo-shop-points');
     els.shopRate = $('mo-shop-rate');
+    els.shopSync = $('mo-shop-sync');
     els.shopNote = $('mo-shop-note');
     els.shopSpeedDesc = $('shop-speed-desc');
     els.shopSpeedCost = $('shop-speed-cost');
@@ -408,6 +409,15 @@
       });
     }
     if (els.shopClose) B8.on(els.shopClose, 'click', closeShop);
+    if (els.shopSync) {
+      B8.on(els.shopSync, 'click', function () {
+        setShopNote('正在同步…');
+        loadUserState().then(function () {
+          setShopNote('已同步', 'ok');
+        });
+        loadTotal();
+      });
+    }
     if (els.shop) {
       B8.on(els.shop, 'click', function (ev) {
         if (ev.target === els.shop) closeShop();
