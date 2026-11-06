@@ -29,6 +29,7 @@
   var pointLv = 1;
   var userKnown = false;
   var loggedIn = false;
+  var economy = 1;   // 2 = 新膜宙金公式；1/缺省 = 服务器还没跑最新 SQL
   var catDur = 1.6;
   var pending = 0;
   var bumpTimer = 0;
@@ -99,6 +100,7 @@
     if (s.speed_lv != null) speedLv = Math.max(1, Number(s.speed_lv) || 1);
     if (s.cat_lv != null) catLv = Math.max(0, Number(s.cat_lv) || 0);
     if (s.point_lv != null) pointLv = Math.max(1, Number(s.point_lv) || 1);
+    if (s.economy != null) economy = Math.max(1, Number(s.economy) || 1);
 
     catDur = speedSeconds();
     document.documentElement.style.setProperty('--cat-dur', catDur.toFixed(2) + 's');
@@ -504,17 +506,19 @@
     }
 
     if (els.shopSpeedDesc) {
-      els.shopSpeedDesc.textContent = speedLv >= 13
-        ? '已满级'
-        : '升一级：每轮 −0.1s';
+      els.shopSpeedDesc.textContent = 'Lv ' + speedLv + (speedLv >= 13 ? ' · 已满级' : ' · 升一级 −0.1s');
     }
     if (els.shopSpeedCost) els.shopSpeedCost.textContent = speedLv >= 13 ? '满级' : fmt(speedCost) + ' 点';
 
-    if (els.shopCatDesc) els.shopCatDesc.textContent = '小猫自动帮你膜';
+    if (els.shopCatDesc) els.shopCatDesc.textContent = 'Lv ' + catLv + ' · 小猫自动帮你膜';
     if (els.shopCatCost) els.shopCatCost.textContent = catLv >= 20 ? '满级' : fmt(catCost) + ' 点';
 
-    if (els.shopPointDesc) els.shopPointDesc.textContent = '升一级：每次 +2 点';
+    if (els.shopPointDesc) els.shopPointDesc.textContent = 'Lv ' + pointLv + ' · 每级 +2 点/次';
     if (els.shopPointCost) els.shopPointCost.textContent = pointLv >= 10 ? '满级' : fmt(pointCost) + ' 点';
+
+    if (economy < 2 && loggedIn) {
+      setShopNote('服务器还是旧膜宙金公式：请重跑最新 install-all.sql，再刷新页面。', 'err');
+    }
 
     var can = loggedIn && userKnown;
     B8.qsa('.mo-shop-item', els.shop || document).forEach(function (btn) {
@@ -534,6 +538,7 @@
     els.shop.hidden = false;
     setShopNote('');
     renderShop();
+    if (loggedIn) loadUserState();
     if (els.shopClose) {
       try { els.shopClose.focus({ preventScroll: true }); } catch (e) { try { els.shopClose.focus(); } catch (e2) {} }
     }
@@ -562,6 +567,8 @@
       }
       setShopNote(msg, 'err');
       renderShop();
+      // 如果服务器和页面等级/点数对不上，重新拉一次真实状态
+      loadUserState();
     });
   }
 
