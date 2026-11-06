@@ -3271,6 +3271,8 @@
   function renderAnalysis() {
     var has = !!(S && S.state);
     show('bd-analysis', has);
+    var engineBtn = $('bd-engine-run');
+    if (engineBtn) engineBtn.hidden = !has || (S.state.game !== 'chess' && S.state.game !== 'xiangqi');
     var btn = $('bd-analysis');
     if (btn) {
       btn.textContent = ANALYSIS.on ? '收起胜率' : '胜率';
@@ -3298,6 +3300,50 @@
     show('bd-analysis-panel', !!ANALYSIS.on);
     if (!ANALYSIS.on) return;
     drawWinChart();
+  }
+
+  var engineBusy = false;
+
+  function engineNote(msg, isErr) {
+    var el = $('bd-engine-note');
+    if (!el) return;
+    el.hidden = !msg;
+    el.textContent = msg || '';
+    el.classList.toggle('is-err', !!isErr);
+  }
+
+  function runEngine() {
+    if (!S || !S.state || engineBusy) return;
+    var game = S.state.game;
+    if (game !== 'chess' && game !== 'xiangqi') {
+      engineNote('引擎目前接了国象/象棋；五子棋、围棋、国跳还在排队。', true);
+      return;
+    }
+    if (!window.B8Engine) {
+      engineNote('引擎脚本没加载上，刷新再试。', true);
+      return;
+    }
+
+    var engineName = game === 'chess' ? 'Stockfish' : 'Pikafish';
+    engineBusy = true;
+    var btn = $('bd-engine-run');
+    if (btn) { btn.disabled = true; btn.textContent = '分析中'; }
+    engineNote(engineName + ' 正在分析当前局面…');
+
+    window.B8Engine.analyze(game, S.state, { movetime: 900 }).then(function (r) {
+      var side = r.p1 >= 50 ? shortName(1) : shortName(2);
+      var pct = r.p1 >= 50 ? r.p1 : (100 - r.p1);
+      var best = r.bestmove ? ' · 最佳 ' + r.bestmove : '';
+      var mate = r.mate != null ? ' · 杀棋 ' + Math.abs(r.mate) + ' 步' : '';
+      engineNote(engineName + '：' + side + ' ' + pct.toFixed(1) + '% · 深度 ' +
+        r.depth + ' · ' + (r.ms / 1000).toFixed(1) + 's' + mate + best +
+        ' · GPLv3', false);
+    }).catch(function (err) {
+      engineNote('引擎失败：' + (err && err.message ? err.message : '未知错误'), true);
+    }).then(function () {
+      engineBusy = false;
+      if (btn) { btn.disabled = false; btn.textContent = '引擎'; }
+    });
   }
 
   function openAnalysis() {
@@ -4609,6 +4655,8 @@
     $('bd-exit').addEventListener('click', leaveGame);
     $('bd-practice').addEventListener('click', togglePractice);
     $('bd-analysis').addEventListener('click', toggleAnalysis);
+    var engineRun = $('bd-engine-run');
+    if (engineRun) engineRun.addEventListener('click', runEngine);
     $('bd-practice-reset').addEventListener('click', practiceReset);
     $('bd-review-exit').addEventListener('click', exitReview);
     $('bd-winbar').addEventListener('click', openAnalysis);

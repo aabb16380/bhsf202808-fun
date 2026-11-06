@@ -407,6 +407,19 @@
     return arr;
   }
 
+  function photoUrl(raw, path) {
+    var proxy = (window.B8_CONFIG && window.B8_CONFIG.photoProxy) || '';
+    var direct = raw || (path && B8.publicUrl ? B8.publicUrl('b8-photos', path) : '');
+    if (!proxy) return direct;
+    var base = String(proxy).replace(/\/+$/, '');
+    var marker = '/storage/v1/object/public/b8-photos/';
+    var s = String(direct || '');
+    var i = s.indexOf(marker);
+    if (i >= 0) return base + '/b8-photos/' + s.slice(i + marker.length);
+    if (path) return base + '/b8-photos/' + String(path).split('/').map(encodeURIComponent).join('/');
+    return direct;
+  }
+
   function normalize(rows) {
     if (!Array.isArray(rows)) return [];
     return rows.map(function (r) {
@@ -414,7 +427,7 @@
       return {
         id: r.id,
         path: path,
-        url: r.url || (path && B8.publicUrl ? B8.publicUrl('b8-photos', path) : ''),
+        url: photoUrl(r.url, path),
         caption: B8.trim(r.caption, 60),
         uploader: B8.trim(r.uploader, 16),
         taken_on: r.taken_on || '',

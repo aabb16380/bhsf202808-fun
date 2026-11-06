@@ -9,13 +9,17 @@ window.B8_CONFIG = {
     name: '八班游乐场',
     domain: 'bhsf202808.fun',
     github: 'aabb16380',
-    version: 'v2.119'
+    version: 'v2.120'
   },
 
   supabase: {
     url: 'https://zcfdtfmxtsxacsklqlhe.supabase.co',
     anonKey: 'sb_publishable_kkJAT4lA9KFJGhua2V9gjw_tr-doaVN'
   },
+
+  // 可选：Cloudflare Worker 图片缓存代理，见 cloudflare/README.md
+  // 留空则继续直连 Supabase；部署好 Worker 后填 'https://img.bhsf202808.fun'
+  photoProxy: '',
 
   links: {
     homes: '//bhsf202808.homes/',

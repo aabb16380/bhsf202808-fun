@@ -826,6 +826,18 @@ html[data-mode="night"] .bd-an-side.is-second i { background: #8fa6c4; }
   line-height: 1.5;
 }
 
+.bd-engine-note {
+  color: #b58a2b;
+}
+
+.bd-engine-note.is-err {
+  color: #b4483f;
+}
+
+#bd-engine-run {
+  margin-left: auto;
+}
+
 /* 棋盘下方的常驻胜率条：观战者也能一眼看到 */
 .bd-winbar[hidden] { display: none; }
 
