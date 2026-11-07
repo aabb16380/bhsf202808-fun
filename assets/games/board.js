@@ -208,7 +208,9 @@
       return;
     }
     var code = String(S.code);
-    if (WS.on && WS.code === code) return;
+    // 已经连上，或者还在握手（readyState 0）就别重开：
+    // 原来只看 WS.on，握手期间每 renderAll 一次就会关掉再建，把排队要补发的 changed 弄丢。
+    if (WS.code === code && (WS.on || (WS.sock && WS.sock.readyState === 0))) return;
     if (WS.sock) wsClose();
     var base = (window.B8_CONFIG && B8_CONFIG.engineApi) || '';
     if (!/^https?:/i.test(base)) return;
@@ -1073,7 +1075,7 @@
       B8.sb.rpc('b8_board_join', { p_token: token(), p_code: code })
         .then(function (res) {
           enterOnline(code, res.room, res.state, res.seat);
-          // 坐下以后立刻告诉房主（不然他要等 12 秒心跳才知道人来了）
+          // 坐下以后立刻告诉房主（不然他要等心跳轮询才知道人来了）
           wsChanged();
         })
         .catch(function (err) {
