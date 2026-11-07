@@ -490,6 +490,103 @@ a:hover { text-decoration: underline; }
 }
 .ag-replay-row span { min-width: 0; overflow-wrap: anywhere; }
 
+/* ---------- 等人面板（v2.157：不再用全屏弹层挡住宿位） ---------- */
+.ag-waitbox {
+  padding: 20px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  text-align: center;
+}
+.ag-waitbox .ag-code { margin: 0 0 2px; }
+.ag-wait-note {
+  margin: 4px auto 12px;
+  max-width: 540px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--ink-2);
+}
+.ag-seat-head {
+  display: flex;
+  justify-content: space-between;
+  max-width: 460px;
+  margin: 0 auto 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.ag-seatlist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 460px;
+  margin: 0 auto 14px;
+  text-align: left;
+}
+.ag-seatrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--card-2);
+  font-size: 12px;
+}
+.ag-seatrow i {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: var(--card);
+  font-family: var(--serif);
+  font-style: normal;
+  font-size: 11px;
+  color: var(--seal);
+}
+.ag-seatrow b {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ag-seatrow.is-empty { opacity: .55; border-style: dashed; }
+.ag-seatrow.is-away { opacity: .65; }
+.ag-seatbadge {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--line-2);
+  color: var(--ink-3);
+}
+.ag-kick {
+  margin-left: auto;
+  font: inherit;
+  font-size: 10.5px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--line-2);
+  background: var(--card);
+  color: var(--seal);
+  cursor: pointer;
+}
+.ag-kick:hover { border-color: var(--seal); }
+.ag-wait-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+.ag-wait-actions .ag-btn { margin: 0; }
+.ag-wait-actions .ag-link { align-self: center; }
+
 /* ---------- 弹层 ---------- */
 .ag-overlay {
   position: fixed;
@@ -541,6 +638,9 @@ html[data-mode="night"] .ag-stage,
 html[data-mode="night"] .ag-chat,
 html[data-mode="night"] .ag-room,
 html[data-mode="night"] .ag-rec,
+html[data-mode="night"] .ag-waitbox,
+html[data-mode="night"] .ag-seatrow,
+html[data-mode="night"] .ag-kick,
 html[data-mode="night"] .ag-player,
 html[data-mode="night"] .ag-btn,
 html[data-mode="night"] .ag-mini,
@@ -553,6 +653,8 @@ html[data-mode="night"] .ag-back2 {
 }
 html[data-mode="night"] .ag-room,
 html[data-mode="night"] .ag-rec,
+html[data-mode="night"] .ag-waitbox,
+html[data-mode="night"] .ag-seatrow,
 html[data-mode="night"] .ag-input,
 html[data-mode="night"] .ag-chat-form input,
 html[data-mode="night"] .ag-gamecard .ag-gicon,

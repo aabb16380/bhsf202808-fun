@@ -615,7 +615,6 @@
     show('ag-room', false);
     show('ag-replay', true);
     showGame('ag-over', false);
-    showGame('ag-wait', false);
     renderReplayHead();
     mountReplayModule();
     replayTo(0);
@@ -973,7 +972,6 @@
     show('ag-lobby', false);
     show('ag-room', true);
     showGame('ag-over', false);
-    showGame('ag-wait', false);
     S.view = 'room';
     try { history.replaceState(null, '', 'arcade.html'); } catch (e) {}
     renderRoom();
@@ -1098,6 +1096,9 @@
     S.mod = null;
     S.modKey = '';
     renderRoom();
+    // 直接进一个已经开局的房间（观战/重进）时，sync 会因为「房间没变」提前 return，
+    // 得在这里先把游戏模块挂上，不然舞台会一直是空的。
+    if (room.status === 'play' || room.status === 'over') ensureModule();
     syncRoom(true);
     wsConnect(room.code);
     schedulePoll();
@@ -1121,12 +1122,38 @@
     show('ag-room', false);
     show('ag-lobby', true);
     showGame('ag-over', false);
-    showGame('ag-wait', false);
     loadLists(true);
     loadRecords(true);
   }
 
-  // 真正解散房间：房主/超管用。跟「离开」不一样 —— 离开只标 left，房间保留。
+  // 房主在等人阶段把某个座位清掉（请出/清掉离开的空座），让别的同学能坐。
+  function kickSeat(seat) {
+    if (!S.room || S.local || S.seat !== 1 || S.room.status !== 'wait') return;
+    var p = null;
+    var list = S.room.seats || [];
+    for (var i = 0; i < list.length; i++) {
+      if (Number(list[i].seat) === Number(seat)) p = list[i];
+    }
+    if (!p) return;
+    var name = p.name || p.no || ('座位 ' + seat);
+    B8.confirm('把「' + name + '」请出房间？空出的座位可以让别的同学坐。', {
+      title: '请出座位', okText: '请出', danger: true
+    }).then(function (ok) {
+      if (!ok || !S.room) return;
+      rpc('b8_arcade_kick', {
+        p_token: token(), p_code: S.room.code, p_seat: seat
+      }).then(function (res) {
+        if (res && res.room) S.room = res.room;
+        wsSend({ type: 'changed' });
+        renderRoom();
+        B8.toast('已请出 ' + name);
+      }).catch(function (err) {
+        B8.toast('没请出去：' + errText(err));
+      });
+    });
+  }
+
+  // 真正解散房间：房主/超管用。跟「离开」不一样 —— 离开只是回大厅，房间保留。
   function closeRoomNow() {
     if (!S.room) return;
     B8.confirm('解散这个房间？里面的人都会被请出去，房间号立刻失效。', {
@@ -1160,8 +1187,6 @@
     S.room = room;
     if (typeof seat === 'number' && seat >= 0) S.seat = seat;
     if (same) return;                       // 只是心跳，别重画（会打断动画）
-    if (room.status === 'wait') showGame('ag-wait', true);
-    else showGame('ag-wait', false);
     renderRoom();
     if (room.status === 'play' || room.status === 'over') ensureModule();
     else destroyModule();
@@ -1188,7 +1213,15 @@
       S.syncBusy = false;
       if (!res || !res.room) return;
       S.chat = res.chat || [];
-      applyRoom(res.room, typeof res.seat === 'number' ? res.seat : S.seat);
+      var wasSeat = Number(S.seat) || 0;
+      var seatNow = typeof res.seat === 'number' ? res.seat : S.seat;
+      applyRoom(res.room, seatNow);
+      // 自己的座位被房主清掉了：回大厅（不是「离开」，是「被请出」）
+      if (wasSeat > 0 && seatNow === 0 && res.room.status !== 'over') {
+        B8.toast('你被房主请出了房间');
+        leaveRoom(true);
+        return;
+      }
       renderChat();
       notify();
     }).catch(function (err) {
@@ -1331,19 +1364,15 @@
     }
 
     var isHost = S.seat === 1;
+    var waiting = r.status === 'wait';
     show('ag-close-room', !S.local && (isHost || (B8.auth && B8.auth.isSuper && B8.auth.isSuper())));
     show('ag-copy-link', !S.local);
-    show('ag-start-now', !S.local && isHost && r.status === 'wait' && seats.length >= 2);
-    show('ag-wait-close', !S.local && isHost);
     show('ag-again', !S.local && isHost && r.status === 'over');
-    // 等开局时把「房号 + 开始游戏」那层亮出来。以前只在 applyRoom 里亮，
-    // 但进房那一刻 applyRoom 会判定「房间没变」直接 return，结果舞台一片空白、房主也点不到开始。
-    showGame('ag-wait', r.status === 'wait');
     txt('ag-chat-count', String((S.chat || []).length));
-    if (r.status === 'wait') {
-      var codeEl = $('ag-wait-code');
-      if (codeEl) codeEl.textContent = r.code;
-    }
+    // 等人：直接在房间页里显示「房号 + 座位 + 开始」，不再用全屏弹层挡住宿位和人数。
+    show('ag-waitbox', waiting);
+    show('ag-stage', !waiting);
+    if (waiting) renderWaitBox(r, seats, isHost);
     if (r.status === 'over') {
       S.overShown = true;
       renderOver();
@@ -1352,6 +1381,69 @@
       showGame('ag-over', false);
     }
   }
+
+  // 等人面板：房号、座位（谁在、谁离开、谁空着）、房主请人、开始游戏
+  function renderWaitBox(r, seats, isHost) {
+    txt('ag-wait-code', r.code || '----');
+    txt('ag-wait-count', seats.length + ' / ' + r.max_seats + ' 人');
+    txt('ag-wait-note', '把房号发给同学，他在大厅输进来就坐下。人齐了房主点「开始游戏」。');
+
+    var start = $('ag-start-now');
+    if (start) {
+      start.hidden = !isHost || S.local;
+      var canStart = seats.length >= 2;
+      start.disabled = !canStart;
+      start.textContent = canStart ? '开始游戏' : '等人齐（' + seats.length + '/' + r.max_seats + '）';
+    }
+    show('ag-wait-close', !S.local && isHost);
+    var hint = $('ag-wait-hint');
+    if (hint) {
+      hint.textContent = isHost
+        ? '人齐了点「开始游戏」。座位右边可以把人请出/清掉离开的座位；离开不会解散房间。'
+        : (S.local ? '' : '等房主点开始。离开不会解散房间，回来还能坐原位。');
+    }
+
+    var list = $('ag-seat-list');
+    if (!list) return;
+    list.innerHTML = '';
+    var bySeat = {};
+    for (var i = 0; i < seats.length; i++) {
+      var s = seats[i];
+      if (s && s.seat) bySeat[s.seat] = s;
+    }
+    for (var n = 1; n <= Math.max(2, Number(r.max_seats) || 2); n++) {
+      var p = bySeat[n];
+      var row = document.createElement('div');
+      row.className = 'ag-seatrow' + (p ? '' : ' is-empty') + (p && p.left ? ' is-away' : '');
+      var num = document.createElement('i');
+      num.textContent = String(n);
+      row.appendChild(num);
+      var name = document.createElement('b');
+      name.textContent = p ? (p.name || p.no || '同学') : '空位 · 等同学';
+      row.appendChild(name);
+      if (n === 1) row.appendChild(badge('房主'));
+      if (p && p.seat === S.seat) row.appendChild(badge('你'));
+      if (p && p.left) row.appendChild(badge('离开'));
+      if (p && isHost && p.seat !== S.seat && !S.local) {
+        var kick = document.createElement('button');
+        kick.type = 'button';
+        kick.className = 'ag-kick';
+        kick.textContent = p.left ? '清掉空座' : '请出';
+        kick.setAttribute('data-kick', String(p.seat));
+        kick.title = '把 ' + (p.name || p.no || '这位同学') + ' 请出房间';
+        row.appendChild(kick);
+      }
+      list.appendChild(row);
+    }
+  }
+
+  function badge(text) {
+    var el = document.createElement('em');
+    el.className = 'ag-seatbadge';
+    el.textContent = text;
+    return el;
+  }
+
 
   function renderOver() {
     var r = S.room;
@@ -1702,6 +1794,15 @@
     if (closeRoom) closeRoom.addEventListener('click', closeRoomNow);
     var waitClose = $('ag-wait-close');
     if (waitClose) waitClose.addEventListener('click', closeRoomNow);
+    var seatList = $('ag-seat-list');
+    if (seatList) {
+      seatList.addEventListener('click', function (e) {
+        var t = e.target;
+        var btn = t && t.closest ? t.closest('[data-kick]') : null;
+        if (!btn) return;
+        kickSeat(Number(btn.getAttribute('data-kick')));
+      });
+    }
 
     var again = $('ag-again');
     if (again) {
@@ -1874,6 +1975,7 @@
     startLocal: startLocal,
     localSend: localSend,
     saveLocalMatch: saveLocalMatch,
+    enterRoom: enterRoom,
     visibleRecords: visibleRecords,
     readLocalRecords: readLocalRecords
   };
