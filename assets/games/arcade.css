@@ -364,6 +364,131 @@ a:hover { text-decoration: underline; }
 
 .ag-side-note { font-size: 10px; line-height: 1.7; color: var(--ink-3); }
 
+/* ---------- 对局记录 / 回看（v2.152） ---------- */
+.ag-card-wide { margin-top: 16px; }
+
+.ag-record-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.ag-record-head h2 { margin: 0; }
+.ag-record-head .chips { margin-right: auto; }
+.ag-record-head .ag-link { margin: 0; }
+
+.ag-records {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 8px;
+}
+
+.ag-rec {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card-2);
+}
+
+.ag-rec-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: var(--card);
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--seal);
+}
+
+.ag-rec-main { flex: 1 1 auto; min-width: 0; }
+.ag-rec-main b {
+  display: block;
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ag-rec-main span {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ag-over-record {
+  margin: 2px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .02em;
+  color: var(--jade);
+}
+
+.ag-replay-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.ag-replay-bar .ag-mini:disabled { opacity: .38; cursor: not-allowed; }
+.ag-replay-bar .ag-mini.is-on { border-color: var(--seal); background: var(--seal); color: #fff; }
+.ag-replay-step {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.ag-replay-log {
+  flex: 1 1 auto;
+  max-height: 340px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+}
+.ag-replay-row {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.ag-replay-row:hover { border-color: var(--line); }
+.ag-replay-row.is-on {
+  border-color: var(--seal);
+  background: rgba(193, 82, 47, .07);
+  color: var(--ink);
+}
+.ag-replay-row em {
+  flex: 0 0 auto;
+  min-width: 18px;
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: 9px;
+  color: var(--ink-3);
+}
+.ag-replay-row span { min-width: 0; overflow-wrap: anywhere; }
+
 /* ---------- 弹层 ---------- */
 .ag-overlay {
   position: fixed;
@@ -414,6 +539,7 @@ html[data-mode="night"] .ag-gamecard,
 html[data-mode="night"] .ag-stage,
 html[data-mode="night"] .ag-chat,
 html[data-mode="night"] .ag-room,
+html[data-mode="night"] .ag-rec,
 html[data-mode="night"] .ag-player,
 html[data-mode="night"] .ag-btn,
 html[data-mode="night"] .ag-mini,
@@ -425,10 +551,13 @@ html[data-mode="night"] .ag-back2 {
   color: var(--ink-2);
 }
 html[data-mode="night"] .ag-room,
+html[data-mode="night"] .ag-rec,
 html[data-mode="night"] .ag-input,
 html[data-mode="night"] .ag-chat-form input,
-html[data-mode="night"] .ag-gamecard .ag-gicon { background: var(--card-2); }
+html[data-mode="night"] .ag-gamecard .ag-gicon,
+html[data-mode="night"] .ag-rec-icon { background: var(--card-2); }
 html[data-mode="night"] .ag-overlay { background: rgba(18, 18, 24, .94); }
+html[data-mode="night"] .ag-replay-row.is-on { background: rgba(229, 141, 107, .12); }
 
 /* ---------- 响应式 ---------- */
 @media (max-width: 980px) {
@@ -441,4 +570,6 @@ html[data-mode="night"] .ag-overlay { background: rgba(18, 18, 24, .94); }
   .ag-games { grid-template-columns: minmax(0, 1fr); }
   .ag-wrap { padding: 0 12px 32px; }
   .ag-brand span { display: none; }
+  .ag-records { grid-template-columns: minmax(0, 1fr); }
+  .ag-replay-step { margin-left: 0; width: 100%; text-align: right; }
 }

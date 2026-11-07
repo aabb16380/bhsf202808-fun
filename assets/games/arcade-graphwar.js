@@ -983,6 +983,10 @@
       rec.blockedAt = Array.isArray(shot.blockedAt) ? shot.blockedAt : null;
     }
     st.shots = Array.isArray(st.shots) ? st.shots : [];
+    // 累计炮数：shots 只留最近 10 发，回看/观战靠它判断「是不是又来了一炮」
+    var seqBefore = Number(st.shotSeq);
+    if (!isFinite(seqBefore)) seqBefore = Math.max(0, st.shots.length);
+    st.shotSeq = seqBefore + 1;
     st.shots.push(rec);
     if (st.shots.length > 10) st.shots = st.shots.slice(st.shots.length - 10);
     st.log = capLog(st.log);
@@ -994,6 +998,78 @@
       st.log.push(win.winner ? seatLabel(win.winner) + ' 获胜' : '本局结束');
       st.log = capLog(st.log);
     }
+    return st;
+  }
+
+  /* ============================================================
+     3.5 回放：按记录里的动作把一局重演（v2.152）
+     ------------------------------------------------------------
+     记录只存「谁、什么函数、什么模式、角度、方向」，不存弹道；
+     这里用同一套 trajectory() 重算，和当时发射的弹道完全一致。
+     ============================================================ */
+
+  function shotFromAction(st, seat, act) {
+    if (!st || !act) return null;
+    var sd = soldierOf(st, seat);
+    if (!sd) return null;
+    var mode = act.mode === 'y2' ? 'y2' : 'y';
+    var angle = isNum(Number(act.angle)) ? Number(act.angle) : 0;
+    var dir = Number(act.dir) < 0 ? -1 : 1;
+    var fnText = String(act.expr == null ? '' : act.expr);
+    var tr = trajectory({
+      fnText: fnText,
+      mode: mode,
+      angle: angle,
+      x0: sd.x,
+      y0: sd.y,
+      dir: dir,
+      bounds: WORLD,
+      obstacles: st.obstacles || []
+    });
+    if (!tr.points || tr.points.length < 2) return null;
+    var hits = pathHitList(st, seat, tr.points).map(function (h) {
+      var target = soldierOf(st, h.seat);
+      return { seat: h.seat, dmg: DAMAGE, at: target ? [target.x, target.y] : h.at };
+    });
+    return {
+      seat: seat, fnText: fnText, mode: mode, angle: angle, dir: dir,
+      points: tr.points, hits: hits,
+      hitObstacle: !!tr.hitObstacle,
+      obstacleIndex: tr.obstacleIndex,
+      blockedAt: tr.blockedAt
+    };
+  }
+
+  function applyAction(state, seat, act) {
+    if (!state || typeof state !== 'object' || !act) return null;
+    var st = copyState(state);
+    var type = String(act.type || '');
+    if (type === 'init') {
+      return (act.state && typeof act.state === 'object') ? copyState(act.state) : st;
+    }
+    var who = Number(seat) || Number(act.seat) || Number(st.turn) || 0;
+    if (!who) return null;
+
+    if (type === 'timeout') {
+      var nt = nextTurn(st);
+      if (!nt) return st;
+      st.log = capLog((st.log || []).concat(['座位 ' + who + ' 超时，跳过']));
+      return advanceStateTurn(st, nt);
+    }
+
+    if (type === 'shot') {
+      var shot = shotFromAction(st, who, act);
+      if (!shot) return null;
+      var next = applyShot(st, who, shot);
+      if (next.finished) {
+        next.turn = Number(next.winner) || next.turn;
+        return next;
+      }
+      var after = nextTurn(next);
+      if (after) advanceStateTurn(next, after);
+      return next;
+    }
+
     return st;
   }
 
@@ -1235,6 +1311,22 @@
     return isFinite(n) ? n : 0;
   }
 
+  /* v2.152：回看模式（外壳传 ctx.replay = {index,total}） */
+  function replayOf() {
+    var rp = view.ctx && view.ctx.replay;
+    return rp && rp.on ? rp : null;
+  }
+
+  function isReplay() {
+    return !!replayOf();
+  }
+
+  function replayText() {
+    var rp = replayOf();
+    if (!rp) return '';
+    return rp.total ? ('回看 · 第 ' + rp.index + ' / ' + rp.total + ' 手') : '回看 · 只有终局';
+  }
+
   function room() {
     return view.ctx && view.ctx.room ? view.ctx.room : null;
   }
@@ -1262,6 +1354,7 @@
   }
 
   function gameOver(st) {
+    if (isReplay()) return !!(st && st.finished);
     if (roomStatus() === 'over') return true;
     return !!(st && st.finished);
   }
@@ -1541,7 +1634,9 @@
     box.innerHTML = '';
     var src = view.expr;
     if (!src) {
-      box.appendChild(gwEl('span', 'gw-ph', canEdit() ? '点下面的屏幕键输入函数…' : (mySeat() === 0 ? '观战中，不能输入' : '等待你的回合…')));
+      box.appendChild(gwEl('span', 'gw-ph', canEdit()
+        ? '点下面的屏幕键输入函数…'
+        : (isReplay() ? '回看中，不能操作' : (mySeat() === 0 ? '观战中，不能输入' : '等待你的回合…'))));
       var c0 = gwEl('span', 'gw-caret');
       c0.setAttribute('aria-hidden', 'true');
       box.appendChild(c0);
@@ -1705,7 +1800,7 @@
   function renderResult(st) {
     var box = view.dom.result;
     if (!box) return;
-    if (!st || !gameOver(st) || view.anim) {
+    if (isReplay() || !st || !gameOver(st) || view.anim) {
       box.hidden = true;
       return;
     }
@@ -1816,6 +1911,11 @@
 
   function updateStatus(st) {
     if (!view.dom.status) return;
+    if (isReplay()) {
+      view.dom.status.textContent = replayText() + ' · 只读';
+      ctxStatus(replayText());
+      return;
+    }
     var text = '';
     var summary = '';
     if (!st) {
@@ -1862,6 +1962,12 @@
   function updateClock() {
     var el = view.dom.clock;
     if (!el) return;
+    if (isReplay()) {
+      el.textContent = '回看 · 只读';
+      el.classList.remove('is-live');
+      el.classList.remove('is-low');
+      return;
+    }
     var st = displayedState();
     var text = '';
     var live = false, low = false;
@@ -2927,10 +3033,13 @@
     var st = gameState();
     if (st) {
       var prev = view.lastState;
-      var oldCount = prev && prev.shots ? prev.shots.length : 0;
-      var newCount = st.shots ? st.shots.length : 0;
-      if (!view.anim && !isWaiting() && prev && newCount > oldCount) {
-        var rec = st.shots[newCount - 1];
+      var oldCount = prev
+        ? (Number(prev.shotSeq) || (prev.shots ? prev.shots.length : 0))
+        : 0;
+      var newCount = Number(st.shotSeq) || (st.shots ? st.shots.length : 0);
+      // 正好多了一炮才回放弹道；一次跳好几步就直接画终态
+      if (!view.anim && !isWaiting() && prev && newCount === oldCount + 1) {
+        var rec = st.shots && st.shots.length ? st.shots[st.shots.length - 1] : null;
         if (rec && Number(rec.seat) !== mySeat()) {
           var replay = makeReplayShot(rec);
           if (replay) startShotAnim(prev, replay);
@@ -2945,6 +3054,7 @@
   }
 
   function maybeStart() {
+    if (isReplay()) return;
     if (!view.mounted || view.initSent) return;
     var r = room();
     if (!r || isWaiting() || roomStatus() === 'over') return;
@@ -3153,6 +3263,8 @@
       distToObstacle: distToObstacle,
       newState: newState,
       applyShot: applyShot,
+      shotFromAction: shotFromAction,
+      applyAction: applyAction,
       nextTurn: nextTurn,
       teams: teams
     }

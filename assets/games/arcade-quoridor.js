@@ -395,6 +395,45 @@
     return ns;
   }
 
+  /* ============================================================
+     2.5 回放：把记录里的动作流水按规则重演（v2.152）
+     ------------------------------------------------------------
+     记录只存每一步的动作（走子 / 放墙 / 超时），不存每一个局面；
+     回看时从这里一步步算回去，和棋谱回看一个思路。
+     ============================================================ */
+
+  function applyAction(state, seat, act) {
+    if (!state || typeof state !== 'object') return null;
+    var type = String((act && act.type) || '');
+    if (type === 'start') {
+      return (act.state && typeof act.state === 'object') ? cloneState(act.state) : cloneState(state);
+    }
+    var st = cloneState(state);
+    var who = seatNumber(seat) || seatNumber(act && act.seat) || seatNumber(st.turn);
+    if (!who) who = seatNumber(st.turn);
+
+    if (type === 'timeout') {
+      if (st.status === 'over') return st;
+      st.turn = nextSeatInOrder(st.order, who);
+      if (!st.order.length) st.turn = 0;
+      return st;
+    }
+    if (st.status === 'over') return st;
+
+    // 以流水里的座位为准（观战/回看时 ctx.seat 是 0，不能靠它）
+    if (seatNumber(st.turn) !== who) st.turn = who;
+
+    if (type === 'move') {
+      var mv = moveTo(st, who, Number(act.x), Number(act.y));
+      return mv || null;
+    }
+    if (type === 'wall') {
+      var wl = placeWall(st, who, act.wall);
+      return wl || null;
+    }
+    return st;
+  }
+
   function init(n) {
     n = Number(n);
     if (n !== 2 && n !== 3 && n !== 4) return null;
@@ -619,6 +658,17 @@
     return 'wait';
   }
 
+  /* v2.152：回看模式（外壳传 ctx.replay = {index,total}） */
+  function replayOf(P) {
+    var rp = P && P.replay;
+    return rp && rp.on ? rp : null;
+  }
+
+  function replayText(rp) {
+    if (!rp) return '';
+    return rp.total ? ('回看 · 第 ' + rp.index + ' / ' + rp.total + ' 手') : '回看 · 只有终局';
+  }
+
   function gameN(P) {
     var st = stateOf(P);
     var n = st && Number(st.n);
@@ -697,6 +747,8 @@
   function baseStatus() {
     var P = S.ctx;
     if (!P) return '等待棋局…';
+    var rp = replayOf(P);
+    if (rp) return replayText(rp);
     var status = statusOf(P);
     var baseState = stateOf(P);
     if (status === 'wait') return '等房主开局（2-4 人）';
@@ -832,8 +884,12 @@
     var hint = '';
     var warn = false;
     var good = false;
+    var rp = replayOf(P);
     if (!P) {
       hint = '等待棋局同步…';
+    } else if (rp) {
+      hint = '回看中：' + replayText(rp) + '，用下面的按钮翻步。';
+      good = true;
     } else if (statusOf(P) === 'wait') {
       hint = '等房主开局（2-4 人），不要自己开始。';
     } else if (statusOf(P) === 'over') {
@@ -1065,6 +1121,11 @@
   }
 
   function updateOverlay(P, st, n, status) {
+    // 回看时不盖结算层：看的就是棋盘本身
+    if (replayOf(P)) {
+      S.overlay.hidden = true;
+      return;
+    }
     if (status === 'wait') {
       showWaitOverlay();
       return;
@@ -1149,6 +1210,56 @@
     return pal.p1;
   }
 
+  /* ---------- 走子 / 放墙的小动画（v2.152） ---------- */
+
+  function nowMs() {
+    return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  }
+
+  function animTick() {
+    if (!S.alive) { S.raf = 0; return; }
+    drawBoard();
+    if (S.anim || S.wallAnim) {
+      S.raf = requestAnimationFrame(animTick);
+    } else {
+      S.raf = 0;
+    }
+  }
+
+  function startAnim() {
+    if (!S.alive) return;
+    if (typeof requestAnimationFrame !== 'function') { drawBoard(); return; }
+    if (S.raf) return;
+    S.raf = requestAnimationFrame(animTick);
+  }
+
+  // 只动「这一手变了的棋子」，其余保持不动；新放的墙落下去时淡入。
+  function queueAnim(prev, next) {
+    if (!prev || !next) return;
+    if (Number(prev.n) !== Number(next.n)) return;
+    var from = {};
+    var list = prev.pawns || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i]) from[seatNumber(list[i].seat)] = { x: Number(list[i].x), y: Number(list[i].y) };
+    }
+    var moved = false;
+    var cur = next.pawns || [];
+    for (var j = 0; j < cur.length; j++) {
+      var p = cur[j];
+      if (!p) continue;
+      var f = from[seatNumber(p.seat)];
+      if (f && (f.x !== Number(p.x) || f.y !== Number(p.y))) moved = true;
+    }
+    var before = (prev.walls || []).length;
+    var after = (next.walls || []).length;
+    var wallAdded = after === before + 1;
+    if (!moved && !wallAdded) return;
+    var t = nowMs();
+    if (moved) S.anim = { from: from, t0: t, dur: 190 };
+    if (wallAdded) S.wallAnim = { index: after - 1, t0: t, dur: 220 };
+    startAnim();
+  }
+
   function drawBoard() {
     if (!S.canvas || !S.boardWrap) return;
     var cssW = S.boardWrap.clientWidth || 0;
@@ -1173,6 +1284,20 @@
     S.geom = geom;
 
     var pal = cssPalette();
+
+    // 动画进度（走子滑过去 / 新墙落下来）
+    var tick = nowMs();
+    var animT = 1;
+    if (S.anim) {
+      animT = Math.min(1, Math.max(0, (tick - S.anim.t0) / S.anim.dur));
+      if (animT >= 1) S.anim = null;
+    }
+    var easeT = animT * animT * (3 - 2 * animT);
+    var wallT = 1;
+    if (S.wallAnim) {
+      wallT = Math.min(1, Math.max(0, (tick - S.wallAnim.t0) / S.wallAnim.dur));
+      if (wallT >= 1) S.wallAnim = null;
+    }
 
     // 纸面
     var outer = Math.max(4, pad * 0.42);
@@ -1270,6 +1395,15 @@
       var wall = walls[wi];
       if (!wall) continue;
       var wr = wallRect(wall, geom);
+      var wAlpha = 1;
+      var wDrop = 0;
+      if (S.wallAnim && S.wallAnim.index === wi) {
+        wAlpha = 0.12 + 0.88 * wallT;
+        wDrop = -(1 - wallT) * cell * 0.16;
+      }
+      g.save();
+      g.globalAlpha = wAlpha;
+      g.translate(0, wDrop);
       g.save();
       g.shadowColor = pal.wallShadow;
       g.shadowBlur = Math.max(2, cell * 0.10);
@@ -1282,6 +1416,7 @@
       g.strokeStyle = pal.wallEdge;
       g.lineWidth = Math.max(1, cell * 0.018);
       g.stroke();
+      g.restore();
     }
 
     // 可走点
@@ -1331,6 +1466,14 @@
       var pseat = seatNumber(pawn.seat);
       var pxx = pad + (Number(pawn.x) + 0.5) * cell;
       var pyy = pad + (Number(pawn.y) + 0.5) * cell;
+      // 走子动画：从上一手的位置滑到这一手的位置
+      if (S.anim && S.anim.from[pseat]) {
+        var fp = S.anim.from[pseat];
+        if (fp.x !== Number(pawn.x) || fp.y !== Number(pawn.y)) {
+          pxx = pad + (fp.x + (Number(pawn.x) - fp.x) * easeT + 0.5) * cell;
+          pyy = pad + (fp.y + (Number(pawn.y) - fp.y) * easeT + 0.5) * cell;
+        }
+      }
       var pr = Math.max(8, cell * 0.305);
       var turn = turnOf(S.ctx);
       var isTurn = statusOf(S.ctx) === 'play' && turn === pseat;
@@ -1721,7 +1864,9 @@
     updateOverlay(P, st, n, status);
     updateControls();
     syncClock();
-    if (over) pageStatus('对局结束');
+    var rp = replayOf(P);
+    if (rp) pageStatus(replayText(rp));
+    else if (over) pageStatus('对局结束');
     if (S.foot) {
       S.foot.textContent = '9×9 · 目标对面边线 · 墙：2 人各 10，3-4 人各 5 · 不能封死任何人的路';
     }
@@ -1738,8 +1883,9 @@
 
   function onCtxChange(next) {
     if (!S.alive || !next) return;
+    var prevState = stateOf(S.ctx);
     var oldSeat = S.ctx ? seatNumber(S.ctx.seat) : 0;
-    var oldSig = boardSig(stateOf(S.ctx));
+    var oldSig = boardSig(prevState);
     var newSig = boardSig(stateOf(next));
     var changed = oldSig !== newSig ||
       oldSeat !== seatNumber(next.seat) ||
@@ -1752,6 +1898,8 @@
       S.selected = null;
       S.hoverWall = null;
       S.hoverOk = false;
+      // 走子滑过去、放墙落下来（回看翻步时也走这条）
+      queueAnim(prevState, stateOf(next));
     }
     render();
   }
@@ -1876,6 +2024,9 @@
       resizeTimer: 0,
       initialTimer: 0,
       lastPageStatus: '',
+      anim: null,
+      wallAnim: null,
+      raf: 0,
       unsub: null
     };
 
@@ -1921,6 +2072,12 @@
       clearTimeout(S.initialTimer);
       S.initialTimer = 0;
     }
+    if (S.raf) {
+      try { cancelAnimationFrame(S.raf); } catch (e) {}
+      S.raf = 0;
+    }
+    S.anim = null;
+    S.wallAnim = null;
     if (S.onResize) {
       try { window.removeEventListener('resize', S.onResize); } catch (e) {}
       S.onResize = null;
@@ -1965,6 +2122,7 @@
       canPlaceWall: canPlaceWall,
       placeWall: placeWall,
       moveTo: moveTo,
+      applyAction: applyAction,
       goalOf: goalOf,
       wallsFor: wallsFor
     }

@@ -57,6 +57,16 @@
     lastList: 0,
     round: 0,
     overShown: false,
+    // v2.152：对局记录 / 回看 / 本机对局流水
+    records: { mine: [], recent: [] },
+    recTab: 'mine',
+    recordsAt: 0,
+    recordsError: '',
+    localActs: [],
+    localInit: null,
+    localStartedAt: 0,
+    localSaved: false,
+    replay: null
   };
 
   function mod(key) { return A.games[key] || null; }
@@ -101,6 +111,117 @@
   function rpc(name, args) {
     if (!B8.sb || !B8.sb.ready) return Promise.reject(new Error('还没连上数据库'));
     return B8.sb.rpc(name, args);
+  }
+
+  /* ============================================================
+     〇、对局记录的小工具（v2.152）
+     ============================================================ */
+
+  var REC_KEY = 'b8arcade.local.records.v1';
+  var REC_MAX = 8;
+
+  function pad2(n) { n = Number(n) || 0; return (n < 10 ? '0' : '') + n; }
+
+  function fmtWhen(iso) {
+    var d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d.getTime())) return '';
+    return (d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' +
+      pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  function fmtDuration(ms) {
+    ms = Math.max(0, Number(ms) || 0);
+    var sec = Math.round(ms / 1000);
+    if (sec < 60) return sec + ' 秒';
+    var min = Math.floor(sec / 60);
+    var rest = sec % 60;
+    if (min < 60) return min + ' 分 ' + pad2(rest) + ' 秒';
+    return Math.floor(min / 60) + ' 小时 ' + pad2(min % 60) + ' 分';
+  }
+
+  function recSeatName(rec, seat) {
+    var list = (rec && rec.players) || [];
+    for (var i = 0; i < list.length; i++) {
+      if (Number(list[i].seat) === Number(seat)) return String(list[i].name || ('玩家 ' + seat));
+    }
+    return seat ? (seat + ' 号') : '';
+  }
+
+  function recPlayersText(rec) {
+    var list = ((rec && rec.players) || []).slice().sort(function (a, b) {
+      return Number(a.seat) - Number(b.seat);
+    });
+    if (!list.length) return (rec && rec.n ? rec.n + ' 人' : '—');
+    return list.map(function (p) { return p.name || ('玩家 ' + p.seat); }).join(' · ');
+  }
+
+  function recWinnerName(rec) {
+    if (!rec) return '';
+    if (rec.winner_name) return String(rec.winner_name);
+    return Number(rec.winner) > 0 ? recSeatName(rec, rec.winner) : '';
+  }
+
+  function recResultText(rec) {
+    if (!rec) return '';
+    if (rec.reason === 'leave') return '有人离开，对局中断';
+    if (rec.reason === 'closed') return '房间被关，对局中断';
+    var who = recWinnerName(rec);
+    if (rec.game === 'quoridor') return who ? '冠军 ' + who : '对局结束';
+    return who ? who + ' 获胜' : '对局结束';
+  }
+
+  function recSourceText(rec) {
+    if (rec && rec.source === 'local') return '本机';
+    return rec && rec.room_code ? '房号 ' + rec.room_code : '联机';
+  }
+
+  function readLocalRecords() {
+    try {
+      var raw = window.localStorage ? window.localStorage.getItem(REC_KEY) : '';
+      var list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function writeLocalRecords(list) {
+    try {
+      if (!window.localStorage) return;
+      window.localStorage.setItem(REC_KEY, JSON.stringify((list || []).slice(0, REC_MAX)));
+    } catch (e) {}
+  }
+
+  function saveLocalRecord(rec) {
+    if (!rec || !rec.localId) return;
+    var list = readLocalRecords();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].localId === rec.localId) {
+        list[i] = rec;
+        writeLocalRecords(list);
+        return;
+      }
+    }
+    list.unshift(rec);
+    writeLocalRecords(list);
+  }
+
+  function patchLocalRecord(localId, patch) {
+    if (!localId || !patch) return;
+    var list = readLocalRecords();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].localId === localId) {
+        for (var k in patch) {
+          if (Object.prototype.hasOwnProperty.call(patch, k)) list[i][k] = patch[k];
+        }
+        writeLocalRecords(list);
+        return;
+      }
+    }
+  }
+
+  function newLocalId() {
+    return 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   }
 
   /* ============================================================
@@ -267,6 +388,490 @@
   }
 
   /* ============================================================
+     一·二、对局记录（大厅里的「我的对局 / 最近对局」）
+     ============================================================ */
+
+  function loadRecords(force) {
+    if (!B8.sb || !B8.sb.ready) { renderRecords(); return; }
+    if (!force && Date.now() - (S.recordsAt || 0) < 8000) return;
+    S.recordsAt = Date.now();
+    rpc('b8_arcade_games_list', {
+      p_token: logged() ? token() : null,
+      p_limit: 24
+    }).then(function (res) {
+      S.records = {
+        mine: (res && res.mine) || [],
+        recent: (res && res.recent) || []
+      };
+      S.recordsError = '';
+      renderRecords();
+    }).catch(function (err) {
+      S.recordsError = errText(err);
+      renderRecords();
+      if (window.console) console.warn('[arcade] 对局记录读取失败', err);
+    });
+  }
+
+  function visibleRecords() {
+    var mine = (S.records && S.records.mine) || [];
+    if (S.recTab === 'recent') return (S.records && S.records.recent) || [];
+    var seen = {};
+    mine.forEach(function (r) { if (r) seen[String(r.id)] = true; });
+    var local = readLocalRecords().filter(function (r) {
+      if (!r) return false;
+      if (!r.server_id) return true;
+      // 已经进库：服务端列表里有时就不重复显示
+      return !seen[String(r.server_id)];
+    });
+    var out = mine.concat(local);
+    out.sort(function (a, b) {
+      var ta = new Date((a && a.ended_at) || 0).getTime() || 0;
+      var tb = new Date((b && b.ended_at) || 0).getTime() || 0;
+      return tb - ta;
+    });
+    return out;
+  }
+
+  function recordRow(rec) {
+    var wrap = document.createElement('div');
+    wrap.className = 'ag-rec';
+    var m = meta(rec.game);
+    var icon = document.createElement('span');
+    icon.className = 'ag-rec-icon';
+    icon.textContent = m.icon;
+    icon.setAttribute('aria-hidden', 'true');
+    wrap.appendChild(icon);
+
+    var main = document.createElement('div');
+    main.className = 'ag-rec-main';
+    var title = document.createElement('b');
+    title.textContent = m.title + ' · ' + recPlayersText(rec) + ' · ' + recResultText(rec);
+    var sub = document.createElement('span');
+    var bits = [fmtWhen(rec.ended_at), fmtDuration(rec.duration_ms)];
+    if (rec.moves != null) bits.push(rec.moves + ' 步');
+    if (rec.game === 'graphwar' && rec.shots != null) bits.push(rec.shots + ' 炮');
+    bits.push(recSourceText(rec));
+    if (rec.id && rec.source !== 'local') bits.push('#' + rec.id);
+    else if (rec.server_id) bits.push('#' + rec.server_id);
+    sub.textContent = bits.join(' · ');
+    main.appendChild(title);
+    main.appendChild(sub);
+    wrap.appendChild(main);
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ag-room-btn';
+    btn.textContent = '看回放';
+    btn.addEventListener('click', function () { openRecord(rec); });
+    wrap.appendChild(btn);
+    return wrap;
+  }
+
+  function renderRecords() {
+    var box = $('ag-records');
+    if (!box) return;
+    box.innerHTML = '';
+    var list = visibleRecords();
+    if (!list.length) {
+      var p = document.createElement('p');
+      p.className = 'ag-empty';
+      if (S.recTab === 'recent') {
+        p.textContent = '还没有人打完一局。开一局，打完自动留记录。';
+      } else if (!logged()) {
+        p.textContent = '登录后这里显示你打过的每一局；本机游玩也会留一份。';
+      } else {
+        p.textContent = '你还没打过。开一局，打完自动留记录。';
+      }
+      box.appendChild(p);
+    } else {
+      list.forEach(function (rec) { if (rec) box.appendChild(recordRow(rec)); });
+    }
+
+    var mineBtn = $('ag-rec-mine');
+    var recBtn = $('ag-rec-recent');
+    if (mineBtn) {
+      mineBtn.className = 'chip' + (S.recTab === 'mine' ? ' is-on' : '');
+      mineBtn.setAttribute('aria-pressed', S.recTab === 'mine' ? 'true' : 'false');
+    }
+    if (recBtn) {
+      recBtn.className = 'chip' + (S.recTab === 'recent' ? ' is-on' : '');
+      recBtn.setAttribute('aria-pressed', S.recTab === 'recent' ? 'true' : 'false');
+    }
+
+    var note = $('ag-rec-note');
+    if (note) {
+      if (S.recordsError) {
+        note.textContent = '对局记录读不出来：' + S.recordsError;
+        note.className = 'ag-hint is-warn';
+      } else if (!logged() && S.recTab === 'mine') {
+        note.textContent = '本机记录只存在这台设备；登录后每一局都会存到服务器，换设备也能看。';
+        note.className = 'ag-hint';
+      } else {
+        note.textContent = '每一局打完自动保存；点「看回放」能一步步重看，链接也能发给同学。';
+        note.className = 'ag-hint';
+      }
+    }
+  }
+
+  /* ============================================================
+     一·三、对局回看（和棋谱回看一个意思）
+     ------------------------------------------------------------
+     记录里存了「开局局面 + 每一步动作」，这里按模块的纯规则一步步重演。
+     回看是只读的：ctx.seat = 0，ctx.replay 标记，模块不画结算层。
+     ============================================================ */
+
+  function openRecord(recOrId) {
+    if (!recOrId) return;
+    if (typeof recOrId === 'object') {
+      if (recOrId.acts && recOrId.state) { startReplay(recOrId); return; }
+      if (recOrId.server_id) { openRecord(Number(recOrId.server_id)); return; }
+      if (recOrId.id && !recOrId.localId) { openRecord(Number(recOrId.id)); return; }
+      if (recOrId.localId) { startReplay(recOrId); return; }
+      B8.toast('这条记录不完整');
+      return;
+    }
+    var id = Number(recOrId);
+    if (!id) return;
+    rpc('b8_arcade_game', { p_id: id }).then(function (rec) {
+      if (!rec) { B8.toast('这条对局记录不存在了'); return; }
+      startReplay(rec);
+    }).catch(function (err) {
+      B8.toast('记录打不开：' + errText(err));
+    });
+  }
+
+  function startReplay(rec) {
+    if (!rec || !rec.game) { B8.toast('这条记录不完整'); return; }
+    if (S.view === 'replay') closeReplay(true);
+    var back = S.room ? { room: S.room, seat: S.seat, round: S.round, local: !!S.local } : null;
+    wsClose();
+    clearTimeout(S.pollTimer);
+    destroyModule();
+    S.local = false;
+    S.seat = 0;
+
+    var acts = Array.isArray(rec.acts) ? rec.acts.slice() : [];
+    var init = null;
+    var broken = false;
+    if (acts.length && acts[0] && acts[0].act && acts[0].act.state) {
+      init = acts[0].act.state;
+      acts = acts.slice(1);
+    } else if (rec.state) {
+      init = rec.state;
+      acts = [];
+      broken = true;
+    } else {
+      B8.toast('这条记录没有局面数据');
+      return;
+    }
+
+    S.replay = {
+      rec: rec,
+      back: back,
+      acts: acts,
+      frames: [init],
+      index: 0,
+      total: acts.length,
+      broken: broken,
+      timer: 0
+    };
+    var seats = ((rec.players || []).slice()).sort(function (a, b) {
+      return Number(a.seat) - Number(b.seat);
+    }).map(function (p) {
+      return { seat: Number(p.seat), no: '', name: p.name || ('玩家 ' + p.seat) };
+    });
+    S.room = {
+      id: 0,
+      code: rec.id ? 'REC' + rec.id : 'LOCALREC',
+      game: rec.game,
+      name: '对局回看',
+      status: 'over',
+      is_private: true,
+      max_seats: Number(rec.n) || seats.length || 2,
+      team_mode: rec.team_mode || 'ffa',
+      host_seat: 1,
+      seats: seats,
+      state: init,
+      seq: 1,
+      turn: Number(init && init.turn) || 0,
+      winner: Number(rec.winner) || 0,
+      record_id: rec.id || null
+    };
+    S.view = 'replay';
+    S.round = 0;
+    show('ag-lobby', false);
+    show('ag-room', false);
+    show('ag-replay', true);
+    showGame('ag-over', false);
+    showGame('ag-wait', false);
+    renderReplayHead();
+    mountReplayModule();
+    replayTo(0);
+    if (rec.id && !rec.localId) {
+      try { history.replaceState(null, '', 'arcade.html?rec=' + encodeURIComponent(rec.id)); } catch (e) {}
+    }
+  }
+
+  function mountReplayModule() {
+    var rp = S.replay;
+    var stage = $('ag-replay-stage');
+    if (!rp || !stage) return;
+    var m = mod(rp.rec.game);
+    if (!m || typeof m.mount !== 'function') {
+      stage.innerHTML = '<p class="ag-empty">这个游戏的模块没加载好，回放画不出来。</p>';
+      return;
+    }
+    destroyModule();
+    S.mod = m;
+    S.modKey = 'replay:' + (rp.rec.id || rp.rec.localId || 'x');
+    try {
+      m.mount(stage, makeCtx());
+    } catch (e) {
+      if (window.console) console.warn('[arcade] 回放挂载失败', e);
+      stage.innerHTML = '<p class="ag-empty">回放画面出错：' + esc(e && e.message) + '</p>';
+      S.mod = null;
+    }
+  }
+
+  function applyReplayAct(state, seat, act) {
+    var rp = S.replay;
+    if (!rp || !act) return null;
+    var m = mod(rp.rec.game);
+    if (!m) return null;
+    try {
+      if (m._test && typeof m._test.applyAction === 'function') {
+        return m._test.applyAction(state, seat, act);
+      }
+      if (typeof m.applyAction === 'function') {
+        return m.applyAction(state, seat, act);
+      }
+    } catch (e) {
+      if (window.console) console.warn('[arcade] 回放这一手算不出来', e);
+    }
+    return null;
+  }
+
+  function replayFrameAt(i) {
+    var rp = S.replay;
+    if (!rp) return null;
+    if (i <= 0) return rp.frames[0];
+    while (rp.frames.length <= i) {
+      var k = rp.frames.length - 1;
+      var a = rp.acts[k];
+      if (!a) break;
+      var next = applyReplayAct(rp.frames[k], a.seat, a.act);
+      if (!next) {
+        // 旧记录 / 新规则对不上：这一手跳过；走到最后一步至少把终局亮出来
+        rp.broken = true;
+        next = (k + 1 >= rp.total && rp.rec.state) ? rp.rec.state : rp.frames[k];
+      }
+      rp.frames.push(next);
+    }
+    if (i >= rp.total && rp.broken && rp.rec.state) return rp.rec.state;
+    return rp.frames[Math.min(i, rp.frames.length - 1)];
+  }
+
+  function replayTo(i) {
+    var rp = S.replay;
+    if (!rp || !S.room) return;
+    i = Math.max(0, Math.min(rp.total, Number(i) || 0));
+    rp.index = i;
+    var st = replayFrameAt(i);
+    S.room.state = st;
+    S.room.turn = Number(st && st.turn) || 0;
+    S.room.seq = i + 1;
+    S.room.winner = i >= rp.total ? (Number(rp.rec.winner) || 0) : 0;
+    notify();
+    renderReplayBar();
+  }
+
+  function stopReplayTimer() {
+    if (S.replay && S.replay.timer) {
+      clearInterval(S.replay.timer);
+      S.replay.timer = 0;
+    }
+  }
+
+  function replayActText(rec, a, i) {
+    var act = (a && a.act) || {};
+    var who = recSeatName(rec, a && a.seat) || ((a && a.seat) + ' 号');
+    var t = String(act.type || '');
+    if (rec.game === 'quoridor') {
+      if (t === 'move') return who + ' 走到 (' + act.x + ', ' + act.y + ')';
+      if (t === 'wall') {
+        var w = act.wall || {};
+        return who + ' 放' + (String(w.dir) === 'v' ? '竖墙' : '横墙') +
+          ' (' + Number(w.x) + ', ' + Number(w.y) + ')';
+      }
+      if (t === 'timeout') return who + ' 超时，跳过';
+    } else {
+      if (t === 'shot') {
+        var mode = act.mode === 'y2' ? "y'' =" : 'y =';
+        return who + ' 发射 ' + mode + ' ' + String(act.expr == null ? '?' : act.expr);
+      }
+      if (t === 'timeout') return who + ' 超时，跳过';
+    }
+    return who + ' · ' + (t || '动作');
+  }
+
+  function renderReplayHead() {
+    var rp = S.replay;
+    if (!rp) return;
+    var rec = rp.rec;
+    var m = meta(rec.game);
+    txt('ag-replay-title', m.title + ' · 对局回看' + (rec.id ? ' #' + rec.id : ''));
+    txt('ag-replay-meta', [
+      fmtWhen(rec.ended_at),
+      fmtDuration(rec.duration_ms),
+      recResultText(rec),
+      recSourceText(rec)
+    ].filter(Boolean).join(' · '));
+
+    var box = $('ag-replay-players');
+    if (box) {
+      box.innerHTML = '';
+      var players = ((rec.players || []).slice()).sort(function (a, b) {
+        return Number(a.seat) - Number(b.seat);
+      });
+      players.forEach(function (p) {
+        var el = document.createElement('span');
+        var win = Number(p.seat) === Number(rec.winner) && Number(rec.winner) > 0;
+        el.className = 'ag-player' + (win ? ' is-turn' : '');
+        var i = document.createElement('i');
+        i.textContent = String(p.seat);
+        var b = document.createElement('span');
+        b.textContent = (p.name || ('玩家 ' + p.seat)) + (win ? ' · 赢' : '');
+        el.appendChild(i);
+        el.appendChild(b);
+        box.appendChild(el);
+      });
+    }
+
+    var info = $('ag-replay-info');
+    if (info) info.textContent = (rec.moves != null ? rec.moves + ' 步' : '') +
+      (rec.game === 'graphwar' && rec.shots != null ? ' · ' + rec.shots + ' 炮' : '');
+
+    var log = $('ag-replay-log');
+    if (log) {
+      log.innerHTML = '';
+      if (!rp.acts.length) {
+        var p = document.createElement('p');
+        p.className = 'ag-empty';
+        p.textContent = rp.broken ? '这条记录只有终局，没有逐步流水。' : '这局没有可回看的动作。';
+        log.appendChild(p);
+      } else {
+        rp.acts.forEach(function (a, idx) {
+          var row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'ag-replay-row';
+          row.setAttribute('data-step', String(idx + 1));
+          var no = document.createElement('em');
+          no.textContent = String(idx + 1);
+          var tx = document.createElement('span');
+          tx.textContent = replayActText(rec, a, idx);
+          row.appendChild(no);
+          row.appendChild(tx);
+          row.addEventListener('click', function () { replayTo(idx + 1); });
+          log.appendChild(row);
+        });
+      }
+    }
+    renderReplayBar();
+  }
+
+  function renderReplayBar() {
+    var rp = S.replay;
+    if (!rp) return;
+    txt('ag-replay-step', rp.total
+      ? '第 ' + rp.index + ' / ' + rp.total + ' 步'
+      : (rp.broken ? '只有终局' : '没有动作'));
+    var first = $('ag-replay-first');
+    var prev = $('ag-replay-prev');
+    var next = $('ag-replay-next');
+    var last = $('ag-replay-last');
+    var play = $('ag-replay-play');
+    if (first) first.disabled = rp.index <= 0;
+    if (prev) prev.disabled = rp.index <= 0;
+    if (next) next.disabled = rp.index >= rp.total;
+    if (last) last.disabled = rp.index >= rp.total;
+    if (play) {
+      play.textContent = rp.timer ? '⏸ 暂停' : '▶ 自动';
+      play.disabled = rp.total <= 0;
+      play.classList[rp.timer ? 'add' : 'remove']('is-on');
+    }
+    var log = $('ag-replay-log');
+    if (log) {
+      var rows = log.querySelectorAll('.ag-replay-row');
+      for (var i = 0; i < rows.length; i++) {
+        var step = Number(rows[i].getAttribute('data-step'));
+        rows[i].className = 'ag-replay-row' + (step === rp.index ? ' is-on' : '');
+      }
+    }
+  }
+
+  function toggleReplayAuto() {
+    var rp = S.replay;
+    if (!rp) return;
+    if (rp.timer) {
+      stopReplayTimer();
+      renderReplayBar();
+      return;
+    }
+    if (rp.index >= rp.total) replayTo(0);
+    rp.timer = setInterval(function () {
+      if (!S.replay || S.view !== 'replay') { stopReplayTimer(); return; }
+      if (S.replay.index >= S.replay.total) {
+        stopReplayTimer();
+        renderReplayBar();
+        return;
+      }
+      replayTo(S.replay.index + 1);
+    }, 1300);
+    renderReplayBar();
+  }
+
+  function closeReplay(silent) {
+    var rp = S.replay;
+    if (!rp) return;
+    stopReplayTimer();
+    destroyModule();
+    var back = rp.back;
+    S.replay = null;
+    S.local = false;
+    if (back && back.room) {
+      S.room = back.room;
+      S.seat = back.seat || 0;
+      S.round = back.round || 0;
+      S.local = !!back.local;
+      S.view = 'room';
+      show('ag-replay', false);
+      show('ag-room', true);
+      S.modKey = '';
+      renderRoom();
+      ensureModule();
+      if (!S.local && S.room.code) {
+        wsConnect(S.room.code);
+        schedulePoll();
+        try {
+          history.replaceState(null, '', 'arcade.html?room=' + encodeURIComponent(S.room.code));
+        } catch (e) {}
+      }
+      return;
+    }
+    S.room = null;
+    S.seat = 0;
+    S.view = 'lobby';
+    show('ag-replay', false);
+    show('ag-room', false);
+    show('ag-lobby', true);
+    if (!silent) {
+      try { history.replaceState(null, '', 'arcade.html'); } catch (e) {}
+    }
+    loadLists(true);
+    loadRecords(true);
+  }
+
+  /* ============================================================
      二、建房 / 加入 / 离开
      ============================================================ */
 
@@ -337,6 +942,12 @@
     S.round = (S.round || 0) + 1;
     S.overShown = false;
     S.subs = [];
+    // v2.152：本机对局也留流水，打完存一份记录
+    S.localActs = [];
+    S.localInit = JSON.parse(JSON.stringify(init));
+    S.localStartedAt = Date.now();
+    S.localSaved = false;
+    S.localRecord = null;
     if (S.mod && S.mod.destroy) { try { S.mod.destroy(); } catch (e) {} }
     S.mod = null;
     S.modKey = '';
@@ -362,6 +973,15 @@
     var r = S.room;
     if (!r || !S.local) return Promise.reject(new Error('本地对局没开始'));
     opts = opts || {};
+    // 本地局没有服务器，动作流水先攒在这里；打完再一起存成记录
+    var actor = Number(r.turn) || 1;
+    if (action && typeof action === 'object') {
+      S.localActs.push({
+        seat: Number(action.seat) || actor,
+        act: action,
+        at: new Date().toISOString()
+      });
+    }
     if (nextState) r.state = nextState;
     if (opts.turn != null) r.turn = opts.turn;
     if (opts.status === 'over') {
@@ -369,9 +989,71 @@
       r.winner = opts.winner == null ? null : opts.winner;
     }
     r.seq = (r.seq || 0) + 1;
+    if (r.status === 'over') saveLocalMatch();
     renderRoom();
     notify();
     return Promise.resolve({ ok: true, room: r });
+  }
+
+  /* ---------- 本机对局：存一份记录（本机一定有，登录了再传服务器） ---------- */
+
+  function saveLocalMatch() {
+    var r = S.room;
+    if (!r || !S.local || S.localSaved || !r.state || !S.localInit) return;
+    S.localSaved = true;
+    var seats = r.seats || [];
+    var players = seats.map(function (x) { return { seat: Number(x.seat), name: x.name }; });
+    var acts = [{
+      seat: 1,
+      act: { type: 'start', n: seats.length, state: S.localInit },
+      at: new Date(S.localStartedAt || Date.now()).toISOString()
+    }];
+    (S.localActs || []).forEach(function (x) {
+      if (x && x.act) acts.push({ seat: x.seat, act: x.act, at: x.at });
+    });
+    var rec = {
+      localId: newLocalId(),
+      source: 'local',
+      game: r.game,
+      team_mode: r.team_mode || 'ffa',
+      n: seats.length,
+      players: players,
+      state: r.state,
+      acts: acts,
+      winner: Number(r.winner) || 0,
+      winner_name: '',
+      reason: 'normal',
+      moves: Math.max(0, acts.length - 1),
+      shots: acts.filter(function (x) { return x.act && x.act.type === 'shot'; }).length,
+      duration_ms: Math.max(0, Date.now() - (S.localStartedAt || Date.now())),
+      ended_at: new Date().toISOString()
+    };
+    for (var i = 0; i < players.length; i++) {
+      if (players[i].seat === rec.winner) rec.winner_name = players[i].name;
+    }
+    S.localRecord = rec;
+    saveLocalRecord(rec);
+    renderRecords();
+
+    if (!logged()) return;
+    rpc('b8_arcade_save_local', {
+      p_token: token(),
+      p_game: rec.game,
+      p_team_mode: rec.team_mode,
+      p_players: players,
+      p_state: rec.state,
+      p_acts: rec.acts,
+      p_winner: rec.winner,
+      p_duration_ms: rec.duration_ms
+    }).then(function (res) {
+      if (res && res.id) {
+        patchLocalRecord(rec.localId, { server_id: res.id });
+        loadRecords(true);
+      }
+    }).catch(function (err) {
+      // 数据库没更新时也别弹窗打断：本机记录已经存好了，列表里标「本机」
+      if (window.console) console.warn('[arcade] 本机对局上传失败', err);
+    });
   }
 
   function joinRoom(code) {
@@ -385,6 +1067,7 @@
 
   function enterRoom(room, seat, remember) {
     S.local = false;
+    S.localRecord = null;
     S.room = room;
     S.seat = seat || 0;
     S.chat = [];
@@ -431,6 +1114,7 @@
     showGame('ag-over', false);
     showGame('ag-wait', false);
     loadLists(true);
+    loadRecords(true);
   }
 
   /* ============================================================
@@ -439,6 +1123,8 @@
 
   function applyRoom(room, seat) {
     if (!room) return;
+    // 回看时不要被房间的心跳覆盖（点记录时可能还有一个 sync 在路上）
+    if (S.view === 'replay') return;
     var prev = S.room || {};
     // 再来一局：别人开的新一局也要重挂载，否则停在上一局的结算画面
     if (prev.status === 'over' && room.status === 'play') S.round = (S.round || 0) + 1;
@@ -453,10 +1139,12 @@
     renderRoom();
     if (room.status === 'play' || room.status === 'over') ensureModule();
     else destroyModule();
+    // 这一局刚打完：记录是服务器在最后一步里自动存的，这里补一下列表
+    if (room.status === 'over' && prev.status !== 'over') loadRecords(true);
   }
 
   function syncRoom(force) {
-    if (!S.room) return;
+    if (!S.room || S.view === 'replay') return;
     if (S.syncBusy) return;
     var now = Date.now();
     // 900ms 冷却 + 合流：onChange 里再调 refresh 也只会排在后面跑一次
@@ -624,10 +1312,8 @@
       if (codeEl) codeEl.textContent = r.code;
     }
     if (r.status === 'over') {
-      if (!S.overShown) {
-        S.overShown = true;
-        renderOver();
-      }
+      S.overShown = true;
+      renderOver();
     } else {
       S.overShown = false;
       showGame('ag-over', false);
@@ -641,7 +1327,7 @@
     var win = r.winner;
     var who = '';
     for (var i = 0; i < seats.length; i++) if (seats[i].seat === win) who = seats[i].name || seats[i].no;
-    txt('ag-over-kicker', '对局结束 · 房号 ' + r.code);
+    txt('ag-over-kicker', S.local ? '对局结束 · 本机对局' : '对局结束 · 房号 ' + r.code);
     txt('ag-over-title', who ? who + ' 获胜' : '对局结束');
     var sub = [];
     if (S.seat > 0) {
@@ -652,6 +1338,23 @@
     if (r.team_mode === 'team') sub.push('组队模式（红 1/3/5/7 · 蓝 2/4/6/8）');
     txt('ag-over-sub', sub.join(' '));
     showGame('ag-over', true);
+
+    // 每一局都留了记录：显示编号，并给一个「看回放」
+    var recId = Number(r.record_id) || 0;
+    var localRec = S.local && S.localRecord ? S.localRecord : null;
+    var recLine = $('ag-over-record');
+    if (recLine) {
+      recLine.hidden = !(recId || localRec);
+      recLine.textContent = recId
+        ? '对局记录 #' + recId + ' 已保存'
+        : (localRec ? '本局已存进本机记录（登录后会同步到服务器）' : '');
+    }
+    var viewBtn = $('ag-over-view');
+    if (viewBtn) {
+      viewBtn.hidden = !(recId || localRec);
+      viewBtn.disabled = !(recId || localRec);
+    }
+
     var again = $('ag-over-again');
     if (again) {
       again.hidden = !(S.seat === 1);
@@ -722,23 +1425,38 @@
     });
   }
 
+  function replaySend() {
+    return Promise.reject(new Error('回看是只读的'));
+  }
+
   function makeCtx() {
     var r = S.room || {};
     var seats = r.seats || [];
-    var localSeat = S.local ? (r.turn || 1) : S.seat;
+    var replay = (S.view === 'replay' && S.replay) ? {
+      on: true,
+      index: S.replay.index,
+      total: S.replay.total,
+      broken: !!S.replay.broken,
+      id: S.replay.rec.id || S.replay.rec.localId || ''
+    } : null;
+    var localSeat = replay ? 0 : (S.local ? (r.turn || 1) : S.seat);
     var me = null;
-    for (var i = 0; i < seats.length; i++) if (seats[i].seat === localSeat) me = seats[i];
+    for (var i = 0; i < seats.length; i++) {
+      if (seats[i].seat === localSeat && localSeat > 0) me = seats[i];
+    }
     return {
       game: r.game,
       seat: localSeat,
       room: r,
       state: (r.state && typeof r.state === 'object') ? r.state : {},
       me: me,
-      isHost: S.local ? true : (S.seat === 1),
+      isHost: replay ? false : (S.local ? true : (S.seat === 1)),
       players: seats,
-      isMyTurn: S.local ? (r.status === 'play') : (r.status === 'play' && r.turn === S.seat && S.seat > 0),
-      local: !!S.local,
-      send: S.local ? localSend : sendAction,
+      isMyTurn: replay ? false :
+        (S.local ? (r.status === 'play') : (r.status === 'play' && r.turn === S.seat && S.seat > 0)),
+      local: !!S.local && !replay,
+      replay: replay,
+      send: replay ? replaySend : (S.local ? localSend : sendAction),
       onChange: function (fn) {
         if (typeof fn !== 'function') return function () {};
         S.subs.push(fn);
@@ -747,9 +1465,11 @@
           if (k >= 0) S.subs.splice(k, 1);
         };
       },
-      refresh: function () { return syncRoom(true); },
+      refresh: function () { return replay ? Promise.resolve() : syncRoom(true); },
       toast: function (msg) { B8.toast(msg); },
-      setStatus: function (msg) { txt('ag-status', msg || '—'); },
+      setStatus: function (msg) {
+        txt(replay ? 'ag-replay-status' : 'ag-status', msg || '—');
+      },
       chat: {
         send: sendChat,
         items: S.chat
@@ -960,19 +1680,93 @@
     }
 
     var again = $('ag-again');
-    if (again) again.addEventListener('click', startGame);
+    if (again) {
+      again.addEventListener('click', function () {
+        if (S.local) startLocal();
+        else startGame();
+      });
+    }
 
     var overAgain = $('ag-over-again');
     if (overAgain) {
       overAgain.addEventListener('click', function () {
         showGame('ag-over', false);
-        if (S.room && S.room.status === 'over' && S.seat === 1) startGame();
+        if (S.local) startLocal();
+        else if (S.room && S.room.status === 'over' && S.seat === 1) startGame();
         else B8.toast('等房主再开一局');
       });
     }
 
     var overLobby = $('ag-over-lobby');
     if (overLobby) overLobby.addEventListener('click', function () { leaveRoom(false); });
+
+    // 打完这一局看回放（联机记录在服务器，本机记录在本机）
+    var overView = $('ag-over-view');
+    if (overView) {
+      overView.addEventListener('click', function () {
+        if (S.local && S.localRecord) { openRecord(S.localRecord); return; }
+        if (S.room && S.room.record_id) { openRecord(Number(S.room.record_id)); return; }
+        B8.toast('这一局的记录还没同步下来，稍等一下');
+      });
+    }
+
+    var recMine = $('ag-rec-mine');
+    if (recMine) {
+      recMine.addEventListener('click', function () {
+        S.recTab = 'mine';
+        renderRecords();
+        loadRecords(false);
+      });
+    }
+    var recRecent = $('ag-rec-recent');
+    if (recRecent) {
+      recRecent.addEventListener('click', function () {
+        S.recTab = 'recent';
+        renderRecords();
+        loadRecords(false);
+      });
+    }
+    var recRefresh = $('ag-rec-refresh');
+    if (recRefresh) recRefresh.addEventListener('click', function () { loadRecords(true); });
+
+    var repBack = $('ag-replay-back');
+    if (repBack) repBack.addEventListener('click', function () { closeReplay(false); });
+    var repFirst = $('ag-replay-first');
+    if (repFirst) repFirst.addEventListener('click', function () { replayTo(0); });
+    var repPrev = $('ag-replay-prev');
+    if (repPrev) repPrev.addEventListener('click', function () {
+      if (S.replay) replayTo(S.replay.index - 1);
+    });
+    var repNext = $('ag-replay-next');
+    if (repNext) repNext.addEventListener('click', function () {
+      if (S.replay) replayTo(S.replay.index + 1);
+    });
+    var repLast = $('ag-replay-last');
+    if (repLast) repLast.addEventListener('click', function () {
+      if (S.replay) replayTo(S.replay.total);
+    });
+    var repPlay = $('ag-replay-play');
+    if (repPlay) repPlay.addEventListener('click', toggleReplayAuto);
+    var repShare = $('ag-replay-share');
+    if (repShare) {
+      repShare.addEventListener('click', function () {
+        if (!S.replay || !S.replay.rec.id || S.replay.rec.localId) {
+          B8.toast('本机记录没有分享链接');
+          return;
+        }
+        var url = location.origin + location.pathname + '?rec=' + encodeURIComponent(S.replay.rec.id);
+        if (B8.copy) B8.copy(url);
+      });
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (S.view !== 'replay' || !S.replay) return;
+      if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || '')) return;
+      if (e.key === 'ArrowLeft') { replayTo(S.replay.index - 1); e.preventDefault(); }
+      else if (e.key === 'ArrowRight') { replayTo(S.replay.index + 1); e.preventDefault(); }
+      else if (e.key === 'Escape') { closeReplay(false); e.preventDefault(); }
+      else if (e.key === ' ') { toggleReplayAuto(); e.preventDefault(); }
+    });
 
     var chatForm = $('ag-chat-form');
     if (chatForm) {
@@ -998,7 +1792,7 @@
     var el = $('ag-who');
     if (!el) return;
     if (logged()) el.textContent = (nick() || '我') + ' · 已登录';
-    else el.textContent = '未登录（只能扫雷/观战）';
+    else el.textContent = '未登录（能本机玩 / 看回放）';
   }
 
   function boot() {
@@ -1007,11 +1801,14 @@
     bind();
     updateWho();
     loadLists(true);
+    renderRecords();
+    loadRecords(true);
 
     if (B8.auth && B8.auth.ready) {
       B8.auth.ready(function () {
         updateWho();
         loadLists(true);
+        loadRecords(true);
       });
     }
 
@@ -1022,6 +1819,10 @@
       } else {
         joinRoom(room[1]);
       }
+    } else {
+      // arcade.html?rec=123 直接打开一局的回看（和 board.html?rec=123 一个意思）
+      var rec = (location.search || '').match(/[?&]rec=(\d{1,12})/);
+      if (rec) openRecord(Number(rec[1]));
     }
 
     setInterval(function () {
@@ -1033,7 +1834,8 @@
   window.addEventListener('error', function () {
     var lobby = $('ag-lobby');
     var room = $('ag-room');
-    if (lobby && room && lobby.hidden && room.hidden) {
+    var replay = $('ag-replay');
+    if (lobby && room && lobby.hidden && room.hidden && (!replay || replay.hidden)) {
       lobby.hidden = false;
       room.hidden = true;
     }
@@ -1041,6 +1843,16 @@
 
   A.boot = boot;
   A.state = S;
+  // 自检用（_shared/arcade-replay-harness.html）：不参与线上流程
+  A._test = {
+    openRecord: openRecord,
+    closeReplay: closeReplay,
+    startLocal: startLocal,
+    localSend: localSend,
+    saveLocalMatch: saveLocalMatch,
+    visibleRecords: visibleRecords,
+    readLocalRecords: readLocalRecords
+  };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();

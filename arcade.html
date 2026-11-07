@@ -4,22 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>多人游戏 · 函数大战 / 步步为营 · 八班游乐场</title>
-<meta name="description" content="八班多人游戏：GraphWar 函数大战（2-8 人，输入函数打炮）、Quoridor 步步为营（2-4 人放墙堵路）。房间号加入、组队或混战、聊天。">
+<meta name="description" content="八班多人游戏：GraphWar 函数大战（2-8 人，输入函数打炮）、Quoridor 步步为营（2-4 人放墙堵路）。房间号加入、组队或混战、聊天；每一局自动保存，可逐步回看。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g114" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g114">
-<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g114">
+<link rel="icon" href="assets/favicon.png?v=20261101g115" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g115">
+<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g115">
 <script>
-window.B8_BUILD = '20261101g114';
+window.B8_BUILD = '20261101g115';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g114"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g114">
+<script src="assets/theme.js?v=20261101g115"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g115">
 </head>
 
 <body data-site="fun">
@@ -44,7 +44,8 @@ window.B8_TEST = !!window.B8_T;
         <h1>多人游戏</h1>
         <p class="ag-lead">
           两个多人棋战：<b>函数大战</b>输入一条函数当炮弹，<b>步步为营</b>放墙把对手堵死。
-          房间支持 2–8 人，可组队、可聊天。扫雷在首页「下课十分钟」里。
+          房间支持 2–8 人，可组队、可聊天。<b>每一局打完自动存进「对局记录」</b>，
+          能一步步回看，链接也能发给同学。扫雷在首页「下课十分钟」里。
         </p>
       </div>
 
@@ -104,6 +105,57 @@ window.B8_TEST = !!window.B8_T;
           <button class="ag-link" id="ag-refresh" type="button">刷新列表</button>
         </div>
       </div>
+
+      <div class="ag-card ag-card-wide" id="ag-record-card">
+        <div class="ag-record-head">
+          <h2>对局记录</h2>
+          <div class="chips" role="group" aria-label="记录类型">
+            <button class="chip is-on" id="ag-rec-mine" type="button" aria-pressed="true">我的对局</button>
+            <button class="chip" id="ag-rec-recent" type="button" aria-pressed="false">最近对局</button>
+          </div>
+          <button class="ag-link" id="ag-rec-refresh" type="button">刷新记录</button>
+        </div>
+        <div class="ag-records" id="ag-records"></div>
+        <p class="ag-hint" id="ag-rec-note">每一局打完自动保存；点「看回放」能一步步重看，链接也能发给同学。</p>
+      </div>
+    </section>
+
+    <!-- ==================== 对局回看 ==================== -->
+    <section class="ag-view" id="ag-replay" hidden>
+      <div class="ag-gamebar">
+        <button class="ag-back2" id="ag-replay-back" type="button">← 返回</button>
+        <div class="ag-gname">
+          <b id="ag-replay-title">对局回看</b>
+          <span id="ag-replay-meta"></span>
+        </div>
+        <button class="ag-mini" id="ag-replay-share" type="button">复制回放链接</button>
+      </div>
+
+      <div class="ag-layout">
+        <div class="ag-stage-wrap">
+          <div class="ag-players" id="ag-replay-players"></div>
+          <div class="ag-stage" id="ag-replay-stage"></div>
+          <div class="ag-replay-bar">
+            <button class="ag-mini" id="ag-replay-first" type="button" aria-label="回到开局">⏮</button>
+            <button class="ag-mini" id="ag-replay-prev" type="button">◀ 上一步</button>
+            <button class="ag-mini" id="ag-replay-play" type="button">▶ 自动</button>
+            <button class="ag-mini" id="ag-replay-next" type="button">下一步 ▶</button>
+            <button class="ag-mini" id="ag-replay-last" type="button" aria-label="跳到终局">⏭</button>
+            <span class="ag-replay-step" id="ag-replay-step">第 0 / 0 步</span>
+          </div>
+          <p class="ag-status" id="ag-replay-status">回看中：← → 翻步，空格自动播放，Esc 退出。</p>
+        </div>
+
+        <aside class="ag-side">
+          <div class="ag-chat">
+            <div class="ag-box-head"><b>本局流水</b><span id="ag-replay-info">—</span></div>
+            <div class="ag-replay-log" id="ag-replay-log"></div>
+          </div>
+          <div class="ag-side-note">
+            回看是只读的：棋盘按当时的每一步重演，不会改动任何房间或记录。
+          </div>
+        </aside>
+      </div>
     </section>
 
     <!-- ==================== 房间 / 对局 ==================== -->
@@ -160,8 +212,10 @@ window.B8_TEST = !!window.B8_T;
       <p class="ag-over-kicker" id="ag-over-kicker">对局结束</p>
       <h2 id="ag-over-title">—</h2>
       <p class="ag-over-sub" id="ag-over-sub"></p>
+      <p class="ag-over-record" id="ag-over-record" hidden></p>
       <div class="ag-over-actions">
         <button class="ag-btn primary" id="ag-over-again" type="button">再来一局</button>
+        <button class="ag-btn" id="ag-over-view" type="button" hidden>看回放</button>
         <button class="ag-btn" id="ag-over-lobby" type="button">回大厅</button>
       </div>
     </div>
@@ -178,7 +232,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g114' + T;
+  var V = '?v=20261101g115' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
