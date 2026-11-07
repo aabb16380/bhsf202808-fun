@@ -75,10 +75,56 @@
     bestMoves: [], bestArrow: null,
     // v2.135：胜率曲线跟着棋谱存库，一局只算一次
     saved: false, savedAt: 0, claimState: '', autoFor: '', progress: '',
-    reloadTimer: 0, saveBusy: false
+    reloadTimer: 0, saveBusy: false,
+    pointAt: {}
   };
   // 棋盘上的每手标签（观战/回看/分析可见；棋手对局中不显示）
   var LIVE_TAG_CACHE = { key: '', tags: null };
+
+  var CHESS_FEN_MAP = {
+    1: 'P', 2: 'N', 3: 'B', 4: 'R', 5: 'Q', 6: 'K',
+    9: 'p', 10: 'n', 11: 'b', 12: 'r', 13: 'q', 14: 'k'
+  };
+  var XQ_FEN_MAP = {
+    1: 'K', 2: 'A', 3: 'B', 4: 'N', 5: 'R', 6: 'C', 7: 'P',
+    9: 'k', 10: 'a', 11: 'b', 12: 'n', 13: 'r', 14: 'c', 15: 'p'
+  };
+
+  function rowsToFen(board, height, width, map) {
+    var rows = [];
+    for (var y = 0; y < height; y++) {
+      var row = '', empty = 0;
+      for (var x = 0; x < width; x++) {
+        var p = board[y * width + x];
+        if (!p) { empty++; continue; }
+        if (empty) { row += empty; empty = 0; }
+        row += map[p] || '';
+      }
+      if (empty) row += empty;
+      rows.push(row);
+    }
+    return rows.join('/');
+  }
+
+  function fenChess(st) {
+    var turn = st.turn === 2 ? 'b' : 'w';
+    var c = st.castle || {};
+    var cast = (c.wk ? 'K' : '') + (c.wq ? 'Q' : '') +
+               (c.bk ? 'k' : '') + (c.bq ? 'q' : '');
+    if (!cast) cast = '-';
+    var ep = '-';
+    if (typeof st.ep === 'number' && st.ep >= 0) {
+      ep = 'abcdefgh'[st.ep % 8] + (8 - Math.floor(st.ep / 8));
+    }
+    return rowsToFen(st.board, 8, 8, CHESS_FEN_MAP) + ' ' + turn + ' ' + cast + ' ' + ep +
+      ' ' + (st.half || 0) + ' ' + (Math.floor((st.seq || 0) / 2) + 1);
+  }
+
+  function fenXiangqi(st) {
+    var turn = st.turn === 2 ? 'b' : 'w';
+    return rowsToFen(st.board, 10, 9, XQ_FEN_MAP) + ' ' + turn + ' - - ' +
+      (st.half || 0) + ' ' + (Math.floor((st.seq || 0) / 2) + 1);
+  }
   function resetAnalysisMarks() {
     ANALYSIS.tags = {};
     ANALYSIS.bestMoves = [];
@@ -100,6 +146,7 @@
     ANALYSIS.liveKey = '';
     ANALYSIS.liveCode = '';
     ANALYSIS.liveStates = null;
+    ANALYSIS.pointAt = {};
     ANALYSIS.practiceKey = '';
     ANALYSIS.practiceStates = null;
     LIVE_TAG_CACHE.key = '';
@@ -3240,14 +3287,21 @@
       return;
     }
     if (ANALYSIS.data.length === states.length && ANALYSIS.baseSig === base && ANALYSIS.lastSig === last) return;
-    var reuse = 0;
-    if (ANALYSIS.data.length && ANALYSIS.data.length <= states.length &&
-        ANALYSIS.baseSig === base &&
-        ANALYSIS.lastSig === stateSig(states[ANALYSIS.data.length - 1])) {
-      reuse = ANALYSIS.data.length;
+    var data = [];
+    if (ANALYSIS.data.length && ANALYSIS.baseSig === base) {
+      if (ANALYSIS.data.length < states.length &&
+          ANALYSIS.lastSig === stateSig(states[ANALYSIS.data.length - 1])) {
+        data = ANALYSIS.data.slice(0, ANALYSIS.data.length);
+      } else if (ANALYSIS.data.length > states.length) {
+        data = ANALYSIS.data.slice(0, states.length);
+        for (var k = states.length; k < ANALYSIS.data.length; k++) delete ANALYSIS.pointAt[k];
+      } else {
+        // 悔棋后换了另一条线：旧的服务器点不能再复用
+        ANALYSIS.pointAt = {};
+      }
     }
-    var data = reuse ? ANALYSIS.data.slice(0, reuse) : [];
-    for (var i = reuse; i < states.length; i++) data.push(evalState(states[i]));
+    // 不再用本地启发式补点：没有服务器点就保持 0.5，等单点/整盘服务器结果来填。
+    while (data.length < states.length) data.push(0.5);
     ANALYSIS.data = data;
     ANALYSIS.baseSig = base;
     ANALYSIS.lastSig = last;
@@ -3670,7 +3724,7 @@
     }
     if (game === 'chess' || game === 'xiangqi') {
       var fens = states.map(function (st) {
-        return game === 'chess' ? B8Engine.fenChess(st) : B8Engine.fenXiangqi(st);
+        return game === 'chess' ? fenChess(st) : fenXiangqi(st);
       });
       return B8Server.evalBatch(game, fens, 80, progress).then(function (rows) {
         return (rows || []).map(function (r) {
@@ -3738,7 +3792,8 @@
 
   function applyAnalysisRows(rows, states, game) {
     var tags = {};
-    for (var i = 0; i < S.moves.length; i++) {
+    var n = Math.min(S.moves.length, states.length - 1, rows.length - 1);
+    for (var i = 0; i < n; i++) {
       var mv = S.moves[i];
       var before = p1OfRow(rows[i]);
       var after = p1OfRow(rows[i + 1]);
@@ -3755,6 +3810,8 @@
     ANALYSIS.serverData = rows.map(function (r) { return p1OfRow(r); });
     ANALYSIS.serverKey = stateSig(states[0]) + '|' + stateSig(states[states.length - 1]);
     ANALYSIS.data = ANALYSIS.serverData.slice();
+    ANALYSIS.pointAt = {};
+    for (var q = 0; q < ANALYSIS.serverData.length; q++) ANALYSIS.pointAt[q] = true;
     ANALYSIS.baseSig = stateSig(states[0]);
     ANALYSIS.lastSig = stateSig(states[states.length - 1]);
     ANALYSIS.serverPointKey = '';
@@ -3833,6 +3890,8 @@
       var v = Number(x);
       return isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5;
     });
+    ANALYSIS.pointAt = {};
+    for (var pi = 0; pi < ANALYSIS.serverData.length; pi++) ANALYSIS.pointAt[pi] = true;
     ANALYSIS.bestMoves = Array.isArray(a.best) ? a.best.slice(0, n) : [];
     while (ANALYSIS.bestMoves.length < n) ANALYSIS.bestMoves.push('');
     ANALYSIS.tags = (a.tags && typeof a.tags === 'object') ? a.tags : {};
@@ -3949,7 +4008,6 @@
     if (ANALYSIS.saved || ANALYSIS.analysisBusy) return;
     var game = S.game;
     if (!ANALYZABLE[game]) return;
-    if ((game === 'chess' || game === 'xiangqi') && !window.B8Engine) return;
     var states = reviewBuild();
     if (!states || states.length < 2) return;
     var gk = analysisGameKey();
@@ -4038,7 +4096,7 @@
       // scanFen(st) 已经是当前局面，不能再把历史 moves 叠加一次
       request = B8Server.evalDraughts(scanFen(st), '', 0.2);
     } else {
-      var fen = game === 'chess' ? B8Engine.fenChess(st) : B8Engine.fenXiangqi(st);
+      var fen = game === 'chess' ? fenChess(st) : fenXiangqi(st);
       request = B8Server.evalOne(game, fen, 120);
     }
 
@@ -4047,6 +4105,7 @@
       var idx = ANALYSIS.cur;
       if (idx < 0 || idx >= ANALYSIS.data.length) return;
       ANALYSIS.data[idx] = r.p1 / 100;
+      ANALYSIS.pointAt[idx] = true;
       if (r.bestmove) ANALYSIS.bestArrow = bestMoveArrow(game, r.bestmove, st);
       drawWinChart();
       renderWinBar(ANALYSIS.data[idx], idx);
@@ -4058,21 +4117,17 @@
     var has = !!(S && S.state);
     show('bd-analysis', has);
     var over = !!(S && S.state && S.state.status === 'over');
-    var engineBtn = $('bd-engine-run');
-    // 下完的棋谱用保存好的整盘曲线，不再单独分析当前局面
-    if (engineBtn) engineBtn.hidden = !has || over || (S.state.game !== 'chess' && S.state.game !== 'xiangqi');
     var serverBtn = $('bd-server-run');
     if (serverBtn) {
-      serverBtn.hidden = !has || over || !window.B8Server || !B8Server.enabled() ||
-        (S.state.game !== 'chess' && S.state.game !== 'xiangqi');
+      serverBtn.hidden = !has || over || !window.B8Server || !B8Server.enabled();
     }
     var note = $('bd-analysis-note');
     if (note) {
       var forbidNote = (S.state && S.state.forbid) ? ' 当前按黑棋禁手（Renju）规则分析。' : '';
       note.textContent = (ANALYSIS.saved
         ? '折线：服务器整盘分析，胜率曲线随这盘棋谱保存（只算一次）。点开棋谱就能看，不会重复分析。'
-        : '折线：本地战术搜索 + 位置评估（国象/象棋 1 层、国跳 2 层；围棋影响力）。' +
-          '下完自动用服务器整盘分析一次；之后直接读保存的曲线。') + forbidNote;
+        : '折线：服务器强引擎。实战当前点逐手服务器评估；点「服务器」算整盘；' +
+          '下完自动整盘分析一次并存进棋谱。') + forbidNote;
     }
     var btn = $('bd-analysis');
     if (btn) {
@@ -4105,12 +4160,15 @@
     renderWinBar(p, ANALYSIS.cur);
 
     show('bd-analysis-panel', !!ANALYSIS.on);
-    if (!ANALYSIS.on) return;
+    if (!ANALYSIS.on) {
+      // 观战者即使收起面板，也要拿当前点的服务器评估来贴“当前手”标签
+      if (S.state.status === 'play' && S.seat === 0) refreshServerPoint();
+      return;
+    }
     drawWinChart();
     refreshServerPoint();
   }
 
-  var engineBusy = false;
   var serverBusy = false;
 
   function engineNote(msg, isErr) {
@@ -4121,51 +4179,11 @@
     el.classList.toggle('is-err', !!isErr);
   }
 
-  function runEngine() {
-    if (!S || !S.state || engineBusy) return;
-    var game = S.state.game;
-    if (game !== 'chess' && game !== 'xiangqi') {
-      engineNote('引擎目前接了国象/象棋；五子棋、围棋、国跳还在排队。', true);
-      return;
-    }
-    if (!window.B8Engine) {
-      engineNote('引擎脚本没加载上，刷新再试。', true);
-      return;
-    }
-
-    var engineName = game === 'chess' ? 'Stockfish' : 'Pikafish';
-    engineBusy = true;
-    var btn = $('bd-engine-run');
-    if (btn) { btn.disabled = true; btn.textContent = '分析中'; }
-    engineNote(engineName + ' 正在分析当前局面…');
-
-    window.B8Engine.analyze(game, S.state, { movetime: 900 }).then(function (r) {
-      var side = r.p1 >= 50 ? shortName(1) : shortName(2);
-      var pct = r.p1 >= 50 ? r.p1 : (100 - r.p1);
-      var best = r.bestmove ? ' · 最佳 ' + r.bestmove : '';
-      var mate = r.mate != null ? ' · 杀棋 ' + Math.abs(r.mate) + ' 步' : '';
-      engineNote(engineName + '：' + side + ' ' + pct.toFixed(1) + '% · 深度 ' +
-        r.depth + ' · ' + (r.ms / 1000).toFixed(1) + 's' + mate + best +
-        ' · GPLv3', false);
-      ANALYSIS.bestArrow = bestMoveArrow(game, r.bestmove, S.state);
-      draw();
-    }).catch(function (err) {
-      engineNote('引擎失败：' + (err && err.message ? err.message : '未知错误'), true);
-    }).then(function () {
-      engineBusy = false;
-      if (btn) { btn.disabled = false; btn.textContent = '引擎'; }
-    });
-  }
-
   function serverCurve() {
     if (!S || !S.state || serverBusy) return;
     var game = S.state.game;
     if (S.state.status === 'over' || isRecordMode()) {
       engineNote('棋谱下完会自动整盘分析一次并存进棋谱，不用再点服务器。', true);
-      return;
-    }
-    if (game !== 'chess' && game !== 'xiangqi') {
-      engineNote('服务器曲线目前支持国象/象棋；围棋请用保存后深度分析。', true);
       return;
     }
     if (!window.B8Server || !B8Server.enabled()) {
@@ -4175,26 +4193,24 @@
 
     var states = analysisStates();
     if (!states || !states.length) return;
-    var fens = states.map(function (st) {
-      return game === 'chess' ? B8Engine.fenChess(st) : B8Engine.fenXiangqi(st);
-    });
+    var snapshot = S.moves.length;
+    var base = stateSig(states[0]);
+    var last = stateSig(states[states.length - 1]);
 
     serverBusy = true;
     var btn = $('bd-server-run');
     if (btn) { btn.disabled = true; btn.textContent = '算曲线…'; }
-    engineNote('服务器正在算 ' + fens.length + ' 个局面（约 ' +
-      Math.max(1, Math.round(fens.length * 0.09)) + '–' +
-      Math.max(2, Math.round(fens.length * 0.2)) + ' 秒）…');
+    engineNote('服务器强引擎正在算 ' + states.length + ' 个局面，请稍等…');
 
-    B8Server.evalBatch(game, fens, 80).then(function (rows) {
-      if (!rows || rows.length !== fens.length) throw new Error('返回数量不对');
-      var serverData = rows.map(function (r) { return r ? r.p1 / 100 : 0.5; });
-      var base = stateSig(states[0]);
-      var last = stateSig(states[states.length - 1]);
-      ANALYSIS.serverData = serverData;
-      ANALYSIS.serverKey = base + '|' + last;
-      renderAnalysis();
-      engineNote('服务器曲线完成：' + fens.length + ' 个局面，已替换折线。', false);
+    requestAnalysis(game, states).then(function (rows) {
+      if (!rows || rows.length !== states.length) throw new Error('返回数量不对');
+      // 算的过程中又落子了：结果只对应旧局面，丢弃，避免把折线接错
+      if (S.moves.length !== snapshot || stateSig(states[0]) !== base ||
+          stateSig(states[states.length - 1]) !== last) {
+        throw new Error('棋局已变化，请再点一次服务器');
+      }
+      applyAnalysisRows(rows, states, game);
+      engineNote('服务器曲线完成：' + states.length + ' 个局面，已替换折线。', false);
     }).catch(function (err) {
       engineNote('服务器失败：' + (err && err.message ? err.message : '未知错误'), true);
     }).then(function () {
@@ -4766,17 +4782,19 @@
     return S.seat === 0;
   }
 
-  // 观战者还在实战、服务器整盘分析还没跑：先用本地曲线算一遍每手标签
+  // 观战者实战：用已经拿到的服务器单点算每手标签；没有前后两个服务器点就不猜
   function localBoardTags() {
     if (!S || !S.moves || !S.moves.length || !ANALYSIS.data) return null;
     var n = S.moves.length;
     if (ANALYSIS.data.length < n + 1) return null;
     var lastMv = S.moves[n - 1];
     var lastSig = lastMv ? ((lastMv.at || 0) + ':' + JSON.stringify(lastMv.move || {})) : '';
-    var key = (S.code || 'local') + '|' + n + '|' + stateSig(S.state) + '|' + ANALYSIS.data.length + '|' + lastSig;
+    var pointSig = Object.keys(ANALYSIS.pointAt || {}).sort().join(',');
+    var key = (S.code || 'local') + '|' + n + '|' + stateSig(S.state) + '|' + ANALYSIS.data.length + '|' + lastSig + '|' + pointSig;
     if (LIVE_TAG_CACHE.key === key && LIVE_TAG_CACHE.tags) return LIVE_TAG_CACHE.tags;
     var tags = {};
     for (var i = 0; i < n; i++) {
+      if (!ANALYSIS.pointAt[i] || !ANALYSIS.pointAt[i + 1]) continue;
       var mv = S.moves[i];
       var before = Number(ANALYSIS.data[i]);
       var after = Number(ANALYSIS.data[i + 1]);
@@ -4797,7 +4815,10 @@
   function boardTagSet() {
     if (!boardTagsVisible()) return null;
     if (ANALYSIS.tags && Object.keys(ANALYSIS.tags).length) return ANALYSIS.tags;
-    if (S.state.status === 'play' && S.seat === 0) return localBoardTags();
+    // 观战者：实战/刚结束都可能只有服务器单点，用前后两个点算当前手标签
+    if (S.seat === 0 && (S.state.status === 'play' || S.state.status === 'over')) {
+      return localBoardTags();
+    }
     return null;
   }
 
@@ -5831,8 +5852,6 @@
     $('bd-exit').addEventListener('click', leaveGame);
     $('bd-practice').addEventListener('click', togglePractice);
     $('bd-analysis').addEventListener('click', toggleAnalysis);
-    var engineRun = $('bd-engine-run');
-    if (engineRun) engineRun.addEventListener('click', runEngine);
     var serverRun = $('bd-server-run');
     if (serverRun) serverRun.addEventListener('click', serverCurve);
     $('bd-practice-reset').addEventListener('click', practiceReset);

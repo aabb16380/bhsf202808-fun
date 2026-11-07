@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；3 位数字邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g99" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g99">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g99">
+<link rel="icon" href="assets/favicon.png?v=20261101g100" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g100">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g100">
 <script>
-window.B8_BUILD = '20261101g99';
+window.B8_BUILD = '20261101g100';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g99"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g99">
+<script src="assets/theme.js?v=20261101g100"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g100">
 </head>
 
 <body data-site="fun">
@@ -304,8 +304,7 @@ window.B8_TEST = !!window.B8_T;
             <div class="bd-analysis-head">
               <b>局面胜率</b>
               <span id="bd-analysis-label">—</span>
-              <button class="bd-mini" id="bd-engine-run" type="button">引擎</button>
-              <button class="bd-mini" id="bd-server-run" type="button" hidden>服务器</button>
+              <button class="bd-mini" id="bd-server-run" type="button" title="用服务器强引擎算整盘曲线">服务器</button>
             </div>
             <div class="bd-an-legend">
               <span class="bd-an-side is-first"><i></i><b id="bd-an-name1">先手</b><em id="bd-an-p1">—</em></span>
@@ -313,7 +312,7 @@ window.B8_TEST = !!window.B8_T;
             </div>
             <canvas id="bd-win-chart" height="170"
                     aria-label="整盘胜率折线图"></canvas>
-            <p class="bd-analysis-note" id="bd-analysis-note">折线：本地战术搜索 + 位置评估（国象/象棋 1 层、国跳 2 层；围棋影响力）。点「引擎」用 Stockfish/Pikafish 分析当前手 · 仅供参考</p>
+            <p class="bd-analysis-note" id="bd-analysis-note">折线：服务器强引擎（Stockfish / Pikafish / KataGo / Rapfi / Scan）。实战当前点逐手服务器评估，点「服务器」可算整盘；下完自动整盘分析一次并存进棋谱。</p>
             <p class="bd-analysis-note bd-tag-legend" id="bd-tag-legend">
               <span class="is-best">★ 正手</span>
               <span class="is-excellent">◎ 优秀</span>
@@ -441,14 +440,13 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g99' + T;
+  var V = '?v=20261101g100' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
     ['assets/sb.js', 1],
     ['assets/auth.js', 1],
     ['assets/games/board-engine.js', 1],
-    ['assets/games/engine.js', 1],
     ['assets/games/server.js', 1],
     ['assets/games/board.js', 1]
   ];
