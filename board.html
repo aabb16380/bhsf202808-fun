@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；3 位数字邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g96" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g96">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g96">
+<link rel="icon" href="assets/favicon.png?v=20261101g97" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g97">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g97">
 <script>
-window.B8_BUILD = '20261101g96';
+window.B8_BUILD = '20261101g97';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g96"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g96">
+<script src="assets/theme.js?v=20261101g97"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g97">
 </head>
 
 <body data-site="fun">
@@ -314,6 +314,15 @@ window.B8_TEST = !!window.B8_T;
             <canvas id="bd-win-chart" height="170"
                     aria-label="整盘胜率折线图"></canvas>
             <p class="bd-analysis-note" id="bd-analysis-note">折线：本地战术搜索 + 位置评估（国象/象棋 1 层、国跳 2 层；围棋影响力）。点「引擎」用 Stockfish/Pikafish 分析当前手 · 仅供参考</p>
+            <p class="bd-analysis-note bd-tag-legend" id="bd-tag-legend">
+              <span class="is-best">★ 正手</span>
+              <span class="is-excellent">◎ 优秀</span>
+              <span class="is-good">● 良好</span>
+              <span class="is-inaccuracy">△ 一般</span>
+              <span class="is-mistake">? 失误</span>
+              <span class="is-blunder">?? 败着</span>
+              <em>棋手对局中不显示，观战/回看可见</em>
+            </p>
             <p class="bd-analysis-note bd-engine-note" id="bd-engine-note" hidden></p>
           </div>
 
@@ -432,7 +441,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g96' + T;
+  var V = '?v=20261101g97' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

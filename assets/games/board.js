@@ -77,6 +77,8 @@
     saved: false, savedAt: 0, claimState: '', autoFor: '', progress: '',
     reloadTimer: 0, saveBusy: false
   };
+  // 棋盘上的每手标签（观战/回看/分析可见；棋手对局中不显示）
+  var LIVE_TAG_CACHE = { key: '', tags: null };
   function resetAnalysisMarks() {
     ANALYSIS.tags = {};
     ANALYSIS.bestMoves = [];
@@ -100,6 +102,8 @@
     ANALYSIS.liveStates = null;
     ANALYSIS.practiceKey = '';
     ANALYSIS.practiceStates = null;
+    LIVE_TAG_CACHE.key = '';
+    LIVE_TAG_CACHE.tags = null;
     if (ANALYSIS.reloadTimer) {
       clearTimeout(ANALYSIS.reloadTimer);
       ANALYSIS.reloadTimer = 0;
@@ -4725,6 +4729,128 @@
     return [ox3 + x3 * c3, oy3 + y3 * c3];
   }
 
+  function boardCellSize(game, st, w, h) {
+    if (game === 'draughts') return Math.min(w, h) / 10;
+    if (game === 'chess') return Math.min(w, h) / 8;
+    if (game === 'xiangqi') {
+      var pad = Math.max(12, w * 0.055);
+      return Math.min((w - pad * 2) / 8, (h - pad * 2) / 9);
+    }
+    var n = (st && st.size) || 15;
+    var pad2 = Math.max(10, w * 0.055);
+    return (w - pad2 * 2) / (n - 1);
+  }
+
+  function tagTone(key) {
+    return {
+      best: '#2f6f5e',
+      excellent: '#3b7f8f',
+      good: '#587d4a',
+      inaccuracy: '#a8791f',
+      mistake: '#b9602a',
+      blunder: '#a83b2c'
+    }[key] || '#6b6257';
+  }
+
+  // 棋手对局中不看；观战、回看、棋谱分析可以看
+  function boardTagsVisible() {
+    if (!S || !S.state || S.practice) return false;
+    if (S.state.status === 'over' || S.reviewing || S.record) return true;
+    if (isOfflineLocal()) return false;
+    return S.seat === 0;
+  }
+
+  // 观战者还在实战、服务器整盘分析还没跑：先用本地曲线算一遍每手标签
+  function localBoardTags() {
+    if (!S || !S.moves || !S.moves.length || !ANALYSIS.data) return null;
+    var n = S.moves.length;
+    if (ANALYSIS.data.length < n + 1) return null;
+    var lastMv = S.moves[n - 1];
+    var lastSig = lastMv ? ((lastMv.at || 0) + ':' + JSON.stringify(lastMv.move || {})) : '';
+    var key = (S.code || 'local') + '|' + n + '|' + stateSig(S.state) + '|' + ANALYSIS.data.length + '|' + lastSig;
+    if (LIVE_TAG_CACHE.key === key && LIVE_TAG_CACHE.tags) return LIVE_TAG_CACHE.tags;
+    var tags = {};
+    for (var i = 0; i < n; i++) {
+      var mv = S.moves[i];
+      var before = Number(ANALYSIS.data[i]);
+      var after = Number(ANALYSIS.data[i + 1]);
+      if (!isFinite(before)) before = 0.5;
+      if (!isFinite(after)) after = 0.5;
+      var eb = mv.color === 1 ? before : 1 - before;
+      var ea = mv.color === 1 ? after : 1 - after;
+      var loss = Math.max(0, eb - ea);
+      var tg = tagFor(loss, false);
+      tg.loss = loss;
+      tags[i + 1] = tg;
+    }
+    LIVE_TAG_CACHE.key = key;
+    LIVE_TAG_CACHE.tags = tags;
+    return tags;
+  }
+
+  function boardTagSet() {
+    if (!boardTagsVisible()) return null;
+    if (ANALYSIS.tags && Object.keys(ANALYSIS.tags).length) return ANALYSIS.tags;
+    if (S.state.status === 'play' && S.seat === 0) return localBoardTags();
+    return null;
+  }
+
+  function pieceColor(st, pc) {
+    if (!pc) return 0;
+    if (st.game === 'go' || st.game === 'gomoku') return pc;
+    return pc < 8 ? 1 : 2;
+  }
+
+  function drawBoardTags(ctx, st, tags, limit, flip, w, h, cv) {
+    if (cv) cv.setAttribute('data-tags', '0');
+    if (!tags || !limit || !S || !S.moves) return;
+    var cell = boardCellSize(st.game, st, w, h);
+    var r = Math.max(4.5, cell * 0.19);
+    var fs = Math.max(7, Math.round(cell * 0.26));
+    var count = 0;
+    for (var i = 0; i < limit; i++) {
+      var tag = tags[i + 1];
+      if (!tag) continue;
+      var mv = S.moves[i];
+      if (!mv || !mv.move) continue;
+      var dest = null;
+      if (st.game === 'draughts') {
+        var p = mv.move.p || [];
+        dest = p.length ? p[p.length - 1] : null;
+      } else {
+        if (mv.move.pass) continue;
+        dest = mv.move.t;
+      }
+      if (dest == null) continue;
+      var pc = st.board[dest];
+      if (!pc) continue;
+      var col = pieceColor(st, pc);
+      if (col !== mv.color) continue; // 这个棋子已经走开/被吃了，不贴
+      var c = arrowCenter(st.game, dest, st, w, h, flip);
+      var cx = c[0] + cell * 0.30;
+      var cy = c[1] - cell * 0.30;
+      var tone = tagTone(tag.key);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = isNight() ? '#1b1a18' : '#fffdf7';
+      ctx.fill();
+      ctx.lineWidth = Math.max(1, r * 0.2);
+      ctx.strokeStyle = tone;
+      ctx.stroke();
+      ctx.fillStyle = tone;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      var icon = tag.icon || (tag.key === 'best' ? '\u2605' : '?');
+      var fsz = icon.length > 1 ? Math.round(fs * 0.76) : fs;
+      ctx.font = '700 ' + fsz + 'px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
+      ctx.fillText(icon, cx, cy + 0.5);
+      ctx.restore();
+      count++;
+    }
+    if (cv) cv.setAttribute('data-tags', String(count));
+  }
+
   function drawBestArrow(ctx, st, opts, w, h) {
     var a = opts.arrow;
     if (!a || !st) return;
@@ -5431,6 +5557,14 @@
       arrow: showArrow ? ANALYSIS.bestArrow : null
     });
     renderer.draw(!!S.anim && !S.reviewing && !practicing);
+    var tags = boardTagSet();
+    var limit = S.moves ? S.moves.length : 0;
+    if (S.reviewing) limit = Math.min(limit, S.reviewIndex);
+    if (tags && limit > 0) {
+      drawBoardTags(renderer.ctx, st, tags, limit, S.flip, renderer.w, renderer.h, renderer.cv);
+    } else if (renderer.cv) {
+      renderer.cv.setAttribute('data-tags', '0');
+    }
   }
 
   /* ============================================================

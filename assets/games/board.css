@@ -826,6 +826,28 @@ html[data-mode="night"] .bd-an-side.is-second i { background: #8fa6c4; }
   line-height: 1.5;
 }
 
+.bd-tag-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 10px;
+  margin-top: 7px;
+  font-size: 9.5px;
+}
+
+.bd-tag-legend span { white-space: nowrap; }
+.bd-tag-legend em {
+  margin-left: auto;
+  font-style: normal;
+  color: var(--ink-3);
+}
+.bd-tag-legend .is-best { color: #147a43; }
+.bd-tag-legend .is-excellent { color: #2166a5; }
+.bd-tag-legend .is-good { color: #5b6470; }
+.bd-tag-legend .is-inaccuracy { color: #9a6b12; }
+.bd-tag-legend .is-mistake { color: #b05a20; }
+.bd-tag-legend .is-blunder { color: #a63232; }
+
 .bd-engine-note {
   color: #b58a2b;
 }
