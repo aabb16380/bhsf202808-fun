@@ -166,8 +166,8 @@
 
   function recResultText(rec) {
     if (!rec) return '';
-    if (rec.reason === 'leave') return '有人离开，对局中断';
-    if (rec.reason === 'closed') return '房间被关，对局中断';
+    if (rec.reason === 'leave') return '有人离开，对局结束';
+    if (rec.reason === 'closed') return '房间已解散';
     var who = recWinnerName(rec);
     if (rec.game === 'quoridor') return who ? '冠军 ' + who : '对局结束';
     return who ? who + ' 获胜' : '对局结束';
@@ -193,6 +193,13 @@
       if (!window.localStorage) return;
       window.localStorage.setItem(REC_KEY, JSON.stringify((list || []).slice(0, REC_MAX)));
     } catch (e) {}
+  }
+
+  function removeLocalRecord(rec) {
+    if (!rec || !rec.localId) return;
+    writeLocalRecords(readLocalRecords().filter(function (r) {
+      return r && r.localId !== rec.localId;
+    }));
   }
 
   function saveLocalRecord(rec) {
@@ -442,6 +449,32 @@
     return out;
   }
 
+  function deleteRecord(rec) {
+    if (!rec) return;
+    var serverId = Number(rec.server_id || (rec.source !== 'local' ? rec.id : 0)) || 0;
+    var localId = rec.localId || 0;
+    if (!serverId && !localId) { B8.toast('这条记录不能删'); return; }
+    var m = meta(rec.game);
+    var label = (m ? m.title : '对局') + ' · ' + recPlayersText(rec) + ' · ' + recResultText(rec);
+    B8.confirm('删除对局记录「' + label + '」？删掉后回放链接会失效。', {
+      title: '删除对局记录', okText: '删除', danger: true
+    }).then(function (ok) {
+      if (!ok) return;
+      var done = function () {
+        if (localId) removeLocalRecord(rec);
+        B8.toast('对局记录已删除');
+        loadRecords(true);
+        renderRecords();
+      };
+      if (serverId) {
+        rpc('b8_arcade_record_delete', { p_token: token(), p_id: serverId })
+          .then(done).catch(function (err) { B8.toast(errText(err)); });
+      } else {
+        done();
+      }
+    });
+  }
+
   function recordRow(rec) {
     var wrap = document.createElement('div');
     wrap.className = 'ag-rec';
@@ -474,6 +507,19 @@
     btn.textContent = '看回放';
     btn.addEventListener('click', function () { openRecord(rec); });
     wrap.appendChild(btn);
+
+    if (B8.auth && B8.auth.isSuper && B8.auth.isSuper()) {
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'ag-room-btn ag-rec-del';
+      del.textContent = '删除';
+      del.title = '超管删除这条对局记录';
+      del.addEventListener('click', function (e) {
+        e.stopPropagation();
+        deleteRecord(rec);
+      });
+      wrap.appendChild(del);
+    }
     return wrap;
   }
 
@@ -1228,7 +1274,7 @@
       S.syncBusy = false;
       if (S.dbMissing) return;
       if (/房间不存在/.test((err && err.message) || '')) {
-        B8.toast('房间已经关了');
+        B8.toast('房间已解散');
         leaveRoom(true);
       }
     });

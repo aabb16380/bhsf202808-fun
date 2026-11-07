@@ -302,7 +302,7 @@
   }
   /* ---------- 上线记录 ---------- */
   function loadVisits() {
-    B8.sb.rpc('b8_super_visits', { p_token: tok(), p_limit: 3000 }).then(function (rows) {
+    B8.sb.rpc('b8_super_visits', { p_token: tok(), p_limit: 5000 }).then(function (rows) {
       visits = rows || [];
       paintVisits();
     }, fail);

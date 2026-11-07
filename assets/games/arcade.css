@@ -229,6 +229,8 @@ a:hover { text-decoration: underline; }
 }
 
 .ag-room-btn.is-live { border-color: var(--seal); background: var(--seal); color: #fff; }
+.ag-room-btn.ag-rec-del { border-color: var(--seal); color: var(--seal); }
+.ag-room-btn.ag-rec-del:hover { background: var(--seal); color: #fff; }
 
 .ag-empty { margin: 4px 0; font-size: 11px; color: var(--ink-3); }
 .ag-link { margin-top: 8px; padding: 0; border: 0; background: none; font-size: 10.5px; color: var(--ink-3); text-decoration: underline; cursor: pointer; }

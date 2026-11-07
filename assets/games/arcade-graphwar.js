@@ -448,11 +448,13 @@
   // 挖空就别留一个看不见的圆；采样够判断了
   function hasSolid(ob) {
     var r = obstacleRadius(ob);
-    for (var i = -4; i <= 4; i++) {
-      for (var j = -4; j <= 4; j++) {
+    // 17×17 采样：洞只占球的一角时，另一侧还剩实心，不能整块删掉
+    var steps = 8;
+    for (var i = -steps; i <= steps; i++) {
+      for (var j = -steps; j <= steps; j++) {
         if (solidAt(ob,
-          Number(ob.x) + (i / 4) * r * 0.94,
-          Number(ob.y) + (j / 4) * r * 0.94)) return true;
+          Number(ob.x) + (i / steps) * r * 0.97,
+          Number(ob.y) + (j / steps) * r * 0.97)) return true;
       }
     }
     return false;
@@ -818,14 +820,15 @@
     for (var k = 0; k < obstacles.length; k++) {
       var o = obstacles[k];
       var ox = o.x - x, oy = o.y - y;
-      if (Math.sqrt(ox * ox + oy * oy) < r + obstacleRadius(o)) return false;
+      // 球和球之间留一点缝：洞才不会互相盖住，炸出来的缺口看得见
+      if (Math.sqrt(ox * ox + oy * oy) < r + obstacleRadius(o) + 0.8) return false;
     }
     return true;
   }
 
-  // v2.154：出生点固定在 -15 / +15；中间必有一道墙，炮弹打上去会炸出一个可以穿过去的圆洞。
-  var SPAWN_X = 15;
-  var HOLE_R = 1.8;
+  // v2.159：出生点随机。2 人固定一左一右；3 人以上随机撒开，只要求互相隔开。
+  // 障碍一共 5 个球，球和球之间留缝，炸出来的洞才看得见；人不会生成在球里。
+  var HOLE_R = 1.4;
 
   function newState(n, mode, seed) {
     n = normalizeN(n);
@@ -833,54 +836,58 @@
     if (seed && typeof seed === 'object' && seed.seed != null) seed = seed.seed;
     var rnd = makeRng(seed);
     var soldiers = [];
-    var left = [], right = [];
-    for (var s = 1; s <= n; s++) {
-      if (s % 2 === 1) left.push(s);
-      else right.push(s);
-    }
-    var i;
-    for (i = 0; i < left.length; i++) {
+    var i, tries;
+
+    if (n === 2) {
+      // 两个人：左边一个、右边一个，位置随机但远离边界。
       soldiers.push({
-        seat: left[i],
-        x: -SPAWN_X,
-        y: sideY(left.length, i),
-        hp: HP_MAX,
-        alive: true,
-        dir: 1
+        seat: 1, x: roundNum(-19 + rnd() * 6, 3), y: roundNum(-9 + rnd() * 18, 3),
+        hp: HP_MAX, alive: true, dir: 1
       });
-    }
-    for (i = 0; i < right.length; i++) {
       soldiers.push({
-        seat: right[i],
-        x: SPAWN_X,
-        y: sideY(right.length, i),
-        hp: HP_MAX,
-        alive: true,
-        dir: -1
+        seat: 2, x: roundNum(13 + rnd() * 6, 3), y: roundNum(-9 + rnd() * 18, 3),
+        hp: HP_MAX, alive: true, dir: -1
       });
+    } else {
+      // 3 人以上：随机位置，互相至少隔 7.2；实在放不下就退回一圈。
+      for (i = 1; i <= n; i++) {
+        var spot = null;
+        for (tries = 0; tries < 600 && !spot; tries++) {
+          var sx = -20 + rnd() * 40;
+          var sy = -11 + rnd() * 22;
+          var free = true;
+          for (var q = 0; q < soldiers.length; q++) {
+            var qx = soldiers[q].x - sx, qy = soldiers[q].y - sy;
+            if (Math.sqrt(qx * qx + qy * qy) < 7.2) { free = false; break; }
+          }
+          if (free) spot = { x: sx, y: sy };
+        }
+        if (!spot) {
+          var ang = (i / n) * Math.PI * 2;
+          spot = { x: Math.cos(ang) * 17, y: Math.sin(ang) * 10 };
+        }
+        soldiers.push({
+          seat: i, x: roundNum(spot.x, 3), y: roundNum(spot.y, 3),
+          hp: HP_MAX, alive: true, dir: spot.x <= 0 ? 1 : -1
+        });
+      }
     }
     soldiers.sort(function (a, b) { return a.seat - b.seat; });
 
-    // 中间一道竖墙：上下叠 7 个圆，互相压住，任何左右直线都会撞上。
+    // 2 人时先放一个正中间的球，保证两人连线一定被挡住。
     var obstacles = [];
-    var wallYs = [-9.6, -6.4, -3.2, 0, 3.2, 6.4, 9.6];
-    for (var wi = 0; wi < wallYs.length; wi++) {
-      obstacles.push({
-        x: roundNum((rnd() - 0.5) * 1.0, 3),
-        y: roundNum(wallYs[wi] + (rnd() - 0.5) * 0.6, 3),
-        r: roundNum(2.3 + rnd() * 0.25, 3),
-        holes: []
-      });
+    if (n === 2) {
+      var my = clamp((soldiers[0].y + soldiers[1].y) / 2, -8, 8);
+      obstacles.push({ x: 0, y: roundNum(my, 3), r: 2.6, holes: [] });
     }
 
-    // 墙外再撒 2-3 个小障碍，给弹道多一点花样（不压墙、不压人）
-    var want = 2 + Math.floor(rnd() * 2);
-    var tries = 0;
-    while (obstacles.length < wallYs.length + want && tries < 1200) {
+    // 补到 5 个球；互不重叠，也避开所有士兵。
+    tries = 0;
+    while (obstacles.length < 5 && tries < 3000) {
       tries++;
-      var br = 1.0 + rnd() * 0.9;
-      var bx = -9 + rnd() * 18;
-      var by = WORLD.y0 + br + 0.5 + rnd() * (WORLD.y1 - WORLD.y0 - 2 * br - 1);
+      var br = 2.0 + rnd() * 0.8;
+      var bx = -14 + rnd() * 28;
+      var by = -12 + rnd() * 24;
       if (!placementOk(bx, by, br, soldiers, obstacles)) continue;
       obstacles.push({ x: roundNum(bx, 3), y: roundNum(by, 3), r: roundNum(br, 3), holes: [] });
     }
@@ -1556,7 +1563,7 @@
       '  <div class="gw-overlay" data-ref="wait" hidden>',
       '    <div class="gw-wait-seal">ƒ</div>',
       '    <b data-ref="waitTitle">等房主开局</b>',
-      '    <p data-ref="waitSub">房主按下开始后，会自动生成战场、士兵和中间一道墙。</p>',
+      '    <p data-ref="waitSub">房主按下开始后，会自动生成战场、随机出生点和四五个可以炸穿的障碍球。</p>',
       '  </div>',
       '  <div class="gw-result" data-ref="result" hidden>',
       '    <div class="gw-result-card">',
@@ -2001,8 +2008,11 @@
   function updateStatus(st) {
     if (!view.dom.status) return;
     if (isReplay()) {
-      view.dom.status.textContent = replayText() + ' · 只读';
-      ctxStatus(replayText());
+      var rst = displayedState();
+      var extra = rst ? shotOutcomeText(rst) : '';
+      var rtxt = replayText() + (extra ? ' · ' + extra : '');
+      view.dom.status.textContent = rtxt + ' · 只读';
+      ctxStatus(rtxt);
       return;
     }
     var text = '';
@@ -2139,7 +2149,7 @@
         wait.hidden = false;
         view.dom.waitTitle.textContent = isWaiting() ? '等房主开局' : (gameOver(null) ? '本局已结束' : '正在同步开局');
         view.dom.waitSub.textContent = isWaiting()
-          ? '房主按下开始后，会自动生成战场、士兵和中间一道可以炸穿的墙。'
+          ? '房主按下开始后，会自动生成战场、随机出生点和四五个可以炸穿的障碍球。'
           : (gameOver(null) ? '这一局已经结束啦。' : (mySeat() === 0
             ? '观战中，房主开局后就能看到战场。'
             : '房主正在发牌，马上就好。'));
@@ -2498,6 +2508,51 @@
     g.strokeStyle = p.obstacleRim;
     g.lineWidth = 1.4;
     g.stroke();
+    // 洞不是盖一块背景色：边缘加一圈亮口 + 内侧暗影 + 四道裂纹，
+    // 这样球被炸掉一块之后，外轮廓会真的缺一角，里面也像个坑。
+    for (var h = 0; h < holes.length; h++) {
+      var hole = holes[h];
+      var hr = Math.max(1, Number(hole.r) * scale);
+      if (!isFinite(hr) || hr <= 0) continue;
+      var hx = toSX(hole.x), hy = toSY(hole.y);
+      // 洞口内侧压一圈淡淡的暗影，看起来像坑，而不是贴了一张白纸
+      var grad = g.createRadialGradient(hx, hy, hr * 0.35, hx, hy, hr);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(0.72, 'rgba(0,0,0,.06)');
+      grad.addColorStop(1, 'rgba(0,0,0,.34)');
+      g.fillStyle = grad;
+      g.beginPath();
+      g.arc(hx, hy, hr, 0, Math.PI * 2);
+      g.fill();
+      g.beginPath();
+      g.arc(hx, hy, hr, 0, Math.PI * 2);
+      g.strokeStyle = p.gold;
+      g.lineWidth = 1.6;
+      g.globalAlpha = 0.75;
+      g.stroke();
+      g.beginPath();
+      g.arc(hx, hy, Math.max(1, hr - 1.2), 0, Math.PI * 2);
+      g.strokeStyle = 'rgba(0,0,0,.38)';
+      g.lineWidth = 1;
+      g.globalAlpha = 1;
+      g.stroke();
+      // 四道短裂纹，从洞口往外裂
+      g.beginPath();
+      for (var c = 0; c < 4; c++) {
+        var ang = Math.PI * 0.25 + c * Math.PI * 0.5;
+        var x1 = hx + Math.cos(ang) * hr;
+        var y1 = hy + Math.sin(ang) * hr;
+        var x2 = hx + Math.cos(ang) * (hr + Math.max(3, 0.5 * scale));
+        var y2 = hy + Math.sin(ang) * (hr + Math.max(3, 0.5 * scale));
+        g.moveTo(x1, y1);
+        g.lineTo(x2, y2);
+      }
+      g.strokeStyle = p.gold;
+      g.globalAlpha = 0.45;
+      g.lineWidth = 1;
+      g.stroke();
+      g.globalAlpha = 1;
+    }
     g.restore();
   }
 
@@ -2663,6 +2718,107 @@
     g.restore();
   }
 
+  function lastShotRec(st) {
+    var list = st && Array.isArray(st.shots) ? st.shots : [];
+    return list.length ? list[list.length - 1] : null;
+  }
+
+  // 回放时明确告诉用户这一炮打没打中（实况有动画，回放只有静态画面）
+  function shotOutcomeText(st) {
+    var rec = lastShotRec(st);
+    if (!rec) return '';
+    var hits = Array.isArray(rec.hits) ? rec.hits : [];
+    if (hits.length) {
+      return '命中 ' + hits.map(function (h) { return '座位 ' + h.seat; }).join('、');
+    }
+    if (rec.hitObstacle) return '击中障碍 · 炸出洞';
+    return '未命中';
+  }
+
+  function drawReplayShot(g, st, p) {
+    var rec = lastShotRec(st);
+    if (!rec) return;
+    var pts = Array.isArray(rec.points) ? rec.points : [];
+    if (pts.length < 2) return;
+
+    var color = colorOf(st, Number(rec.seat) || 1, p);
+    var i, x, y;
+    g.save();
+    g.globalAlpha = 0.9;
+    g.strokeStyle = color;
+    g.lineWidth = 2;
+    g.lineJoin = 'round';
+    g.lineCap = 'round';
+    g.beginPath();
+    for (i = 0; i < pts.length; i++) {
+      x = toSX(pts[i][0]);
+      y = toSY(pts[i][1]);
+      if (i === 0) g.moveTo(x, y);
+      else g.lineTo(x, y);
+    }
+    g.stroke();
+
+    // 起点
+    x = toSX(pts[0][0]);
+    y = toSY(pts[0][1]);
+    g.fillStyle = color;
+    g.beginPath();
+    g.arc(x, y, 2.6, 0, Math.PI * 2);
+    g.fill();
+
+    // 落点 / 命中标记
+    var ex = toSX(pts[pts.length - 1][0]);
+    var ey = toSY(pts[pts.length - 1][1]);
+    g.globalAlpha = 1;
+    g.strokeStyle = p.gold;
+    g.lineWidth = 1.8;
+    g.beginPath();
+    g.moveTo(ex - 5, ey - 5); g.lineTo(ex + 5, ey + 5);
+    g.moveTo(ex + 5, ey - 5); g.lineTo(ex - 5, ey + 5);
+    g.stroke();
+
+    var hits = Array.isArray(rec.hits) ? rec.hits : [];
+    for (i = 0; i < hits.length; i++) {
+      var target = soldierOf(st, Number(hits[i].seat));
+      if (!target) continue;
+      x = toSX(target.x);
+      y = toSY(target.y);
+      g.strokeStyle = p.seal;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(x, y, Math.max(10, 1.05 * viewScale()), 0, Math.PI * 2);
+      g.stroke();
+      g.fillStyle = p.seal;
+      g.font = '700 11px ' + p.mono;
+      g.fillText('-' + DAMAGE, x - 8, y - Math.max(14, 1.3 * viewScale()));
+    }
+    if (rec.hitObstacle && rec.blockedAt) {
+      x = toSX(rec.blockedAt[0]);
+      y = toSY(rec.blockedAt[1]);
+      g.strokeStyle = p.gold;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(x, y, Math.max(8, HOLE_R * viewScale()), 0, Math.PI * 2);
+      g.stroke();
+    }
+
+    // 左上角：函数式 + 结果
+    var formula = (rec.mode === 'y2' ? "y'' = " : 'y = ') + String(rec.fnText || '');
+    if (formula.length > 44) formula = formula.slice(0, 44) + '…';
+    var outcome = shotOutcomeText(st);
+    g.font = '700 12px ' + p.mono;
+    var tw = Math.max(g.measureText(formula).width, g.measureText(outcome).width) + 14;
+    g.fillStyle = p.card;
+    g.globalAlpha = 0.92;
+    g.fillRect(10, 42, tw, 38);
+    g.globalAlpha = 1;
+    g.fillStyle = p.ink;
+    g.fillText(formula, 17, 56);
+    g.fillStyle = hits.length || rec.hitObstacle ? p.seal : p.ink3;
+    g.fillText(outcome, 17, 73);
+    g.restore();
+  }
+
   function drawScene(st, anim) {
     if (!view.mounted || !view.dom.canvas) return;
     var g = view.dom.canvas.getContext && view.dom.canvas.getContext('2d');
@@ -2687,6 +2843,7 @@
         return da - db || a.seat - b.seat;
       });
       for (i = 0; i < soldiers.length; i++) drawSoldier(g, st, soldiers[i], p, anim);
+      if (isReplay() && !anim) drawReplayShot(g, st, p);
     }
     if (anim) {
       drawAnimPath(g, anim, p);
@@ -3120,8 +3277,11 @@
     };
   }
 
-  function onChange() {
+  function onChange(next) {
     if (!view.mounted) return;
+    // 外壳每次 notify 都会传一份新的 ctx；以前这里忽略了参数，
+    // view.ctx.state 一直指着发射前的旧局面，于是第一炮之后永远「同步中」。
+    if (next) view.ctx = next;
     if (isWaiting()) view.initSent = false;
     var st = gameState();
     if (st) {
@@ -3363,7 +3523,12 @@
       shotFromAction: shotFromAction,
       applyAction: applyAction,
       nextTurn: nextTurn,
-      teams: teams
+      teams: teams,
+      ctxTurn: function () {
+        return view.ctx && view.ctx.state ? Number(view.ctx.state.turn) || 0 : 0;
+      },
+      submitted: function () { return !!view.submitted; },
+      animating: function () { return !!view.anim; }
     }
   };
   A.games.graphwar = game;
