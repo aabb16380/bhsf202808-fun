@@ -420,22 +420,97 @@
     return isNum(r) && r > 0 ? r : 1.5;
   }
 
-  function segmentCircleT(x1, y1, x2, y2, ob) {
+  function insideHole(ob, px, py) {
+    var holes = (ob && Array.isArray(ob.holes)) ? ob.holes : null;
+    if (!holes || !holes.length) return false;
+    for (var i = 0; i < holes.length; i++) {
+      var h = holes[i];
+      var hr = Number(h && h.r);
+      if (!isFinite(hr) || hr <= 0) continue;
+      var dx = Number(px) - Number(h.x);
+      var dy = Number(py) - Number(h.y);
+      if (isFinite(dx) && isFinite(dy) && dx * dx + dy * dy < hr * hr) return true;
+    }
+    return false;
+  }
+
+  // 这个点是不是还实心：在圆里、且不在任何被炸出来的洞里
+  function solidAt(ob, px, py) {
+    if (!ob || !obstacleAlive(ob)) return false;
+    var dx = Number(px) - Number(ob.x);
+    var dy = Number(py) - Number(ob.y);
+    if (!isFinite(dx) || !isFinite(dy)) return false;
+    var r = obstacleRadius(ob);
+    if (dx * dx + dy * dy > r * r) return false;
+    return !insideHole(ob, px, py);
+  }
+
+  // 挖空就别留一个看不见的圆；采样够判断了
+  function hasSolid(ob) {
+    var r = obstacleRadius(ob);
+    for (var i = -4; i <= 4; i++) {
+      for (var j = -4; j <= 4; j++) {
+        if (solidAt(ob,
+          Number(ob.x) + (i / 4) * r * 0.94,
+          Number(ob.y) + (j / 4) * r * 0.94)) return true;
+      }
+    }
+    return false;
+  }
+
+  // 炮弹打中障碍：在落点炸出一个固定半径的圆洞，洞是可以穿过去的（没有碰撞箱）
+  function addHole(ob, x, y, r) {
+    if (!ob) return;
+    if (!Array.isArray(ob.holes)) ob.holes = [];
+    ob.holes.push({
+      x: roundNum(Number(x) || 0, 3),
+      y: roundNum(Number(y) || 0, 3),
+      r: roundNum(r > 0 ? r : HOLE_R, 3)
+    });
+    if (ob.holes.length > 24) ob.holes = ob.holes.slice(ob.holes.length - 24);
+    delete ob.hp;
+  }
+
+  function closeToObstacle(ob, px, py) {
+    var dx = Number(px) - Number(ob.x);
+    var dy = Number(py) - Number(ob.y);
+    var r = obstacleRadius(ob);
+    return isFinite(dx) && isFinite(dy) && dx * dx + dy * dy <= (r + 0.15) * (r + 0.15);
+  }
+
+  function segmentCircleRange(x1, y1, x2, y2, ob) {
     var cx = Number(ob.x), cy = Number(ob.y), r = obstacleRadius(ob);
     var dx = x2 - x1, dy = y2 - y1;
     var fx = x1 - cx, fy = y1 - cy;
     var a = dx * dx + dy * dy;
     var b = 2 * (fx * dx + fy * dy);
     var c = fx * fx + fy * fy - r * r;
-    if (a < 1e-14) return c <= 0 ? 0 : null;
+    if (a < 1e-14) return c <= 0 ? { t1: 0, t2: 0 } : null;
     var disc = b * b - 4 * a * c;
     if (disc < 0) return null;
     var sd = Math.sqrt(disc);
     var t1 = (-b - sd) / (2 * a);
     var t2 = (-b + sd) / (2 * a);
-    if (t1 >= 0 && t1 <= 1) return t1;
-    if (t2 >= 0 && t2 <= 1) return t2;
-    if (c <= 0) return 0;
+    // 浮点误差：弹道最后一段常常正好停在圆边上，t 会算出 1.0000000009
+    var eps = 1e-7;
+    if (t2 < -eps || t1 > 1 + eps) return null;
+    return { t1: Math.max(0, t1), t2: Math.min(1, t2) };
+  }
+
+  function segmentCircleT(x1, y1, x2, y2, ob) {
+    // 没洞：还是原来的解析解，快
+    if (!Array.isArray(ob.holes) || !ob.holes.length) {
+      var range = segmentCircleRange(x1, y1, x2, y2, ob);
+      return range ? range.t1 : null;
+    }
+    // 有洞：只在这一段和圆的交叠区间里采样，找第一个实心点
+    var rr = segmentCircleRange(x1, y1, x2, y2, ob);
+    if (!rr) return null;
+    var steps = 10;
+    for (var s = 0; s <= steps; s++) {
+      var t = rr.t1 + (rr.t2 - rr.t1) * (s / steps);
+      if (solidAt(ob, x1 + (x2 - x1) * t, y1 + (y2 - y1) * t)) return t;
+    }
     return null;
   }
 
@@ -458,7 +533,7 @@
 
   function firstObstacleAtPoint(p, obstacles) {
     for (var i = 0; i < obstacles.length; i++) {
-      if (obstacleAlive(obstacles[i]) && distToObstacle(p[0], p[1], obstacles[i]) <= obstacleRadius(obstacles[i])) {
+      if (solidAt(obstacles[i], p[0], p[1])) {
         return { index: i, t: 0, point: [p[0], p[1]] };
       }
     }
@@ -745,6 +820,10 @@
     return true;
   }
 
+  // v2.154：出生点固定在 -15 / +15；中间必有一道墙，炮弹打上去会炸出一个可以穿过去的圆洞。
+  var SPAWN_X = 15;
+  var HOLE_R = 1.8;
+
   function newState(n, mode, seed) {
     n = normalizeN(n);
     mode = mode === 'team' ? 'team' : 'ffa';
@@ -760,7 +839,7 @@
     for (i = 0; i < left.length; i++) {
       soldiers.push({
         seat: left[i],
-        x: -18,
+        x: -SPAWN_X,
         y: sideY(left.length, i),
         hp: HP_MAX,
         alive: true,
@@ -770,7 +849,7 @@
     for (i = 0; i < right.length; i++) {
       soldiers.push({
         seat: right[i],
-        x: 18,
+        x: SPAWN_X,
         y: sideY(right.length, i),
         hp: HP_MAX,
         alive: true,
@@ -779,27 +858,28 @@
     }
     soldiers.sort(function (a, b) { return a.seat - b.seat; });
 
-    var want = 3 + Math.floor(rnd() * 4);
+    // 中间一道竖墙：上下叠 7 个圆，互相压住，任何左右直线都会撞上。
     var obstacles = [];
-    var tries = 0;
-    while (obstacles.length < want && tries < 1400) {
-      tries++;
-      var r = 1.2 + rnd() * 1.8;
-      var x = WORLD.x0 + r + 0.4 + rnd() * (WORLD.x1 - WORLD.x0 - 2 * r - 0.8);
-      var y = WORLD.y0 + r + 0.4 + rnd() * (WORLD.y1 - WORLD.y0 - 2 * r - 0.8);
-      if (placementOk(x, y, r, soldiers, obstacles)) {
-        obstacles.push({ x: roundNum(x, 3), y: roundNum(y, 3), r: roundNum(r, 3), hp: 3 });
-      }
+    var wallYs = [-9.6, -6.4, -3.2, 0, 3.2, 6.4, 9.6];
+    for (var wi = 0; wi < wallYs.length; wi++) {
+      obstacles.push({
+        x: roundNum((rnd() - 0.5) * 1.0, 3),
+        y: roundNum(wallYs[wi] + (rnd() - 0.5) * 0.6, 3),
+        r: roundNum(2.3 + rnd() * 0.25, 3),
+        holes: []
+      });
     }
-    if (obstacles.length < want) {
-      var gx, gy;
-      for (gy = -12; gy <= 12 && obstacles.length < want; gy += 3) {
-        for (gx = -21; gx <= 21 && obstacles.length < want; gx += 3) {
-          if (placementOk(gx, gy, 1.35, soldiers, obstacles)) {
-            obstacles.push({ x: gx, y: gy, r: 1.35, hp: 3 });
-          }
-        }
-      }
+
+    // 墙外再撒 2-3 个小障碍，给弹道多一点花样（不压墙、不压人）
+    var want = 2 + Math.floor(rnd() * 2);
+    var tries = 0;
+    while (obstacles.length < wallYs.length + want && tries < 1200) {
+      tries++;
+      var br = 1.0 + rnd() * 0.9;
+      var bx = -9 + rnd() * 18;
+      var by = WORLD.y0 + br + 0.5 + rnd() * (WORLD.y1 - WORLD.y0 - 2 * br - 1);
+      if (!placementOk(bx, by, br, soldiers, obstacles)) continue;
+      obstacles.push({ x: roundNum(bx, 3), y: roundNum(by, 3), r: roundNum(br, 3), holes: [] });
     }
 
     var st = {
@@ -928,13 +1008,15 @@
     }
 
     var obsBefore = st.obstacles || [];
-    var destroyed = [];
+    var carved = [];
     var raw = Array.isArray(shot.destroyed) && shot.destroyed.length ? shot.destroyed :
       (shot.hitObstacle && Number(shot.obstacleIndex) >= 0 ? [Number(shot.obstacleIndex)] : null);
     if (!raw || !raw.length) {
       var found = firstObstacleOnPath(points, obsBefore);
       raw = found ? [found.index] : [];
     }
+    var contact = Array.isArray(shot.blockedAt) ? shot.blockedAt :
+      (points.length ? points[points.length - 1] : null);
     var used = {};
     for (var q = 0; q < raw.length; q++) {
       var idx = Number(raw[q]);
@@ -942,15 +1024,18 @@
       used[idx] = true;
       var ob = obsBefore[idx];
       if (!obstacleAlive(ob)) continue;
-      if (!isNum(Number(ob.hp))) ob.hp = 3;
-      ob.hp = Number(ob.hp) - 1;
-      destroyed.push(idx);
-      st.log.push(seatLabel(seat) + ' 轰击障碍 -1' + (ob.hp <= 0 ? '，障碍碎了' : '（余 ' + ob.hp + '）'));
-      if (ob.hp <= 0) ob.hp = 0;
+      // 落点不在这个障碍上（索引过期/客户端乱报）就退到它的圆心
+      var hx = contact && isFinite(Number(contact[0])) ? Number(contact[0]) : Number(ob.x);
+      var hy = contact && isFinite(Number(contact[1])) ? Number(contact[1]) : Number(ob.y);
+      if (!closeToObstacle(ob, hx, hy)) { hx = Number(ob.x); hy = Number(ob.y); }
+      addHole(ob, hx, hy, HOLE_R);
+      carved.push(idx);
+      st.log.push(seatLabel(seat) + ' 在障碍上炸出一个洞');
     }
-    if (destroyed.length) {
+    if (carved.length) {
+      // 整块被挖空的障碍删掉；还剩一圈的留着
       st.obstacles = obsBefore.filter(function (o) {
-        return !(isNum(Number(o.hp)) && Number(o.hp) <= 0);
+        return obstacleAlive(o) && hasSolid(o);
       });
     }
 
@@ -963,7 +1048,7 @@
       damaged.push(hits[m].seat);
       st.log.push(seatLabel(seat) + ' 命中 ' + seatLabel(target.seat) + ' -' + DAMAGE);
     }
-    if (!damaged.length && !destroyed.length) {
+    if (!damaged.length && !carved.length) {
       st.log.push(seatLabel(seat) + ' 的炮弹落空了');
     }
 
@@ -975,12 +1060,13 @@
       dir: shooter.dir,
       points: compressPoints(points, 180),
       hits: hits.map(function (x) { return { seat: x.seat, dmg: DAMAGE }; }),
-      destroyed: destroyed.slice()
+      destroyed: carved.slice()
     };
-    if (destroyed.length) {
+    if (carved.length) {
       rec.hitObstacle = true;
-      rec.obstacleIndex = destroyed[0];
-      rec.blockedAt = Array.isArray(shot.blockedAt) ? shot.blockedAt : null;
+      rec.obstacleIndex = carved[0];
+      rec.blockedAt = contact && isFinite(Number(contact[0]))
+        ? [Number(contact[0]), Number(contact[1])] : null;
     }
     st.shots = Array.isArray(st.shots) ? st.shots : [];
     // 累计炮数：shots 只留最近 10 发，回看/观战靠它判断「是不是又来了一炮」
@@ -1467,7 +1553,7 @@
       '  <div class="gw-overlay" data-ref="wait" hidden>',
       '    <div class="gw-wait-seal">ƒ</div>',
       '    <b data-ref="waitTitle">等房主开局</b>',
-      '    <p data-ref="waitSub">房主按下开始后，会自动生成战场与障碍。</p>',
+      '    <p data-ref="waitSub">房主按下开始后，会自动生成战场、士兵和中间一道墙。</p>',
       '  </div>',
       '  <div class="gw-result" data-ref="result" hidden>',
       '    <div class="gw-result-card">',
@@ -2050,7 +2136,7 @@
         wait.hidden = false;
         view.dom.waitTitle.textContent = isWaiting() ? '等房主开局' : (gameOver(null) ? '本局已结束' : '正在同步开局');
         view.dom.waitSub.textContent = isWaiting()
-          ? '房主按下开始后，会自动生成战场、士兵和 3-6 个障碍。'
+          ? '房主按下开始后，会自动生成战场、士兵和中间一道可以炸穿的墙。'
           : (gameOver(null) ? '这一局已经结束啦。' : (mySeat() === 0
             ? '观战中，房主开局后就能看到战场。'
             : '房主正在发牌，马上就好。'));
@@ -2384,27 +2470,31 @@
 
   function drawObstacle(g, ob, p) {
     if (!obstacleAlive(ob)) return;
+    var scale = viewScale();
     var x = toSX(ob.x), y = toSY(ob.y);
-    var r = Math.max(2, obstacleRadius(ob) * viewScale());
+    var r = Math.max(2, obstacleRadius(ob) * scale);
+    var holes = Array.isArray(ob.holes) ? ob.holes : [];
     g.save();
-    g.fillStyle = p.obstacle;
-    g.strokeStyle = p.obstacleRim;
-    g.lineWidth = 1.4;
+    // 只允许画在障碍圆内，再把洞用 evenodd 规则挖掉：
+    // 洞是真的透过去（能看到后面的网格），不是盖一块背景色。
     g.beginPath();
     g.arc(x, y, r, 0, Math.PI * 2);
-    g.fill();
-    g.stroke();
-    var hp = isFinite(Number(ob.hp)) ? Number(ob.hp) : 3;
-    g.fillStyle = p.gold;
-    for (var i = 0; i < 3; i++) {
-      var a = -Math.PI / 2 + (i - 1) * 0.27;
-      var px = x + Math.cos(a) * Math.max(3, r * 0.55);
-      var py = y + Math.sin(a) * Math.max(3, r * 0.55);
-      g.globalAlpha = i < hp ? 0.9 : 0.18;
-      g.beginPath();
-      g.arc(px, py, Math.max(1.2, r * 0.055), 0, Math.PI * 2);
-      g.fill();
+    g.clip();
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    for (var i = 0; i < holes.length; i++) {
+      var h = holes[i];
+      var hr = Math.max(1, Number(h.r) * scale);
+      if (!isFinite(hr) || hr <= 0) continue;
+      var hx = toSX(h.x), hy = toSY(h.y);
+      g.moveTo(hx + hr, hy);
+      g.arc(hx, hy, hr, 0, Math.PI * 2, true);
     }
+    g.fillStyle = p.obstacle;
+    g.fill('evenodd');
+    g.strokeStyle = p.obstacleRim;
+    g.lineWidth = 1.4;
+    g.stroke();
     g.restore();
   }
 
@@ -2937,7 +3027,7 @@
       var count = 24 + Math.floor(Math.random() * 7);
       makeBurst(a, at[0], at[1], count, true);
       a.floats.push({
-        x: at[0], y: at[1] + 1.2, text: '障碍 -1',
+        x: at[0], y: at[1] + 1.2, text: '炸出一个洞',
         life: 0.9, max: 0.9, color: 'gold'
       });
       a.flashes.push({ x: at[0], y: at[1], life: 0.42, max: 0.42, seal: false });
@@ -3261,6 +3351,10 @@
       evalAt: evalAt,
       trajectory: trajectory,
       distToObstacle: distToObstacle,
+      solidAt: solidAt,
+      hasSolid: hasSolid,
+      addHole: addHole,
+      firstObstacleOnPath: firstObstacleOnPath,
       newState: newState,
       applyShot: applyShot,
       shotFromAction: shotFromAction,

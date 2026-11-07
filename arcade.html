@@ -7,19 +7,19 @@
 <meta name="description" content="八班多人游戏：GraphWar 函数大战（2-8 人，输入函数打炮）、Quoridor 步步为营（2-4 人放墙堵路）。房间号加入、组队或混战、聊天；每一局自动保存，可逐步回看。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g117" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g117">
-<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g117">
+<link rel="icon" href="assets/favicon.png?v=20261101g118" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g118">
+<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g118">
 <script>
-window.B8_BUILD = '20261101g117';
+window.B8_BUILD = '20261101g118';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g117"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g117">
+<script src="assets/theme.js?v=20261101g118"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g118">
 </head>
 
 <body data-site="fun">
@@ -204,8 +204,9 @@ window.B8_TEST = !!window.B8_T;
       <div class="ag-over-actions">
         <button class="ag-btn primary" id="ag-start-now" type="button">开始游戏</button>
         <button class="ag-btn" id="ag-copy-code" type="button">复制房号</button>
+        <button class="ag-btn" id="ag-wait-close" type="button" hidden>解散房间</button>
       </div>
-      <button class="ag-link" id="ag-wait-leave" type="button">先离开</button>
+      <button class="ag-link" id="ag-wait-leave" type="button">先离开（房间保留，回来还能坐原位）</button>
     </div>
 
     <div class="ag-overlay" id="ag-over" hidden>
@@ -232,7 +233,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g117' + T;
+  var V = '?v=20261101g118' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

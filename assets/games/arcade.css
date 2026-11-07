@@ -306,6 +306,7 @@ a:hover { text-decoration: underline; }
 .ag-player.is-team-a i { background: rgba(193, 82, 47, .16); border-color: var(--seal); }
 .ag-player.is-team-b i { background: rgba(47, 111, 94, .16); border-color: var(--jade); }
 .ag-player.is-dead { opacity: .45; text-decoration: line-through; }
+.ag-player.is-away { opacity: .55; border-style: dashed; }
 
 .ag-stage {
   position: relative;

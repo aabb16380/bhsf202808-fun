@@ -331,11 +331,18 @@
   function roomLine(r) {
     var m = meta(r.game);
     var seats = r.seats || [];
-    var names = seats.map(function (x) { return x.name || x.no; }).join(' vs ');
+    var away = 0;
+    var names = seats.map(function (x) {
+      if (x.left) away++;
+      return (x.name || x.no) + (x.left ? '（离开）' : '');
+    }).join(' vs ');
     return {
-      title: m.title + (r.is_private ? ' · 私密' : '') + (r.status === 'wait' ? ' · 等人' : ' · 对局中'),
+      title: m.title + (r.is_private ? ' · 私密' : '') +
+        (r.status === 'wait' ? ' · 等人' : (r.status === 'play' ? ' · 对局中' : ' · 已结束')),
       sub: (r.name ? esc(r.name) + ' · ' : '') + '房号 ' + esc(r.code) + ' · ' +
-        seats.length + '/' + r.max_seats + ' 人' + (names ? ' · ' + esc(names) : '')
+        seats.length + '/' + r.max_seats + ' 人' +
+        (away ? '（' + away + ' 人离开）' : '') +
+        (names ? ' · ' + esc(names) : '')
     };
   }
 
@@ -1098,8 +1105,9 @@
 
   function leaveRoom(silent) {
     var room = S.room;
-    // 对局中不调 leave：留座位，别人不用陪着重开；等人阶段才真的退座
-    if (room && !S.local && room.status !== 'play' && logged() && S.seat > 0) {
+    // 离开只标「离开」，房间和座位都保留（跟棋类一样，回来还能坐原位）。
+    // 真的不要房间了走「关房」。
+    if (room && !S.local && logged() && S.seat > 0) {
       rpc('b8_arcade_leave', { p_token: token(), p_code: room.code }).catch(function () {});
     }
     if (!silent) wsSend({ type: 'changed' });
@@ -1122,6 +1130,22 @@
     loadRecords(true);
   }
 
+  // 真正解散房间：房主/超管用。跟「离开」不一样 —— 离开只标 left，房间保留。
+  function closeRoomNow() {
+    if (!S.room) return;
+    B8.confirm('解散这个房间？里面的人都会被请出去，房间号立刻失效。', {
+      title: '解散房间', okText: '解散', danger: true
+    }).then(function (ok) {
+      if (!ok) return;
+      rpc('b8_arcade_close', { p_token: token(), p_code: S.room.code })
+        .then(function () {
+          wsSend({ type: 'changed' });   // 屋里的人立刻收到「房间没了」，不用等轮询
+          leaveRoom(true);
+        })
+        .catch(function (err) { B8.toast(errText(err)); });
+    });
+  }
+
   /* ============================================================
      三、同步 / WebSocket
      ============================================================ */
@@ -1135,7 +1159,8 @@
     if (prev.status === 'over' && room.status === 'play') S.round = (S.round || 0) + 1;
     var same = !!prev.code && prev.code === room.code &&
       prev.seq === room.seq && prev.status === room.status &&
-      prev.turn === room.turn && prev.winner === room.winner;
+      prev.turn === room.turn && prev.winner === room.winner &&
+      JSON.stringify(prev.seats || []) === JSON.stringify(room.seats || []);
     S.room = room;
     if (typeof seat === 'number' && seat >= 0) S.seat = seat;
     if (same) return;                       // 只是心跳，别重画（会打断动画）
@@ -1287,13 +1312,16 @@
       box.innerHTML = '';
       seats.forEach(function (p) {
         var el = document.createElement('span');
+        var away = !!p.left;
         el.className = 'ag-player' +
           (r.turn === p.seat && r.status === 'play' ? ' is-turn' : '') +
-          (p.seat === S.seat ? ' is-me' : '');
+          (p.seat === S.seat ? ' is-me' : '') +
+          (away ? ' is-away' : '');
         var i = document.createElement('i');
         i.textContent = String(p.seat);
         var b = document.createElement('span');
-        b.textContent = (p.name || p.no || '同学') + (p.seat === S.seat ? '（你）' : '');
+        b.textContent = (p.name || p.no || '同学') + (p.seat === S.seat ? '（你）' : '') +
+          (away ? ' · 离开' : '');
         el.appendChild(i);
         el.appendChild(b);
         box.appendChild(el);
@@ -1310,7 +1338,11 @@
     show('ag-close-room', !S.local && (isHost || (B8.auth && B8.auth.isSuper && B8.auth.isSuper())));
     show('ag-copy-link', !S.local);
     show('ag-start-now', !S.local && isHost && r.status === 'wait' && seats.length >= 2);
+    show('ag-wait-close', !S.local && isHost);
     show('ag-again', !S.local && isHost && r.status === 'over');
+    // 等开局时把「房号 + 开始游戏」那层亮出来。以前只在 applyRoom 里亮，
+    // 但进房那一刻 applyRoom 会判定「房间没变」直接 return，结果舞台一片空白、房主也点不到开始。
+    showGame('ag-wait', r.status === 'wait');
     txt('ag-chat-count', String((S.chat || []).length));
     if (r.status === 'wait') {
       var codeEl = $('ag-wait-code');
@@ -1671,18 +1703,9 @@
     }
 
     var closeRoom = $('ag-close-room');
-    if (closeRoom) {
-      closeRoom.addEventListener('click', function () {
-        if (!S.room) return;
-        B8.confirm('关掉这个房间？里面的人都会被请出去。', { title: '关房', okText: '关房', danger: true })
-          .then(function (ok) {
-            if (!ok) return;
-            rpc('b8_arcade_close', { p_token: token(), p_code: S.room.code })
-              .then(function () { leaveRoom(true); })
-              .catch(function (err) { B8.toast(errText(err)); });
-          });
-      });
-    }
+    if (closeRoom) closeRoom.addEventListener('click', closeRoomNow);
+    var waitClose = $('ag-wait-close');
+    if (waitClose) waitClose.addEventListener('click', closeRoomNow);
 
     var again = $('ag-again');
     if (again) {
