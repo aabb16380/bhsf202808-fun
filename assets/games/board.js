@@ -3704,7 +3704,7 @@
   function bestArrowValid(game, a, st) {
     if (!a || !st || !st.board) return false;
     if (game === 'go' || game === 'gomoku') {
-      return a.to != null && !st.board[a.to];
+      return a.to != null && a.to >= 0 && a.to < st.board.length && !st.board[a.to];
     }
     if (game === 'chess' || game === 'xiangqi') {
       if (a.from == null || a.to == null) return false;
