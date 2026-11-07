@@ -17,9 +17,7 @@ window.B8_CONFIG = {
     anonKey: 'sb_publishable_kkJAT4lA9KFJGhua2V9gjw_tr-doaVN'
   },
 
-  // 可选：Cloudflare Worker 图片缓存代理，见 cloudflare/README.md
-  // 留空则继续直连 Supabase；部署好 Worker 后填它的 workers.dev 地址，
-  // 例如 'https://b8-photo-proxy.xxx.workers.dev'
+  // 图片代理：旧图已搬到韩国服务器；新上传未同步时前端自动回退 Supabase
   photoProxy: 'https://api.bhsf202808.fun',
 
   // 可选：棋类引擎 API（见 server/README.md）
