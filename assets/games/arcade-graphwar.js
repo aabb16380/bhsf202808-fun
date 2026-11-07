@@ -3381,6 +3381,19 @@
     var st = gameState();
     // 联机对手的炮弹不在本端播飞行动画：直接落终态，
     // 避免 1 秒动画把「轮到你」和键盘输入挡住（v2.165）。
+    // 回放仍然逐步播弹道。
+    if (st && isReplay()) {
+      var prev = view.lastState;
+      var oldCount = prev ? (Number(prev.shotSeq) || (prev.shots ? prev.shots.length : 0)) : 0;
+      var newCount = Number(st.shotSeq) || (st.shots ? st.shots.length : 0);
+      if (!view.anim && prev && newCount === oldCount + 1) {
+        var rec = st.shots && st.shots.length ? st.shots[st.shots.length - 1] : null;
+        if (rec) {
+          var replay = makeReplayShot(rec);
+          if (replay) startShotAnim(prev, replay);
+        }
+      }
+    }
     view.lastState = st ? copyState(st) : null;
     render();
     maybeStart();
