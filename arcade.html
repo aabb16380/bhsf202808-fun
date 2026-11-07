@@ -7,19 +7,19 @@
 <meta name="description" content="八班多人游戏：GraphWar 函数大战（2-8 人，输入函数打炮）、Quoridor 步步为营（2-4 人放墙堵路）。房间号加入、组队或混战、聊天。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g109" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g109">
-<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g109">
+<link rel="icon" href="assets/favicon.png?v=20261101g110" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g110">
+<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g110">
 <script>
-window.B8_BUILD = '20261101g109';
+window.B8_BUILD = '20261101g110';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g109"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g109">
+<script src="assets/theme.js?v=20261101g110"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g110">
 </head>
 
 <body data-site="fun">
@@ -81,10 +81,10 @@ window.B8_TEST = !!window.B8_T;
           </div>
 
           <div class="ag-btns">
-            <button class="ag-btn primary" id="ag-quick" type="button">快速匹配</button>
-            <button class="ag-btn" id="ag-create" type="button">建房</button>
+            <button class="ag-btn primary" id="ag-create" type="button">开房间</button>
+            <button class="ag-btn" id="ag-local" type="button">本地游玩</button>
             </div>
-          <p class="ag-hint" id="ag-start-hint">多人房间要登录：座位、分数、聊天都跟着账号走。</p>
+          <p class="ag-hint" id="ag-start-hint">开房间要登录（房号发给同学）；本地游玩不用登录，几个人挤一台设备轮流来。</p>
           <p class="ag-hint is-warn" id="ag-db-note" hidden></p>
 
           <form class="ag-join" id="ag-join-form">
@@ -178,7 +178,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g109' + T;
+  var V = '?v=20261101g110' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

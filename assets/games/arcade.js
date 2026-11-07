@@ -146,7 +146,7 @@
     show('ag-private-row', multi);
     show('ag-name-row', multi);
     show('ag-create', multi);
-    show('ag-quick', multi);
+    show('ag-local', multi);
     show('ag-join-form', multi);
 
     var seats = $('ag-seats');
@@ -277,8 +277,8 @@
     return false;
   }
 
-  function createRoom(quick) {
-    if (!requireLogin('多人房间要登录（要记座位和分数）')) return;
+  function createRoom() {
+    if (!requireLogin('开房间要登录（要记座位和分数）')) return;
     var m = meta(S.game);
     if (m.mode !== 'multi') return;
     var args = {
@@ -289,20 +289,89 @@
       p_max_seats: S.seats,
       p_team_mode: S.teamMode
     };
-    var call = quick ? rpc('b8_arcade_quick', {
-      p_token: args.p_token, p_game: S.game,
-      p_max_seats: S.seats, p_team_mode: S.teamMode
-    }) : rpc('b8_arcade_create', args);
-
-    var btn = $(quick ? 'ag-quick' : 'ag-create');
+    var btn = $('ag-create');
     if (btn) btn.disabled = true;
-    call.then(function (res) {
+    rpc('b8_arcade_create', args).then(function (res) {
       if (btn) btn.disabled = false;
       enterRoom(res.room, res.seat || 0, true);
     }).catch(function (err) {
       if (btn) btn.disabled = false;
       B8.toast(errText(err));
     });
+  }
+
+  /* ---------- 本地游玩：一台设备，几个人轮流 ---------- */
+
+  function buildState(seats, teamMode) {
+    var m = mod(S.game);
+    if (!m) return null;
+    try {
+      if (typeof m.newState === 'function') {
+        return m.newState({ players: seats.length, seats: seats, teamMode: teamMode });
+      }
+      if (m._test) {
+        if (S.game === 'quoridor' && typeof m._test.init === 'function') return m._test.init(seats.length);
+        if (S.game === 'graphwar' && typeof m._test.newState === 'function') {
+          return m._test.newState(seats.length, teamMode);
+        }
+      }
+    } catch (e) {
+      if (window.console) console.warn('[arcade] buildState', e);
+    }
+    return null;
+  }
+
+  function startLocal() {
+    var m = meta(S.game);
+    if (m.mode !== 'multi') { B8.toast('先选一个多人游戏'); return; }
+    var seats = [];
+    for (var i = 1; i <= S.seats; i++) {
+      seats.push({ seat: i, no: '', name: '玩家' + (i === 1 ? '一' : i === 2 ? '二' : i === 3 ? '三' :
+        i === 4 ? '四' : i === 5 ? '五' : i === 6 ? '六' : i === 7 ? '七' : '八') });
+    }
+    var init = buildState(seats, S.teamMode);
+    if (!init) { B8.toast('这个游戏还没加载好'); return; }
+    S.local = true;
+    S.seat = 1;
+    S.chat = [];
+    S.round = (S.round || 0) + 1;
+    S.overShown = false;
+    S.subs = [];
+    if (S.mod && S.mod.destroy) { try { S.mod.destroy(); } catch (e) {} }
+    S.mod = null;
+    S.modKey = '';
+    S.room = {
+      id: 0, code: 'LOCAL', game: S.game, name: '本地对局', status: 'play',
+      is_private: true, max_seats: S.seats, team_mode: S.teamMode, host_seat: 1,
+      seats: seats, state: init, seq: 1, turn: 1, winner: null
+    };
+    wsClose();
+    clearTimeout(S.pollTimer);
+    show('ag-lobby', false);
+    show('ag-room', true);
+    showGame('ag-over', false);
+    showGame('ag-wait', false);
+    S.view = 'room';
+    try { history.replaceState(null, '', 'arcade.html'); } catch (e) {}
+    renderRoom();
+    ensureModule();
+    txt('ag-status', '本地对局 · ' + seats.length + ' 人 · 轮流操作，不用联网');
+  }
+
+  function localSend(action, nextState, opts) {
+    var r = S.room;
+    if (!r || !S.local) return Promise.reject(new Error('本地对局没开始'));
+    opts = opts || {};
+    if (nextState) r.state = nextState;
+    if (opts.turn != null) r.turn = opts.turn;
+    if (opts.status === 'over') {
+      r.status = 'over';
+      r.winner = opts.winner == null ? null : opts.winner;
+    }
+    r.seq = (r.seq || 0) + 1;
+    renderRoom();
+    notify();
+    return Promise.resolve({ ok: true, room: r });
   }
 
   function joinRoom(code) {
@@ -315,6 +384,7 @@
   }
 
   function enterRoom(room, seat, remember) {
+    S.local = false;
     S.room = room;
     S.seat = seat || 0;
     S.chat = [];
@@ -340,7 +410,7 @@
 
   function leaveRoom(silent) {
     var room = S.room;
-    if (room && logged() && S.seat > 0) {
+    if (room && !S.local && logged() && S.seat > 0) {
       rpc('b8_arcade_leave', { p_token: token(), p_code: room.code }).catch(function () {});
     }
     if (!silent) wsSend({ type: 'changed' });
@@ -352,6 +422,7 @@
     S.subs = [];
     S.room = null;
     S.seat = 0;
+    S.local = false;
     S.view = 'lobby';
     try { history.replaceState(null, '', 'arcade.html'); } catch (e) {}
     show('ag-room', false);
@@ -487,10 +558,13 @@
     var m = meta(r.game);
     var seats = r.seats || [];
     txt('ag-room-title', m.title + (r.name ? ' · ' + r.name : ''));
-    txt('ag-room-meta', '房号 ' + r.code + ' · ' + seats.length + '/' + r.max_seats + ' 人 · ' +
+    txt('ag-room-meta', (S.local ? '本地对局' : '房号 ' + r.code) + ' · ' +
+      seats.length + (S.local ? ' 人' : '/' + r.max_seats + ' 人') + ' · ' +
       (r.status === 'wait' ? '等人' : (r.status === 'play' ? '对局中' : '已结束')) +
       (r.team_mode === 'team' ? ' · 组队' : '') +
-      (S.seat > 0 ? ' · 你坐 ' + S.seat + ' 号' : ' · 观战'));
+      (S.local
+        ? ' · 轮到 ' + ((seats[(r.turn || 1) - 1] || {}).name || (r.turn + ' 号'))
+        : (S.seat > 0 ? ' · 你坐 ' + S.seat + ' 号' : ' · 观战')));
 
     var box = $('ag-players');
     if (box) {
@@ -517,9 +591,10 @@
     }
 
     var isHost = S.seat === 1;
-    show('ag-close-room', isHost || (B8.auth && B8.auth.isSuper && B8.auth.isSuper()));
-    show('ag-start-now', isHost && r.status === 'wait' && seats.length >= 2);
-    show('ag-again', isHost && r.status === 'over');
+    show('ag-close-room', !S.local && (isHost || (B8.auth && B8.auth.isSuper && B8.auth.isSuper())));
+    show('ag-copy-link', !S.local);
+    show('ag-start-now', !S.local && isHost && r.status === 'wait' && seats.length >= 2);
+    show('ag-again', !S.local && isHost && r.status === 'over');
     txt('ag-chat-count', String((S.chat || []).length));
     if (r.status === 'wait') {
       var codeEl = $('ag-wait-code');
@@ -618,18 +693,20 @@
   function makeCtx() {
     var r = S.room || {};
     var seats = r.seats || [];
+    var localSeat = S.local ? (r.turn || 1) : S.seat;
     var me = null;
-    for (var i = 0; i < seats.length; i++) if (seats[i].seat === S.seat) me = seats[i];
+    for (var i = 0; i < seats.length; i++) if (seats[i].seat === localSeat) me = seats[i];
     return {
       game: r.game,
-      seat: S.seat,
+      seat: localSeat,
       room: r,
       state: (r.state && typeof r.state === 'object') ? r.state : {},
       me: me,
-      isHost: S.seat === 1,
+      isHost: S.local ? true : (S.seat === 1),
       players: seats,
-      isMyTurn: r.status === 'play' && r.turn === S.seat && S.seat > 0,
-      send: sendAction,
+      isMyTurn: S.local ? (r.status === 'play') : (r.status === 'play' && r.turn === S.seat && S.seat > 0),
+      local: !!S.local,
+      send: S.local ? localSend : sendAction,
       onChange: function (fn) {
         if (typeof fn !== 'function') return function () {};
         S.subs.push(fn);
@@ -750,10 +827,10 @@
      ============================================================ */
 
   function bind() {
-    var quick = $('ag-quick');
-    if (quick) quick.addEventListener('click', function () { createRoom(true); });
     var create = $('ag-create');
-    if (create) create.addEventListener('click', function () { createRoom(false); });
+    if (create) create.addEventListener('click', function () { createRoom(); });
+    var local = $('ag-local');
+    if (local) local.addEventListener('click', startLocal);
 
     var ffa = $('ag-mode-ffa');
     if (ffa) ffa.addEventListener('click', function () { S.teamMode = 'ffa'; renderOptions(); });
@@ -883,6 +960,16 @@
       if (S.view === 'lobby' && !document.hidden) loadLists(false);
     }, 15000);
   }
+
+  // 任何未捕获错误都把大厅亮出来，别留一整页白
+  window.addEventListener('error', function () {
+    var lobby = $('ag-lobby');
+    var room = $('ag-room');
+    if (lobby && room && lobby.hidden && room.hidden) {
+      lobby.hidden = false;
+      room.hidden = true;
+    }
+  });
 
   A.boot = boot;
   A.state = S;
