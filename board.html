@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；3 位数字邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g79" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g79">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g79">
+<link rel="icon" href="assets/favicon.png?v=20261101g80" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g80">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g80">
 <script>
-window.B8_BUILD = '20261101g79';
+window.B8_BUILD = '20261101g80';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g79"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g79">
+<script src="assets/theme.js?v=20261101g80"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g80">
 </head>
 
 <body data-site="fun">
@@ -304,6 +304,7 @@ window.B8_TEST = !!window.B8_T;
               <b>局面胜率</b>
               <span id="bd-analysis-label">—</span>
               <button class="bd-mini" id="bd-engine-run" type="button">引擎</button>
+              <button class="bd-mini" id="bd-server-run" type="button" hidden>服务器</button>
             </div>
             <div class="bd-an-legend">
               <span class="bd-an-side is-first"><i></i><b id="bd-an-name1">先手</b><em id="bd-an-p1">—</em></span>
@@ -428,7 +429,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g79' + T;
+  var V = '?v=20261101g80' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
@@ -436,6 +437,7 @@ window.B8_TEST = !!window.B8_T;
     ['assets/auth.js', 1],
     ['assets/games/board-engine.js', 1],
     ['assets/games/engine.js', 1],
+    ['assets/games/server.js', 1],
     ['assets/games/board.js', 1]
   ];
   for (var i = 0; i < list.length; i++) {

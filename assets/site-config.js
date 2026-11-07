@@ -9,7 +9,7 @@ window.B8_CONFIG = {
     name: '八班游乐场',
     domain: 'bhsf202808.fun',
     github: 'aabb16380',
-    version: 'v2.120'
+    version: 'v2.121'
   },
 
   supabase: {
@@ -18,8 +18,13 @@ window.B8_CONFIG = {
   },
 
   // 可选：Cloudflare Worker 图片缓存代理，见 cloudflare/README.md
-  // 留空则继续直连 Supabase；部署好 Worker 后填 'https://img.bhsf202808.fun'
+  // 留空则继续直连 Supabase；部署好 Worker 后填它的 workers.dev 地址，
+  // 例如 'https://b8-photo-proxy.xxx.workers.dev'
   photoProxy: '',
+
+  // 可选：棋类引擎 API（见 server/README.md）
+  // 留空则只用本地 P1 / 浏览器 WASM；部署好服务器后填 'https://api.bhsf202808.fun'
+  engineApi: '',
 
   links: {
     homes: '//bhsf202808.homes/',

@@ -68,7 +68,9 @@
     on: false, data: [], cur: 0, hover: -1,
     liveKey: '', liveCode: '', liveStates: null,
     practiceKey: '', practiceStates: null,
-    baseSig: '', lastSig: ''
+    baseSig: '', lastSig: '',
+    serverData: null, serverKey: '',
+    serverPointKey: ''
   };
   var SPECT = { last: 0, inflight: false };
   var S = null;                 // 当前对局
@@ -3016,6 +3018,14 @@
     }
     var base = stateSig(states[0]);
     var last = stateSig(states[states.length - 1]);
+    var serverKey = base + '|' + last;
+    if (ANALYSIS.serverData && ANALYSIS.serverKey === serverKey &&
+        ANALYSIS.serverData.length === states.length) {
+      ANALYSIS.data = ANALYSIS.serverData.slice();
+      ANALYSIS.baseSig = base;
+      ANALYSIS.lastSig = last;
+      return;
+    }
     if (ANALYSIS.data.length === states.length && ANALYSIS.baseSig === base && ANALYSIS.lastSig === last) return;
     var reuse = 0;
     if (ANALYSIS.data.length && ANALYSIS.data.length <= states.length &&
@@ -3268,11 +3278,40 @@
     show('bd-winbar', true);
   }
 
+  function refreshServerPoint() {
+    if (!S || !S.state || !window.B8Server || !B8Server.enabled()) return;
+    var game = S.state.game;
+    if (game !== 'chess' && game !== 'xiangqi') return;
+    if (ANALYSIS.serverData) return;
+
+    var states = analysisStates();
+    var st = states[ANALYSIS.cur];
+    if (!st) return;
+    var key = stateSig(st);
+    if (key === ANALYSIS.serverPointKey) return;
+    ANALYSIS.serverPointKey = key;
+
+    var fen = game === 'chess' ? B8Engine.fenChess(st) : B8Engine.fenXiangqi(st);
+    B8Server.evalOne(game, fen, 120).then(function (r) {
+      if (!r || !ANALYSIS.data || ANALYSIS.serverPointKey !== key) return;
+      var idx = ANALYSIS.cur;
+      if (idx < 0 || idx >= ANALYSIS.data.length) return;
+      ANALYSIS.data[idx] = r.p1 / 100;
+      drawWinChart();
+      renderWinBar(ANALYSIS.data[idx], idx);
+    }).catch(function () { /* 服务器不可用就保持 P1 */ });
+  }
+
   function renderAnalysis() {
     var has = !!(S && S.state);
     show('bd-analysis', has);
     var engineBtn = $('bd-engine-run');
     if (engineBtn) engineBtn.hidden = !has || (S.state.game !== 'chess' && S.state.game !== 'xiangqi');
+    var serverBtn = $('bd-server-run');
+    if (serverBtn) {
+      serverBtn.hidden = !has || !window.B8Server || !B8Server.enabled() ||
+        (S.state.game !== 'chess' && S.state.game !== 'xiangqi');
+    }
     var btn = $('bd-analysis');
     if (btn) {
       btn.textContent = ANALYSIS.on ? '收起胜率' : '胜率';
@@ -3300,9 +3339,11 @@
     show('bd-analysis-panel', !!ANALYSIS.on);
     if (!ANALYSIS.on) return;
     drawWinChart();
+    refreshServerPoint();
   }
 
   var engineBusy = false;
+  var serverBusy = false;
 
   function engineNote(msg, isErr) {
     var el = $('bd-engine-note');
@@ -3343,6 +3384,48 @@
     }).then(function () {
       engineBusy = false;
       if (btn) { btn.disabled = false; btn.textContent = '引擎'; }
+    });
+  }
+
+  function serverCurve() {
+    if (!S || !S.state || serverBusy) return;
+    var game = S.state.game;
+    if (game !== 'chess' && game !== 'xiangqi') {
+      engineNote('服务器曲线目前支持国象/象棋；围棋请用保存后深度分析。', true);
+      return;
+    }
+    if (!window.B8Server || !B8Server.enabled()) {
+      engineNote('还没有配置 engineApi（见 site-config.js）。', true);
+      return;
+    }
+
+    var states = analysisStates();
+    if (!states || !states.length) return;
+    var fens = states.map(function (st) {
+      return game === 'chess' ? B8Engine.fenChess(st) : B8Engine.fenXiangqi(st);
+    });
+
+    serverBusy = true;
+    var btn = $('bd-server-run');
+    if (btn) { btn.disabled = true; btn.textContent = '算曲线…'; }
+    engineNote('服务器正在算 ' + fens.length + ' 个局面（约 ' +
+      Math.max(1, Math.round(fens.length * 0.09)) + '–' +
+      Math.max(2, Math.round(fens.length * 0.2)) + ' 秒）…');
+
+    B8Server.evalBatch(game, fens, 80).then(function (rows) {
+      if (!rows || rows.length !== fens.length) throw new Error('返回数量不对');
+      var serverData = rows.map(function (r) { return r ? r.p1 / 100 : 0.5; });
+      var base = stateSig(states[0]);
+      var last = stateSig(states[states.length - 1]);
+      ANALYSIS.serverData = serverData;
+      ANALYSIS.serverKey = base + '|' + last;
+      renderAnalysis();
+      engineNote('服务器曲线完成：' + fens.length + ' 个局面，已替换折线。', false);
+    }).catch(function (err) {
+      engineNote('服务器失败：' + (err && err.message ? err.message : '未知错误'), true);
+    }).then(function () {
+      serverBusy = false;
+      if (btn) { btn.disabled = false; btn.textContent = '服务器'; }
     });
   }
 
@@ -4657,6 +4740,8 @@
     $('bd-analysis').addEventListener('click', toggleAnalysis);
     var engineRun = $('bd-engine-run');
     if (engineRun) engineRun.addEventListener('click', runEngine);
+    var serverRun = $('bd-server-run');
+    if (serverRun) serverRun.addEventListener('click', serverCurve);
     $('bd-practice-reset').addEventListener('click', practiceReset);
     $('bd-review-exit').addEventListener('click', exitReview);
     $('bd-winbar').addEventListener('click', openAnalysis);
