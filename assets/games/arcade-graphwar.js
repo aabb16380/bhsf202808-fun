@@ -440,7 +440,7 @@
     var dx = Number(px) - Number(ob.x);
     var dy = Number(py) - Number(ob.y);
     if (!isFinite(dx) || !isFinite(dy)) return false;
-    var r = obstacleRadius(ob);
+    var r = obstacleRadius(ob) + 1e-3;   // 弹道点四舍五入到 6 位，边界留一点容差
     if (dx * dx + dy * dy > r * r) return false;
     return !insideHole(ob, px, py);
   }
@@ -498,14 +498,17 @@
   }
 
   function segmentCircleT(x1, y1, x2, y2, ob) {
-    // 没洞：还是原来的解析解，快
-    if (!Array.isArray(ob.holes) || !ob.holes.length) {
-      var range = segmentCircleRange(x1, y1, x2, y2, ob);
-      return range ? range.t1 : null;
-    }
-    // 有洞：只在这一段和圆的交叠区间里采样，找第一个实心点
     var rr = segmentCircleRange(x1, y1, x2, y2, ob);
-    if (!rr) return null;
+    if (!rr) {
+      // 弹道点会四舍五入到 6 位；最后一段可能刚好落在圆面上、解析解算成「不相交」。
+      // 端点实心就按命中处理，不然墙永远炸不出洞。
+      if (solidAt(ob, x2, y2)) return 1;
+      if (solidAt(ob, x1, y1)) return 0;
+      return null;
+    }
+    // 没洞：还是原来的解析解，快
+    if (!Array.isArray(ob.holes) || !ob.holes.length) return rr.t1;
+    // 有洞：只在这一段和圆的交叠区间里采样，找第一个实心点
     var steps = 10;
     for (var s = 0; s <= steps; s++) {
       var t = rr.t1 + (rr.t2 - rr.t1) * (s / steps);
