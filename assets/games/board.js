@@ -111,11 +111,49 @@
       }
     }
     // 页面刚打开时 WS 还在握手：先把当前点/变更排一下，连上后补发
-    if (S && S.mode === 'online' && S.room && S.room.status !== 'over' && S.code) {
+    if (S && S.mode === 'online' && S.room && S.code) {
       WS.queue.push(obj);
       if (WS.queue.length > 20) WS.queue.shift();
     }
     return false;
+  }
+
+  // 任何会改变对面看到的东西（走子 / 悔棋 / 求和 / 认输 / 重开 / 关房）成功后都广播一次。
+  // 少了这一下，对面只能等 WS 的 5 秒心跳轮询 —— 悔棋请求就会「三四秒后才到」。
+  function wsChanged() {
+    wsSend({ type: 'changed' });
+  }
+
+  // 悔棋 / 求和的「快速提示」：把请求内容一起推过去，对面不用等 sync 的来回就能先看到弹窗；
+  // 真正同意/拒绝仍然走 Supabase，服务端才是权威。
+  function wsHint(kind) {
+    var by = (S && S.me && S.me.no) || '';
+    var name = (B8.auth && B8.auth.nick && B8.auth.nick()) || '对方';
+    var obj = { type: 'changed' };
+    if (kind === 'undo') obj.undo = { by: by, name: name, mine: false };
+    else if (kind === 'offer') obj.offer = { by: by, name: name, mine: false };
+    wsSend(obj);
+  }
+
+  // 收到 changed 里的提示：先把 UI 点亮，紧接着还是 syncNow() 对齐服务器。
+  function applyWsHint(msg) {
+    if (!S || S.mode !== 'online' || !S.room || S.room.status !== 'play' || S.seat === 0) return false;
+    var myNo = (S.me && S.me.no) || '';
+    var touched = false;
+    if (msg.undo && msg.undo.by && msg.undo.by !== myNo &&
+        (!S.undo || S.undo.by !== msg.undo.by)) {
+      S.undo = { by: String(msg.undo.by), name: String(msg.undo.name || '对方'), mine: false };
+      touched = true;
+    }
+    if (msg.offer && msg.offer.by && msg.offer.by !== myNo &&
+        (!S.offer || S.offer.by !== msg.offer.by)) {
+      S.offer = { by: String(msg.offer.by), name: String(msg.offer.name || '对方'), mine: false };
+      touched = true;
+    }
+    if (!touched) return false;
+    renderAll();
+    promptUndoRequest();
+    return true;
   }
 
   function applyRemotePoint(msg) {
@@ -153,6 +191,8 @@
     try { msg = JSON.parse(ev.data); } catch (e) { return; }
     if (!msg || !msg.type) return;
     if (msg.type === 'changed') {
+      // 推送里可能带着悔棋 / 求和的提示：先点亮 UI，再去 Supabase 对齐
+      applyWsHint(msg);
       syncNow();
       return;
     }
@@ -163,7 +203,7 @@
   }
 
   function wsConnect() {
-    if (!S || S.mode !== 'online' || !S.room || S.room.status === 'over' || !S.code) {
+    if (!S || S.mode !== 'online' || !S.room || !S.code) {
       wsClose();
       return;
     }
@@ -198,7 +238,7 @@
       WS.sock = null;
       clearTimeout(WS.timer);
       WS.timer = 0;
-      if (S && S.mode === 'online' && S.room && S.room.status !== 'over' && S.code) {
+      if (S && S.mode === 'online' && S.room && S.code) {
         WS.retry = Math.min(6, WS.retry + 1);
         WS.timer = setTimeout(wsConnect, 2000 * WS.retry);
       }
@@ -1033,6 +1073,8 @@
       B8.sb.rpc('b8_board_join', { p_token: token(), p_code: code })
         .then(function (res) {
           enterOnline(code, res.room, res.state, res.seat);
+          // 坐下以后立刻告诉房主（不然他要等 12 秒心跳才知道人来了）
+          wsChanged();
         })
         .catch(function (err) {
           toast((err && err.message) || '进不去这个房间');
@@ -1137,6 +1179,7 @@
         toast('已邀请对方再来一局，等他点同意');
         showResult();
         renderActions();
+        wsChanged();
       })
       .catch(function (err) {
         toast((err && err.message) || '邀请没发出去');
@@ -1153,6 +1196,8 @@
     }).then(function (res) {
       if (!res || !res.room) throw new Error('重开没成功');
       var code = res.code || res.room.code;
+      // 新房间是另开的：先在旧房间喊一声，对方收到后会自动跟过来
+      wsChanged();
       toast('再来一局！执子已经交换');
       enterOnline(code, res.room, res.state, res.seat || 0, {});
     }).catch(function (err) {
@@ -1166,6 +1211,7 @@
       var code = S.code;
       B8.sb.rpc('b8_board_cancel', { p_token: token(), p_code: code })
         .then(function () {
+          wsChanged();
           clearLast();
           toast('房间已解散');
           backToLobby();
@@ -1669,6 +1715,7 @@
     SPECT.inflight = false;
     show('bd-spectators', false);
     stopChat();
+    wsClose();
     clearTimeout(NET.timer);
     NET.paused = false;
     ANALYSIS.hover = -1;
@@ -1958,8 +2005,9 @@
       return;
     }
     if (WS.on) {
-      // WebSocket 在线：只留慢心跳兜底；走子/分析会即时推送
-      NET.timer = setTimeout(syncNow, (S.room && S.room.status === 'wait') ? 4000 : 12000);
+      // WebSocket 在线：只留慢心跳兜底；走子/悔棋/求和/认输/重开都会即时推送。
+      // 心跳别太长：万一某次推送漏了，最多 5 秒也能自己发现（12 秒的等待太明显）。
+      NET.timer = setTimeout(syncNow, (S.room && S.room.status === 'wait') ? 4000 : 5000);
       return;
     }
     if (document.hidden) {
@@ -2551,8 +2599,9 @@
     else { var sp = $('bd-scorepanel'); if (sp) sp.hidden = true; }
     draw();
     if (S.anim) ensureAnimLoop();
-    if (S.mode === 'online' && !S.record && S.room &&
-        S.room.status !== 'over' && S.code) {
+    // 对局结束后 WS 也留着：还要靠它即时送达「再来一局」邀请和最终结果。
+    // 真正离开房间（backToLobby）时才关。
+    if (S.mode === 'online' && !S.record && S.room && S.code) {
       wsConnect();
     } else {
       wsClose();
@@ -2884,6 +2933,7 @@
         S.room = res.room;
         S.state = res.state;
         S.offer = null;
+        wsChanged();
         if (S.room.status === 'over') {
           S.resultShown = true;
           renderAll();
@@ -2930,6 +2980,7 @@
       S.resultShown = false;
       trimMovesTo(res.seq || 0);
       renderAll();
+      wsChanged();
       toast('已悔一步');
     }).catch(function (err) {
       if (S) S.undoBusy = false;
@@ -2971,6 +3022,7 @@
       S.undoPrompted = null;
       S.undoBusy = false;
       renderAll();
+      wsChanged();
       toast(act === 'cancel' ? '已撤回悔棋申请' : '已拒绝悔棋');
     }).catch(function (err) {
       if (S) S.undoBusy = false;
@@ -3023,6 +3075,7 @@
         S.undo = { mine: true, name: (B8.auth && B8.auth.nick && B8.auth.nick()) || '我' };
         S.undoBusy = false;
         renderAll();
+        wsHint('undo');
         toast('悔棋请求已发给对方');
         syncNow();
       })
@@ -6571,6 +6624,7 @@
               S.score = null;
               S.scoreBusy = false;
               renderAll();
+              wsChanged();
               showResult();
             })
             .catch(function (err) { toast((err && err.message) || '认输没成功'); });
@@ -6582,11 +6636,12 @@
       var mine = S.offer && S.offer.mine;
       if (mine) {
         B8.sb.rpc('b8_board_draw', { p_token: token(), p_code: S.code, p_accept: false })
-          .then(syncNow).catch(function (err) { toast((err && err.message) || '撤回失败'); });
+          .then(function () { wsChanged(); syncNow(); })
+          .catch(function (err) { toast((err && err.message) || '撤回失败'); });
         return;
       }
       B8.sb.rpc('b8_board_draw', { p_token: token(), p_code: S.code, p_accept: false })
-        .then(function () { toast('求和请求已发出'); syncNow(); })
+        .then(function () { wsHint('offer'); toast('求和请求已发出'); syncNow(); })
         .catch(function (err) { toast((err && err.message) || '求和失败'); });
     });
 
@@ -6616,6 +6671,7 @@
           S.resultShown = true;
           S.score = null;
           S.scoreBusy = false;
+          wsChanged();
           renderAll();
           showResult();
           toast(winner === 3 ? '已强制关闭，记和棋' : '已强制关闭，判 ' + nameForColor(winner) + ' 胜');
@@ -6652,7 +6708,7 @@
         .then(function (ok) {
           if (!ok) return;
           B8.sb.rpc('b8_board_cancel', { p_token: token(), p_code: S.code })
-            .then(function () { clearLast(); backToLobby(); toast('房间已解散'); })
+            .then(function () { wsChanged(); clearLast(); backToLobby(); toast('房间已解散'); })
             .catch(function (err) { toast((err && err.message) || '解散失败'); });
         });
     });
