@@ -111,9 +111,13 @@
       moves: moves || '',
       move_time: moveTime || 0.2
     }, 6000).then(function (r) {
+      var score = Number(r.score || 0);
+      var turn = String(r.turn || fen.charAt(0) || 'W').toUpperCase() === 'B' ? 'B' : 'W';
+      var whiteScore = turn === 'W' ? score : -score;
       return {
-        score: Number(r.score || 0),
-        p1: Math.round((100 / (1 + Math.pow(10, -(Number(r.score || 0) * 100) / 400))) * 10) / 10,
+        score: score,
+        turn: turn,
+        p1: Math.round((100 / (1 + Math.pow(10, -(whiteScore * 100) / 400))) * 10) / 10,
         bestmove: r.bestmove,
         ms: r.ms
       };

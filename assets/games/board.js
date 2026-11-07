@@ -3376,13 +3376,37 @@
     var parts = String(best).split(/[-x]/);
     if (parts.length < 2) return null;
     var mm = scanMap();
-    var path = [];
-    for (var i = 0; i < parts.length; i++) {
-      var idx = mm.by[Number(parts[i])];
-      if (idx == null) return null;
-      path.push(idx);
+    var from = mm.by[Number(parts[0])];
+    var to = mm.by[Number(parts[1])];
+    if (from == null || to == null) return null;
+
+    // 无吃子或只吃一个：两个点直接画
+    if (parts.length <= 3) {
+      return { from: from, to: to, path: [from, to] };
     }
-    return { from: path[0], to: path[path.length - 1], path: path };
+
+    // 吃子：Scan 的格式是 from x to x 被吃子...
+    // 被吃掉的棋子不是落点，不能把箭头画到它身上。
+    // 尝试用“被吃子 + 同方向再一格”还原中间落点；失败就只画 from -> to。
+    var path = [from];
+    var cur = from;
+    for (var i = 2; i < parts.length; i++) {
+      var cap = mm.by[Number(parts[i])];
+      if (cap == null) { path = [from, to]; break; }
+      var cx = cap % 10, cy = Math.floor(cap / 10);
+      var ux = cx - (cur % 10), uy = cy - Math.floor(cur / 10);
+      var lx = cx + ux, ly = cy + uy;
+      if (lx < 0 || ly < 0 || lx > 9 || ly > 9 || (lx + ly) % 2 !== 1) {
+        path = [from, to];
+        break;
+      }
+      var land = ly * 10 + lx;
+      if (mm.map[land] == null) { path = [from, to]; break; }
+      path.push(land);
+      cur = land;
+    }
+    if (path.length < 2 || path[path.length - 1] !== to) path = [from, to];
+    return { from: from, to: to, path: path };
   }
 
   function xqIccs(idx) {
@@ -3518,12 +3542,16 @@
         });
       });
     } else {
-      var dpositions = states.map(function (st, i) {
-        return { fen: scanFen(st), moves: scanMoves(i), move_time: 0.2 };
+      var dpositions = states.map(function (st) {
+        // 每个 state 都是完整局面，moves 留空，避免重复应用
+        return { fen: scanFen(st), moves: '', move_time: 0.2 };
       });
       req = B8Server.evalDraughtsBatch(dpositions, 0.2).then(function (rows) {
         return (rows || []).map(function (r) {
-          var p1 = 100 / (1 + Math.pow(10, -(Number(r ? r.score : 0) * 100) / 400));
+          var score = Number(r ? r.score : 0);
+          var turn = String((r && r.turn) || 'W').toUpperCase() === 'B' ? 'B' : 'W';
+          var whiteScore = turn === 'W' ? score : -score;
+          var p1 = 100 / (1 + Math.pow(10, -(whiteScore * 100) / 400));
           return { p1: Math.round(p1 * 10) / 10, best: r ? r.bestmove : '' };
         });
       });
@@ -3594,8 +3622,8 @@
       }
       request = B8Server.evalGomoku(stones, 200);
     } else if (game === 'draughts') {
-      var dupto = S.reviewing ? Math.min(S.reviewIndex, S.moves.length) : S.moves.length;
-      request = B8Server.evalDraughts(scanFen(st), scanMoves(dupto), 0.2);
+      // scanFen(st) 已经是当前局面，不能再把历史 moves 叠加一次
+      request = B8Server.evalDraughts(scanFen(st), '', 0.2);
     } else {
       var fen = game === 'chess' ? B8Engine.fenChess(st) : B8Engine.fenXiangqi(st);
       request = B8Server.evalOne(game, fen, 120);
