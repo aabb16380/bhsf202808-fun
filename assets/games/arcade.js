@@ -833,6 +833,8 @@
     return { series: series, total: total, index: rp.index };
   }
 
+  function analysisPad() { return { left: 26, right: 8 }; }
+
   function drawQuoridorAnalysis() {
     var box = $('ag-quoridor-analysis');
     var cv = $('ag-analysis-canvas');
@@ -841,8 +843,8 @@
     if (!data) { box.hidden = true; return; }
     box.hidden = false;
 
-    var w = Math.max(280, box.clientWidth - 24);
-    var h = 180;
+    var w = Math.max(150, box.clientWidth - 18);
+    var h = 132;
     var dpr = Math.min(2, window.devicePixelRatio || 1);
     var pw = Math.round(w * dpr), ph = Math.round(h * dpr);
     if (cv.width !== pw || cv.height !== ph) {
@@ -856,7 +858,8 @@
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, w, h);
 
-    var left = 34, right = 12, top = 30, bottom = 24;
+    var pad = analysisPad();
+    var left = pad.left, right = pad.right, top = 24, bottom = 18;
     var plotW = Math.max(10, w - left - right);
     var plotH = Math.max(10, h - top - bottom);
     var maxV = 1;
@@ -868,7 +871,7 @@
     function yAt(v) { return top + plotH - (v / yMax) * plotH; }
 
     // 横向网格 + 纵轴刻度
-    g.font = '9px Menlo, Consolas, monospace';
+    g.font = '8px Menlo, Consolas, monospace';
     g.textBaseline = 'middle';
     g.textAlign = 'right';
     for (var t = 0; t <= 4; t++) {
@@ -887,7 +890,7 @@
     // 横轴刻度
     g.textAlign = 'center';
     g.textBaseline = 'top';
-    var ticks = data.total <= 4 ? data.total : 4;
+    var ticks = data.total <= 2 ? data.total : 2;
     for (var k = 0; k <= ticks; k++) {
       var step = ticks ? Math.round(data.total * k / ticks) : 0;
       var x = xAt(step);
@@ -944,7 +947,7 @@
     var lx = left;
     g.textAlign = 'left';
     g.textBaseline = 'middle';
-    g.font = '10px sans-serif';
+    g.font = '9px sans-serif';
     data.series.forEach(function (s) {
       g.fillStyle = s.color;
       g.beginPath();
@@ -2204,6 +2207,22 @@
 
     var repBack = $('ag-replay-back');
     if (repBack) repBack.addEventListener('click', backFromReplay);
+    var analysisCanvas = $('ag-analysis-canvas');
+    if (analysisCanvas) {
+      analysisCanvas.title = '点线跳到对应步数';
+      analysisCanvas.addEventListener('click', function (e) {
+        var rp = S.replay;
+        if (!rp || rp.rec.game !== 'quoridor' || !rp.total) return;
+        var rect = analysisCanvas.getBoundingClientRect();
+        if (!rect.width) return;
+        var pad = analysisPad();
+        var plot = rect.width - pad.left - pad.right;
+        var x = e.clientX - rect.left;
+        if (plot <= 0 || x < pad.left - 2 || x > rect.width - pad.right + 2) return;
+        var idx = Math.round((x - pad.left) / plot * rp.total);
+        replayTo(Math.max(0, Math.min(rp.total, idx)));
+      });
+    }
     var repFirst = $('ag-replay-first');
     if (repFirst) repFirst.addEventListener('click', function () { replayTo(0); });
     var repPrev = $('ag-replay-prev');
