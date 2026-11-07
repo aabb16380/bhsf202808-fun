@@ -643,6 +643,7 @@
       title.innerHTML = '<span class="bd-hno">#' + B8.esc(r.id == null ? '?' : String(r.id)) + '</span> ' +
         B8.esc(info.name) + (r.casual ? '<i>随便下下</i>' : '') +
         (r.mode === 'local' && !r.casual ? '<i>本机</i>' : '') +
+        (r.forbid ? '<i>禁手</i>' : '') +
         (r.analysis_ready ? '<i>已分析</i>' : '');
       var sub = document.createElement('span');
       var when = B8.dateTime ? B8.dateTime(r.ended_at || r.created_at) : '';
@@ -2397,6 +2398,7 @@
       bits.push('本机双人 · 不上传');
     }
     bits.push(S.timed ? '每方 ' + S.minutes + ' 分钟' : '不限时');
+    if (S.state && S.state.forbid) bits.push('黑棋禁手');
     if (S.room && S.room.status === 'wait') bits.push('等待对手');
     if (S.practice) bits.push('演练模式 · 不上传');
     txt('bd-gmeta', bits.join(' · '));
@@ -3684,12 +3686,24 @@
       });
     }
     if (game === 'gomoku') {
-      var gpositions = states.map(function (st) {
+      var gpositions = states.map(function (st, i) {
+        // 禁手分析需要按落子顺序发 BOARD；按棋盘扫会丢顺序。
         var stones = [];
-        for (var i = 0; i < st.board.length; i++) {
-          if (st.board[i]) stones.push([i % 15, Math.floor(i / 15), st.board[i]]);
+        var ordered = Math.min(i, S.moves.length);
+        for (var k = 0; k < ordered; k++) {
+          var mm = S.moves[k];
+          var t = mm && mm.move ? mm.move.t : null;
+          if (t == null) continue;
+          stones.push([t % 15, Math.floor(t / 15), mm.color]);
         }
-        return { size: 15, stones: stones, timeout_ms: 250 };
+        if (ordered < i) {
+          // 没有完整着法历史时只能退化为按棋盘扫（禁手分析可能不准）
+          stones = [];
+          for (var q = 0; q < st.board.length; q++) {
+            if (st.board[q]) stones.push([q % 15, Math.floor(q / 15), st.board[q]]);
+          }
+        }
+        return { size: 15, stones: stones, timeout_ms: 250, rule: st.forbid ? 4 : 0 };
       });
       return B8Server.evalGomokuBatch(gpositions, 120, progress).then(function (rows) {
         return (rows || []).map(function (r) {
@@ -3752,6 +3766,7 @@
       best: ANALYSIS.bestMoves || [],
       tags: ANALYSIS.tags || {},
       engine: 'server',
+      forbid: !!(S && S.state && S.state.forbid),
       plies: Math.max(0, states.length - 1)
     };
   }
@@ -3998,14 +4013,17 @@
       });
       request = B8Server.evalGo(S.size, moves, 100);
     } else if (game === 'gomoku') {
-      var gsize = st.size || 15;
+      // 禁手模式要按落子顺序发；当前回看到第几手就发前几手
+      var upto = S.reviewing ? Math.min(S.reviewIndex, S.moves.length) : S.moves.length;
       var stones = [];
-      for (var gi = 0; gi < st.board.length; gi++) {
-        var gp = st.board[gi];
-        if (gp) stones.push([gi % gsize, Math.floor(gi / gsize), gp]);
+      for (var gi = 0; gi < upto; gi++) {
+        var gm = S.moves[gi];
+        var gt = gm && gm.move ? gm.move.t : null;
+        if (gt == null) continue;
+        stones.push([gt % 15, Math.floor(gt / 15), gm.color]);
       }
       // 五子棋给足思考时间：200ms 经常漏掉必胜/必防点，800ms 明显更准
-      request = B8Server.evalGomoku(stones, 800);
+      request = B8Server.evalGomoku(stones, 800, st.forbid ? 4 : 0);
     } else if (game === 'draughts') {
       // scanFen(st) 已经是当前局面，不能再把历史 moves 叠加一次
       request = B8Server.evalDraughts(scanFen(st), '', 0.2);
@@ -4040,10 +4058,11 @@
     }
     var note = $('bd-analysis-note');
     if (note) {
-      note.textContent = ANALYSIS.saved
+      var forbidNote = (S.state && S.state.forbid) ? ' 当前按黑棋禁手（Renju）规则分析。' : '';
+      note.textContent = (ANALYSIS.saved
         ? '折线：服务器整盘分析，胜率曲线随这盘棋谱保存（只算一次）。点开棋谱就能看，不会重复分析。'
         : '折线：本地战术搜索 + 位置评估（国象/象棋 1 层、国跳 2 层；围棋影响力）。' +
-          '下完自动用服务器整盘分析一次；之后直接读保存的曲线。';
+          '下完自动用服务器整盘分析一次；之后直接读保存的曲线。') + forbidNote;
     }
     var btn = $('bd-analysis');
     if (btn) {

@@ -117,12 +117,13 @@
     });
   }
 
-  function evalGomoku(stones, timeoutMs) {
+  function evalGomoku(stones, timeoutMs, rule) {
     if (!enabled()) return Promise.resolve(null);
     return post('/gomoku/eval', {
       size: 15,
       stones: stones || [],
-      timeout_ms: timeoutMs || 800
+      timeout_ms: timeoutMs || 800,
+      rule: rule || 0
     }, 8000).then(function (r) {
       return {
         p1: Number(r.winrate || 50),
@@ -196,7 +197,8 @@
           return {
             size: p.size || 15,
             stones: p.stones || [],
-            timeout_ms: p.timeout_ms || timeoutMs || 250
+            timeout_ms: p.timeout_ms || timeoutMs || 250,
+            rule: p.rule || 0
           };
         })
       }, timeout).then(function (r) { return r.results || []; });
