@@ -2179,6 +2179,22 @@
       view.preview = null;
       view.submitted = false;
     }
+    // 动画超过 2.2 秒还没结束（切后台、RAF 被挂起等）就直接收掉，
+    // 否则它会一直挡住「轮到你」和键盘。
+    if (!isReplay() && view.anim && view.anim.startedAt &&
+        Date.now() - view.anim.startedAt > 2200 &&
+        mySeat() > 0 && Number(st.turn) === mySeat() && !gameOver(st)) {
+      if (view.raf) cancelAnimationFrame(view.raf);
+      view.raf = 0;
+      view.anim = null;
+      view.submitted = false;
+    }
+    // v2.165：只要现在轮到本端，就强制解除上一炮留下的 submitted 状态。
+    // 联机时对手的弹道不再在本端播放（见 onChange），避免动画把回合提示和输入卡住。
+    if (!isReplay() && mySeat() > 0 && Number(st.turn) === mySeat() && !gameOver(st)) {
+      view.submitted = false;
+      view.timeoutSent = false;
+    }
   }
 
   function tickClock() {
@@ -3209,6 +3225,7 @@
       cum: info.cum,
       total: total,
       durationMs: duration * 1000,
+      startedAt: Date.now(),
       started: 0,
       last: 0,
       progress: 0,
@@ -3362,24 +3379,9 @@
     if (next) view.ctx = next;
     if (isWaiting()) view.initSent = false;
     var st = gameState();
-    if (st) {
-      var prev = view.lastState;
-      var oldCount = prev
-        ? (Number(prev.shotSeq) || (prev.shots ? prev.shots.length : 0))
-        : 0;
-      var newCount = Number(st.shotSeq) || (st.shots ? st.shots.length : 0);
-      // 正好多了一炮才回放弹道；一次跳好几步就直接画终态
-      if (!view.anim && !isWaiting() && prev && newCount === oldCount + 1) {
-        var rec = st.shots && st.shots.length ? st.shots[st.shots.length - 1] : null;
-        if (rec && Number(rec.seat) !== mySeat()) {
-          var replay = makeReplayShot(rec);
-          if (replay) startShotAnim(prev, replay);
-        }
-      }
-      view.lastState = copyState(st);
-    } else {
-      view.lastState = null;
-    }
+    // 联机对手的炮弹不在本端播飞行动画：直接落终态，
+    // 避免 1 秒动画把「轮到你」和键盘输入挡住（v2.165）。
+    view.lastState = st ? copyState(st) : null;
     render();
     maybeStart();
   }

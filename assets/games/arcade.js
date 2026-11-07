@@ -1817,7 +1817,7 @@
       if (S.view !== 'room' || !S.room) return;
       if (!document.hidden) syncRoom(false);
       schedulePoll();
-    }, S.ws ? 9000 : 3500);
+    }, S.ws ? 4000 : 3000);
   }
 
   function wsUrl(code) {
