@@ -139,7 +139,7 @@
     var m = meta(S.game);
     var multi = m.mode === 'multi';
     txt('ag-start-title', '开一局' + m.title);
-    txt('ag-start-note', '选人数，然后建房或快速匹配。房号 4 位，发同学就能进来。');
+    txt('ag-start-note', '选好人数：开房间会生成 4 位房号，发同学就能进来；本地游玩是一台设备上几个人轮流。');
 
     show('ag-seat-row', multi);
     show('ag-mode-row', multi && S.game === 'graphwar');
@@ -669,6 +669,15 @@
       S.mod = null;
     }
     notify();
+    setTimeout(function () {
+      if (!S.mod || !S.room) return;
+      var stage = $('ag-stage');
+      if (!stage || stage.children.length) return;
+      stage.innerHTML = '<p class="ag-empty">画面没画出来。' +
+        '<button class="ag-link" id="ag-stage-lobby" type="button">回大厅重进一次</button></p>';
+      var b = $('ag-stage-lobby');
+      if (b) b.addEventListener('click', function () { leaveRoom(false); });
+    }, 1200);
   }
 
   function destroyModule() {
