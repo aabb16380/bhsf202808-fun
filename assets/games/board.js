@@ -565,6 +565,7 @@
     box.innerHTML = '';
     var all = LOBBY.history || [];
     var list = all.filter(function (r) {
+      if (LOBBY.historyFilter === 'casual') return !!r.casual;
       return !LOBBY.historyFilter || r.game === LOBBY.historyFilter;
     });
     list = historySortList(list);
@@ -584,7 +585,10 @@
 
     var meta = $('bd-history-meta');
     if (meta) {
-      var label = LOBBY.historyFilter ? (GAMES[LOBBY.historyFilter] ? GAMES[LOBBY.historyFilter].name : LOBBY.historyFilter) : '全部棋类';
+      var label = LOBBY.historyFilter
+      ? (LOBBY.historyFilter === 'casual' ? '其他 · 随便下下'
+        : (GAMES[LOBBY.historyFilter] ? GAMES[LOBBY.historyFilter].name : LOBBY.historyFilter))
+      : '全部棋类';
       var sortLabel = LOBBY.historySort === 'likes' ? '按点赞' : (LOBBY.historySort === 'rating' ? '按评分' : '按时间');
       meta.textContent = '所有人可见 · ' + label + ' ' + list.length + ' / ' + all.length + ' 局 · ' + sortLabel +
         (LOBBY.historyApi === false ? ' · 数据库待更新' : ' · 最多保留 1000 局');
@@ -612,7 +616,8 @@
       var main = document.createElement('div');
       main.className = 'bd-hrow-main';
       var title = document.createElement('b');
-      title.innerHTML = B8.esc(info.name) + (r.mode === 'local' ? '<i>本机</i>' : '');
+      title.innerHTML = B8.esc(info.name) + (r.casual ? '<i>随便下下</i>' : '') +
+        (r.mode === 'local' && !r.casual ? '<i>本机</i>' : '');
       var sub = document.createElement('span');
       var when = B8.dateTime ? B8.dateTime(r.ended_at || r.created_at) : '';
       var why = historyReason(r);
@@ -621,6 +626,14 @@
         B8.esc(when) + ' · ' + (r.seq || 0) + ' 手' + (why ? ' · ' + why : '');
       main.appendChild(title);
       main.appendChild(sub);
+
+      if (r.mode === 'local' && isAdminUser() && (r.host_account || r.host_no)) {
+        var acc = document.createElement('span');
+        acc.className = 'bd-haccount';
+        acc.textContent = '下棋账号：' + (r.host_account || '') +
+          (r.host_no ? '（' + r.host_no + '）' : '');
+        main.appendChild(acc);
+      }
 
       // 点赞 / 评分 / 浏览量
       var social = document.createElement('div');
@@ -962,8 +975,33 @@
 
   function startLocal() { startOfflineLocal('玩家一', '玩家二'); }
 
+  function casualNames(g) {
+    var meta = GAMES[g] || {};
+    function nm(s) {
+      s = String(s || '');
+      if (s.indexOf('黑') >= 0) return '黑棋';
+      if (s.indexOf('白') >= 0) return '白棋';
+      if (s.indexOf('红') >= 0) return '红棋';
+      return '黑棋';
+    }
+    return [nm(meta.first), nm(meta.second)];
+  }
+
+  function startCasual() {
+    if (!logged()) {
+      toast('随便下下也要登录：要保存下棋的账号');
+      return;
+    }
+    var g = LOBBY.game;
+    var names = casualNames(g);
+    closeLocalSetup();
+    createLocalRoom(names[0], names[1], {
+      game: g, size: LOBBY.size, minutes: LOBBY.minutes, forbid: LOBBY.forbid
+    }, true);
+  }
+
   /* ---------- 本机对局也上传成一个公开房间 ---------- */
-  function createLocalRoom(name1, name2, settings) {
+  function createLocalRoom(name1, name2, settings, casual) {
     if (!logged()) {
       toast('没登录：这盘只在本机，不会保存，别人也看不到');
       startOfflineLocal(name1, name2, settings);
@@ -987,10 +1025,11 @@
       p_timed: minutes > 0,
       p_minutes: minutes > 0 ? minutes : 0,
       p_name1: name1,
-      p_name2: name2
+      p_name2: name2,
+      p_casual: !!casual
     }).then(function (res) {
       enterOnline(res.room.code, res.room, res.state, res.seat || 1, { localRoom: true });
-      toast('本机对局已开：别人也能观战，下完进历史');
+      toast(casual ? '随便下下已开：只显示黑棋/白棋，下完进「其他」' : '本机对局已开：别人也能观战，下完进历史');
     }).catch(function (err) {
       var msg = (err && err.message) || '开局没成功';
       if (dbMissing(err)) {
@@ -5219,6 +5258,7 @@
       });
     });
     $('bd-setup-cancel').addEventListener('click', closeLocalSetup);
+    $('bd-setup-casual').addEventListener('click', startCasual);
     $('bd-setup-start').addEventListener('click', submitLocalSetup);
     $('bd-undo-box').addEventListener('click', onUndoClick);
     $('bd-view-board').addEventListener('click', function () {

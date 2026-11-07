@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；3 位数字邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g87" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g87">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g87">
+<link rel="icon" href="assets/favicon.png?v=20261101g88" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g88">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g88">
 <script>
-window.B8_BUILD = '20261101g87';
+window.B8_BUILD = '20261101g88';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g87"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g87">
+<script src="assets/theme.js?v=20261101g88"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g88">
 </head>
 
 <body data-site="fun">
@@ -134,6 +134,7 @@ window.B8_TEST = !!window.B8_T;
           <button class="chip" type="button" data-hg="go">围棋</button>
           <button class="chip" type="button" data-hg="gomoku">五子棋</button>
           <button class="chip" type="button" data-hg="draughts">国际跳棋</button>
+      <button class="chip" type="button" data-hg="casual">其他</button>
         </div>
         <div class="bd-history-sort" id="bd-history-sort" role="group" aria-label="历史对局排序">
           <span>排序</span>
@@ -408,8 +409,10 @@ window.B8_TEST = !!window.B8_T;
 
     <div class="bd-setup-actions">
       <button class="bd-btn" id="bd-setup-cancel" type="button">取消</button>
+      <button class="bd-btn" id="bd-setup-casual" type="button">随便下下</button>
       <button class="bd-btn primary" id="bd-setup-start" type="button">开始对局</button>
     </div>
+    <p class="bd-setup-hint" id="bd-casual-hint">随便下下只显示黑棋/白棋，不填姓名；仍会保存你的账号，下完进「其他」。</p>
   </div>
 </div>
 
@@ -429,7 +432,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g87' + T;
+  var V = '?v=20261101g88' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
