@@ -1104,12 +1104,8 @@
   }
 
   function leaveRoom(silent) {
-    var room = S.room;
-    // 离开只标「离开」，房间和座位都保留（跟棋类一样，回来还能坐原位）。
-    // 真的不要房间了走「关房」。
-    if (room && !S.local && logged() && S.seat > 0) {
-      rpc('b8_arcade_leave', { p_token: token(), p_code: room.code }).catch(function () {});
-    }
+    // 跟棋类一样：离开只是回大厅，不删座位、不结束对局、也不调 b8_arcade_leave。
+    // 房间和座位都留在服务器上，重新输房号回来还是原位；真要撤房走「关房」。
     if (!silent) wsSend({ type: 'changed' });
     wsClose();
     clearTimeout(S.pollTimer);
