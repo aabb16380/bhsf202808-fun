@@ -54,6 +54,7 @@
     wsQueue: [],
     pollTimer: 0,
     syncBusy: false,
+    syncQueued: false,
     joined: false,
     result: '',
     dbMissing: false,
@@ -1771,9 +1772,17 @@
     if (room.status === 'over' && prev.status !== 'over') loadRecords(true);
   }
 
+  function flushQueuedSync() {
+    if (!S.syncQueued) return;
+    S.syncQueued = false;
+    setTimeout(function () {
+      if (S.room && S.view !== 'replay') syncRoom(true);
+    }, 0);
+  }
+
   function syncRoom(force) {
     if (!S.room || S.view === 'replay') return;
-    if (S.syncBusy) return;
+    if (S.syncBusy) { S.syncQueued = true; return; }
     var now = Date.now();
     // 900ms 冷却 + 合流：onChange 里再调 refresh 也只会排在后面跑一次
     if (!force && now - (S.lastSync || 0) < 900) {
@@ -1788,6 +1797,7 @@
       p_code: S.room.code
     }).then(function (res) {
       S.syncBusy = false;
+      flushQueuedSync();
       if (!res || !res.room) return;
       S.chat = res.chat || [];
       var wasSeat = Number(S.seat) || 0;
@@ -1803,6 +1813,7 @@
       notify();
     }).catch(function (err) {
       S.syncBusy = false;
+      flushQueuedSync();
       if (S.dbMissing) return;
       if (/房间不存在/.test((err && err.message) || '')) {
         B8.toast('房间已解散');
