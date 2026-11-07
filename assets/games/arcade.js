@@ -410,7 +410,8 @@
 
   function leaveRoom(silent) {
     var room = S.room;
-    if (room && !S.local && logged() && S.seat > 0) {
+    // 对局中不调 leave：留座位，别人不用陪着重开；等人阶段才真的退座
+    if (room && !S.local && room.status !== 'play' && logged() && S.seat > 0) {
       rpc('b8_arcade_leave', { p_token: token(), p_code: room.code }).catch(function () {});
     }
     if (!silent) wsSend({ type: 'changed' });
@@ -441,8 +442,12 @@
     var prev = S.room || {};
     // 再来一局：别人开的新一局也要重挂载，否则停在上一局的结算画面
     if (prev.status === 'over' && room.status === 'play') S.round = (S.round || 0) + 1;
+    var same = !!prev.code && prev.code === room.code &&
+      prev.seq === room.seq && prev.status === room.status &&
+      prev.turn === room.turn && prev.winner === room.winner;
     S.room = room;
     if (typeof seat === 'number' && seat >= 0) S.seat = seat;
+    if (same) return;                       // 只是心跳，别重画（会打断动画）
     if (room.status === 'wait') showGame('ag-wait', true);
     else showGame('ag-wait', false);
     renderRoom();
@@ -738,6 +743,22 @@
     opts = opts || {};
     if (!S.room) return Promise.reject(new Error('还没进房间'));
     if (S.seat <= 0) return Promise.reject(new Error('观战不能操作'));
+
+    // 先把本端画面推进（动起来），服务器回来再对齐；失败就回滚
+    var before = {
+      state: S.room.state, turn: S.room.turn, status: S.room.status,
+      winner: S.room.winner, seq: S.room.seq
+    };
+    if (nextState) S.room.state = nextState;
+    if (opts.turn != null) S.room.turn = opts.turn;
+    if (opts.status === 'over') {
+      S.room.status = 'over';
+      S.room.winner = opts.winner == null ? null : opts.winner;
+    }
+    S.room.seq = (S.room.seq || 0) + 1;
+    renderRoom();
+    notify();
+
     return rpc('b8_arcade_action', {
       p_token: token(),
       p_code: S.room.code,
@@ -748,12 +769,25 @@
       p_winner: opts.winner == null ? null : opts.winner
     }).then(function (res) {
       if (res && res.room) {
-        applyRoom(res.room, S.seat);
+        S.room = res.room;
+        renderRoom();
+        notify();
       }
       wsSend({ type: 'changed' });
       return res;
     }).catch(function (err) {
+      // 回滚到服务器之前的局面
+      if (S.room && S.room.code) {
+        S.room.state = before.state;
+        S.room.turn = before.turn;
+        S.room.status = before.status;
+        S.room.winner = before.winner;
+        S.room.seq = before.seq;
+        renderRoom();
+        notify();
+      }
       B8.toast(errText(err));
+      syncRoom(true);
       throw err;
     });
   }
