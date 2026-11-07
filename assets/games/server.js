@@ -71,6 +71,12 @@
     return step();
   }
 
+  function winrateOf(r) {
+    if (!r || r.winrate == null || r.winrate === '') return 50;
+    var v = Number(r.winrate);
+    return isFinite(v) ? v : 50;
+  }
+
   function scoreToP1(cp, mate, turn) {
     var raw = mate != null ? (mate > 0 ? 10000 : -10000) : Number(cp || 0);
     var white = turn === 'b' ? -raw : raw;
@@ -107,7 +113,7 @@
       visits: visits || 100
     }, 8000).then(function (r) {
       return {
-        p1: Number(r.winrate || 50),
+        p1: winrateOf(r),
         scoreLead: r.score_lead,
         ownership: Array.isArray(r.ownership) ? r.ownership : [],
         bestmove: r.bestmove,
@@ -126,7 +132,7 @@
       rule: rule || 0
     }, 8000).then(function (r) {
       return {
-        p1: Number(r.winrate || 50),
+        p1: winrateOf(r),
         bestmove: r.bestmove,
         ev: r.ev,
         ms: r.ms

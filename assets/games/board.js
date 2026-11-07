@@ -3859,7 +3859,7 @@
 
   function analysisPayload(states) {
     return {
-      v: 1,
+      v: 2,
       n: states.length,
       p1: (ANALYSIS.serverData || []).map(function (x) {
         return Math.round(Number(x) * 10000) / 10000;
@@ -3918,6 +3918,17 @@
     if (!a || !Array.isArray(a.p1) || !a.p1.length) return false;
     var n = a.p1.length;
     if (a.n && Number(a.n) !== n) return false;
+    // 旧版五子棋分析有批量串局/终局 50 的问题，v2 之前一律重算
+    if (S && S.game === 'gomoku' && Number(a.v || 0) < 2) return false;
+    // 终局胜率必须和 winner 对得上；对不上说明是坏数据，重算
+    if (S && S.state && S.state.status === 'over') {
+      var w = S.state.winner;
+      if (w === 1 || w === 2) {
+        var expect = w === 1 ? 1 : 0;
+        var lastP = Number(a.p1[a.p1.length - 1]);
+        if (!isFinite(lastP) || Math.abs(lastP - expect) > 0.02) return false;
+      }
+    }
     ANALYSIS.saved = true;
     ANALYSIS.savedAt = Number(a.at) || Date.now();
     ANALYSIS.serverData = a.p1.map(function (x) {
@@ -3980,10 +3991,10 @@
     var lastSt = states[states.length - 1];
     var tail = null;
     var send = states.slice();
-    // 国跳无子可动 / 其他棋种规则终局：最后一个局面引擎可能没有着法
-    if (lastSt && lastSt.status === 'over' &&
-        (game === 'draughts' || /nomove|no-move/.test(lastSt.reason || ''))) {
-      tail = terminalRow(lastSt);
+    // 终局局面引擎可能没有合法着法（五子棋已五连、认输/超时、国跳无子可动等）：
+    // 最后一手不再问引擎，直接按这盘棋的 winner 补点，避免返回 50/胡乱着法。
+    if (S.state && S.state.status === 'over' && states.length > 1) {
+      tail = terminalRow(S.state);
       send = states.slice(0, -1);
     }
 
@@ -4065,7 +4076,13 @@
             return;
           }
           if (res && res.cached && res.analysis) {
-            applySavedAnalysis(res.analysis);
+            if (!applySavedAnalysis(res.analysis)) {
+              // 旧版五子棋曲线/终局胜率对不上：重算，并用 v2 覆盖旧分析
+              ANALYSIS.claimState = 'ok:' + rid;
+              engineNote('旧分析数据有问题，正在重新分析…', false);
+              runAnalysis(states, gk);
+              return;
+            }
             renderMoves();
             renderAnalysis();
             draw();
@@ -4103,6 +4120,25 @@
     var states = analysisStates();
     var st = states[ANALYSIS.cur];
     if (!st) return;
+    if (st.status === 'over') {
+      // 终局不再问引擎：五连/将死/无子可动时引擎可能返回 50 或非法着法
+      var tr = terminalRow(st);
+      var ti = ANALYSIS.cur;
+      if (ti >= 0 && ti < ANALYSIS.data.length) {
+        ANALYSIS.data[ti] = tr.p1 / 100;
+        ANALYSIS.pointAt[ti] = true;
+        ANALYSIS.bestArrow = null;
+        drawWinChart();
+        renderWinBar(ANALYSIS.data[ti], ti);
+        var tp = Math.round(ANALYSIS.data[ti] * 100);
+        txt('bd-an-p1', tp + '%');
+        txt('bd-an-p2', (100 - tp) + '%');
+        renderYouWinrate(ANALYSIS.data[ti]);
+        txt('bd-analysis-label', '第 ' + ti + ' / ' + Math.max(0, ANALYSIS.data.length - 1) + ' 手');
+        draw();
+      }
+      return;
+    }
     var key = stateSig(st);
     if (key === ANALYSIS.serverPointKey) return;
     ANALYSIS.serverPointKey = key;
@@ -4157,9 +4193,23 @@
       var pct = Math.round(ANALYSIS.data[idx] * 100);
       txt('bd-an-p1', pct + '%');
       txt('bd-an-p2', (100 - pct) + '%');
+      renderYouWinrate(ANALYSIS.data[idx]);
       txt('bd-analysis-label', '第 ' + idx + ' / ' + Math.max(0, ANALYSIS.data.length - 1) + ' 手');
       draw();
     }).catch(function () { /* 服务器不可用就保持 P1 */ });
+  }
+
+  function renderYouWinrate(p) {
+    var el = $('bd-an-you');
+    if (!el) return;
+    var seat = S && S.seat;
+    if (!S || isOfflineLocal() || (seat !== 1 && seat !== 2)) {
+      el.hidden = true;
+      return;
+    }
+    var mine = seat === 1 ? p : 1 - p;
+    el.hidden = false;
+    el.textContent = '你（' + colorName(seat) + '）胜率 ' + Math.round(mine * 100) + '%';
   }
 
   function renderAnalysis() {
@@ -4206,6 +4256,7 @@
     txt('bd-an-name2', shortName(2));
     txt('bd-an-p1', pct + '%');
     txt('bd-an-p2', (100 - pct) + '%');
+    renderYouWinrate(p);
     txt('bd-analysis-label', '第 ' + ANALYSIS.cur + ' / ' + last + ' 手');
     renderWinBar(p, ANALYSIS.cur);
 

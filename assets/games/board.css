@@ -768,6 +768,13 @@ html[data-mode="night"] .bd-first-banner {
   text-align: right;
 }
 
+.bd-an-you {
+  margin: 2px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
 .bd-an-legend {
   display: flex;
   align-items: center;
