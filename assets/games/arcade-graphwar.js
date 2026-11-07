@@ -833,7 +833,10 @@
   function newState(n, mode, seed) {
     n = normalizeN(n);
     mode = mode === 'team' ? 'team' : 'ffa';
-    if (seed && typeof seed === 'object' && seed.seed != null) seed = seed.seed;
+    if (seed && typeof seed === 'object') {
+      if (seed.seed != null) seed = seed.seed;
+      else seed = null;   // 外壳传的是 {players,seats,teamMode}，没有 seed 就真随机
+    }
     var rnd = makeRng(seed);
     var soldiers = [];
     var i, tries;
