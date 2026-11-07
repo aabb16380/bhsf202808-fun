@@ -548,6 +548,21 @@
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
 
+  // 数据库还没重跑时，旧 b8_notice_publish 只有 7 个参数。
+  // 「所有人」通知可以先退回旧签名发；定向通知必须等 SQL 更新。
+  function publishNotice(args) {
+    return B8.sb.rpc('b8_notice_publish', args).catch(function (err) {
+      var msg = err && err.message ? err.message : '';
+      if (noticeAudience === 'all' &&
+          /PGRST202|Could not find the function|schema cache|does not exist/i.test(msg)) {
+        var legacy = {};
+        for (var k in args) if (k !== 'p_targets') legacy[k] = args[k];
+        return B8.sb.rpc('b8_notice_publish', legacy);
+      }
+      throw err;
+    });
+  }
+
   function memberName(no) {
     for (var i = 0; i < members.length; i++) {
       if (members[i].student_no === no) return members[i].name || no;
@@ -834,7 +849,7 @@
         return;
       }
       pub.disabled = true;
-      B8.sb.rpc('b8_notice_publish', {
+      publishNotice({
         p_token: tok(),
         p_kind: noticeKind,
         p_pinned: noticePinned,
