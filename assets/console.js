@@ -499,6 +499,10 @@
   var noticeKind = 'once';
   var noticePinned = false;
   var noticeLevel = 'info';
+  var noticeAudience = 'all';       // all | pick
+  var noticeTargets = [];           // 指定同学的学号
+  var noticeTargetQuery = '';       // 搜索框
+  var noticeOpenId = 0;            // 当前展开详情的通知
   var NOTICE_MINS = [5, 15, 30, 60, 120, 240, 720, 1440];
 
   function noticeMinLabel(m) {
@@ -517,25 +521,122 @@
   }
 
   function loadNotices() {
-    return B8.sb.rpc('b8_super_notices', { p_token: tok(), p_limit: 50 })
-      .then(function (rows) {
-        notices = rows || [];
-        paintNotices();
-      }, function (err) {
-        var b = body();
-        if (!b) return;
-        var msg = err && err.message ? err.message : '网络异常';
-        if (/Could not find the function|schema cache|does not exist/i.test(msg)) {
-          msg = '「通知」要更新数据库：请在 Supabase SQL Editor 里跑一遍 supabase/install-all.sql（只需一次）。';
-        }
-        b.innerHTML = '<p class="form-status err">读取失败：' + esc(msg) + '</p>';
-      });
+    // 定向通知要在花名册里挑人；如果还没进过「成员」页，先把名单取回来（不重画成员页）。
+    var ready = members.length ? Promise.resolve() :
+      B8.sb.rpc('b8_super_members', { p_token: tok() }).then(function (rows) {
+        members = rows || [];
+      }, function () { /* 名单取不到也能发「所有人」 */ });
+    return ready.then(function () {
+      return B8.sb.rpc('b8_super_notices', { p_token: tok(), p_limit: 50 });
+    }).then(function (rows) {
+      notices = rows || [];
+      paintNotices();
+    }, function (err) {
+      var b = body();
+      if (!b) return;
+      var msg = err && err.message ? err.message : '网络异常';
+      if (/Could not find the function|schema cache|does not exist/i.test(msg)) {
+        msg = '「通知」要更新数据库：请在 Supabase SQL Editor 里跑一遍 supabase/install-all.sql（只需一次）。';
+      }
+      b.innerHTML = '<p class="form-status err">读取失败：' + esc(msg) + '</p>';
+    });
   }
 
   function chipOn(btn, on) {
     if (!btn) return;
     btn.classList.toggle('on', !!on);
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+
+  function memberName(no) {
+    for (var i = 0; i < members.length; i++) {
+      if (members[i].student_no === no) return members[i].name || no;
+    }
+    return no;
+  }
+
+  // 只重画「选同学」这一段，不动标题/正文，输入时不会丢字。
+  function renderNoticeTargets() {
+    var box = document.getElementById('notice-target-list');
+    if (!box) return;
+    var cnt = document.getElementById('notice-target-count');
+    if (cnt) cnt.textContent = '已选 ' + noticeTargets.length + ' 人';
+    if (!members.length) {
+      box.innerHTML = '<p class="notice-target-empty">花名册还没读出来；先发「所有人」，或去「成员」页刷新一下。</p>';
+      return;
+    }
+    var q = String(noticeTargetQuery || '').trim().toLowerCase();
+    var list = members.filter(function (m) {
+      if (m.active === false) return false;
+      if (!q) return true;
+      return String(m.name || '').toLowerCase().indexOf(q) >= 0 ||
+        String(m.student_no || '').indexOf(q) >= 0;
+    });
+    if (!list.length) {
+      box.innerHTML = '<p class="notice-target-empty">没有匹配的同学。</p>';
+      return;
+    }
+    var html = '';
+    list.forEach(function (m) {
+      var no = String(m.student_no || '');
+      var on = noticeTargets.indexOf(no) >= 0;
+      html += '<label><input type="checkbox" data-nt-no="' + esc(no) + '"' +
+        (on ? ' checked' : '') + '> <span>' + esc(m.name || no) +
+        '</span> <span class="console-dim">' + esc(no) + '</span></label>';
+    });
+    box.innerHTML = html;
+  }
+
+  function paintNoticeDetail(id) {
+    var box = document.getElementById('notice-detail-' + id);
+    if (!box) return;
+    var n = null;
+    for (var i = 0; i < notices.length; i++) if (Number(notices[i].id) === Number(id)) n = notices[i];
+    if (!n) { box.hidden = true; return; }
+    var targets = Array.isArray(n.targets) ? n.targets : [];
+    box.hidden = false;
+    box.innerHTML = '<p class="form-note">读取中…</p>';
+    B8.sb.rpc('b8_notice_dismissers', { p_token: tok(), p_id: id }).then(function (rows) {
+      var list = rows || [];
+      var by = {};
+      list.forEach(function (r) { by[r.member_no] = r; });
+      var html = '<div class="notice-detail-head"><b>谁点掉了</b>' +
+        '<span class="console-dim">已关 ' + list.length + ' 人' +
+        (targets.length ? ' / 指定 ' + targets.length + ' 人' : '') + '</span></div>';
+      if (targets.length) {
+        html += '<p class="form-note">发给：' + targets.map(function (no) {
+          return esc(memberName(no)) + '（' + esc(no) + '）';
+        }).join('、') + '</p>';
+        html += '<div class="notice-dismissers">';
+        targets.forEach(function (no) {
+          var r = by[no];
+          html += '<div class="notice-dismisser' + (r ? '' : ' is-pending') + '">' +
+            '<b>' + esc(memberName(no)) + '</b><span>' + esc(no) + '</span>' +
+            '<time>' + (r ? '已点掉 · ' + esc(B8.dateTime(r.dismissed_at)) : '还没点掉') + '</time></div>';
+        });
+        html += '</div>';
+      } else {
+        html += '<p class="form-note">发给所有人。</p>';
+        if (!list.length) {
+          html += '<p class="notice-target-empty">还没有人点掉这条通知。</p>';
+        } else {
+          html += '<div class="notice-dismissers">';
+          list.forEach(function (r) {
+            html += '<div class="notice-dismisser"><b>' + esc(r.name || r.member_no) +
+              '</b><span>' + esc(r.member_no) + '</span><time>' +
+              esc(B8.dateTime(r.dismissed_at)) + '</time></div>';
+          });
+          html += '</div>';
+        }
+      }
+      box.innerHTML = html;
+    }, function (err) {
+      var msg = err && err.message ? err.message : '网络异常';
+      if (/Could not find the function|schema cache|does not exist/i.test(msg)) {
+        msg = '要更新数据库（install-all.sql）后才能看谁点掉了。';
+      }
+      box.innerHTML = '<p class="form-status err">' + esc(msg) + '</p>';
+    });
   }
 
   function paintNotices() {
@@ -561,11 +662,25 @@
         '<button class="chip' + (noticeLevel === 'warn' ? ' on' : '') + '" type="button" data-nlv="warn" aria-pressed="' +
           (noticeLevel === 'warn') + '">重要（红）</button>' +
       '</div></div>' +
+      '<div class="field"><label>发给谁</label><div class="chip-row">' +
+        '<button class="chip' + (noticeAudience === 'all' ? ' on' : '') + '" type="button" data-na="all" aria-pressed="' +
+          (noticeAudience === 'all') + '">所有人</button>' +
+        '<button class="chip' + (noticeAudience === 'pick' ? ' on' : '') + '" type="button" data-na="pick" aria-pressed="' +
+          (noticeAudience === 'pick') + '">指定同学</button>' +
+      '</div></div>' +
       '<div class="field" id="notice-min-field"' + (noticeKind === 'period' ? '' : ' hidden') + '>' +
         '<label for="notice-min">时段长度</label>' +
         '<select class="input" id="notice-min">' + noticeMinOptions() + '</select></div>' +
       '<div class="field"><label for="notice-title">标题</label>' +
         '<input class="input" id="notice-title" maxlength="80" placeholder="例：周五 16:00 棋类比赛"></div>' +
+    '</div>' +
+    '<div class="console-add" id="notice-target-wrap" style="grid-template-columns:1fr;margin-top:8px"' +
+      (noticeAudience === 'pick' ? '' : ' hidden') + '>' +
+      '<div class="field"><label>选同学 <span id="notice-target-count" class="console-dim">已选 0 人</span></label>' +
+        '<input class="input" id="notice-target-search" maxlength="40" placeholder="搜名字或学号…" value="' +
+          esc(noticeTargetQuery) + '">' +
+        '<div class="notice-target-list" id="notice-target-list"></div>' +
+      '</div>' +
     '</div>' +
     '<div class="console-add" style="grid-template-columns:1fr;margin-top:8px">' +
       '<div class="field"><label for="notice-body">正文（可空）</label>' +
@@ -585,6 +700,10 @@
         : '<span class="tag plain">已关闭</span>');
       if (n.pinned) bits.push('<span class="tag">置顶</span>');
       if (n.level === 'warn') bits.push('<span class="tag">重要</span>');
+      var targets = Array.isArray(n.targets) ? n.targets : [];
+      bits.push(targets.length
+        ? '<span class="tag">指定 ' + targets.length + ' 人</span>'
+        : '<span class="tag plain">所有人</span>');
 
       var bodyTxt = String(n.body || '');
       if (bodyTxt.length > 60) bodyTxt = bodyTxt.slice(0, 60) + '…';
@@ -602,15 +721,81 @@
               : ' · 一直有效') +
             ' · 已关 ' + (Number(n.dismissed_count) || 0) + ' 人' +
           '</div>' +
+          '<div class="notice-detail-box" id="notice-detail-' + esc(n.id) + '"' +
+            (noticeOpenId === Number(n.id) ? '' : ' hidden') + '></div>' +
         '</div>' +
-        (n.active
-          ? '<div class="chip-row"><button class="btn ghost sm" type="button" data-nclose="' +
-              esc(n.id) + '">关闭</button></div>'
-          : '') +
+        '<div class="chip-row">' +
+          '<button class="btn ghost sm" type="button" data-ndetail="' + esc(n.id) + '">' +
+            (noticeOpenId === Number(n.id) ? '收起' : '详情') + '</button>' +
+          (n.active
+            ? '<button class="btn ghost sm" type="button" data-nclose="' +
+                esc(n.id) + '">关闭</button>'
+            : '') +
+        '</div>' +
       '</div>';
     });
     html += '</div>';
     b.innerHTML = html;
+
+    // 发给谁：所有人 / 指定同学
+    B8.qsa('[data-na]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        noticeAudience = btn.getAttribute('data-na') === 'pick' ? 'pick' : 'all';
+        B8.qsa('[data-na]', b).forEach(function (o) { chipOn(o, o === btn); });
+        var wrap = document.getElementById('notice-target-wrap');
+        if (wrap) wrap.hidden = noticeAudience !== 'pick';
+        if (noticeAudience === 'pick') renderNoticeTargets();
+      });
+    });
+    var nsearch = document.getElementById('notice-target-search');
+    if (nsearch) {
+      B8.on(nsearch, 'input', function () {
+        noticeTargetQuery = nsearch.value || '';
+        renderNoticeTargets();
+      });
+    }
+    var nlist = document.getElementById('notice-target-list');
+    if (nlist) {
+      B8.on(nlist, 'change', function (e) {
+        var no = e.target && e.target.getAttribute ? e.target.getAttribute('data-nt-no') : '';
+        if (!no) return;
+        var idx = noticeTargets.indexOf(no);
+        if (e.target.checked) {
+          if (idx < 0) noticeTargets.push(no);
+        } else if (idx >= 0) {
+          noticeTargets.splice(idx, 1);
+        }
+        var cnt = document.getElementById('notice-target-count');
+        if (cnt) cnt.textContent = '已选 ' + noticeTargets.length + ' 人';
+      });
+    }
+    renderNoticeTargets();
+
+    // 详情：谁点掉了
+    B8.qsa('[data-ndetail]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        var id = Number(btn.getAttribute('data-ndetail'));
+        var box = document.getElementById('notice-detail-' + id);
+        if (!box) return;
+        if (noticeOpenId === id && !box.hidden) {
+          noticeOpenId = 0;
+          box.hidden = true;
+          btn.textContent = '详情';
+          return;
+        }
+        B8.qsa('[data-ndetail]', b).forEach(function (o) {
+          var oid = Number(o.getAttribute('data-ndetail'));
+          var ob = document.getElementById('notice-detail-' + oid);
+          if (ob) ob.hidden = true;
+          o.textContent = '详情';
+        });
+        noticeOpenId = id;
+        box.hidden = false;
+        btn.textContent = '收起';
+        paintNoticeDetail(id);
+      });
+    });
+    if (noticeOpenId) paintNoticeDetail(noticeOpenId);
 
     B8.qsa('[data-nk]', b).forEach(function (btn) {
       B8.on(btn, 'click', function () {
@@ -644,6 +829,10 @@
       var text = (bodyEl && bodyEl.value || '').trim();
       var mins = Math.floor(Number(minEl && minEl.value) || 60);
       if (!title) { B8.toast('先写个标题'); if (titleEl) titleEl.focus(); return; }
+      if (noticeAudience === 'pick' && !noticeTargets.length) {
+        B8.toast('「指定同学」至少选一个；要发给所有人就切回「所有人」');
+        return;
+      }
       pub.disabled = true;
       B8.sb.rpc('b8_notice_publish', {
         p_token: tok(),
@@ -652,15 +841,24 @@
         p_title: title,
         p_body: text,
         p_minutes: noticeKind === 'period' ? mins : 0,
-        p_level: noticeLevel
+        p_level: noticeLevel,
+        p_targets: noticeAudience === 'pick' ? noticeTargets : []
       }).then(function (res) {
+        var who = noticeAudience === 'pick' ? ('已发给 ' + noticeTargets.length + ' 人') : '已发布';
         B8.toast(res && res.expires_at
-          ? '已发布，到 ' + B8.dateTime(res.expires_at) + ' 自动消失'
-          : '已发布，一直留着直到有人点关闭');
+          ? who + '，到 ' + B8.dateTime(res.expires_at) + ' 自动消失'
+          : who + '，一直留着直到有人点关闭');
+        noticeAudience = 'all';
+        noticeTargets = [];
+        noticeTargetQuery = '';
         loadNotices();
       }).catch(function (err) {
         pub.disabled = false;
-        B8.toast(errText(err));
+        var msg = err && err.message ? err.message : '网络异常';
+        if (/Could not find the function|schema cache|does not exist/i.test(msg)) {
+          msg = '要重跑 install-all.sql 才能发定向通知（数据库还没更新）';
+        }
+        B8.toast(msg);
       });
     });
 
