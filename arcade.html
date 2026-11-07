@@ -7,19 +7,19 @@
 <meta name="description" content="八班多人游戏：GraphWar 函数大战（2-8 人，输入函数打炮）、Quoridor 步步为营（2-4 人放墙堵路）。房间号加入、组队或混战、聊天；每一局自动保存，可逐步回看。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g126" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g126">
-<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g126">
+<link rel="icon" href="assets/favicon.png?v=20261101g127" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g127">
+<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g127">
 <script>
-window.B8_BUILD = '20261101g126';
+window.B8_BUILD = '20261101g127';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g126"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g126">
+<script src="assets/theme.js?v=20261101g127"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g127">
 </head>
 
 <body data-site="fun">
@@ -102,6 +102,9 @@ window.B8_TEST = !!window.B8_T;
 
           <h2 class="ag-h2">等人的房间</h2>
           <div class="ag-rooms" id="ag-rooms"></div>
+
+          <h2 class="ag-h2">正在进行的对局</h2>
+          <div class="ag-rooms" id="ag-live-rooms"></div>
           <button class="ag-link" id="ag-refresh" type="button">刷新列表</button>
         </div>
       </div>
@@ -194,6 +197,19 @@ window.B8_TEST = !!window.B8_T;
             <span class="ag-status" id="ag-status" role="status" aria-live="polite">—</span>
             <button class="ag-mini" id="ag-again" type="button" hidden>再来一局</button>
           </div>
+
+          <!-- 结算层只盖住棋局区域，不占整页 -->
+          <div class="ag-overlay" id="ag-over" hidden>
+            <p class="ag-over-kicker" id="ag-over-kicker">对局结束</p>
+            <h2 id="ag-over-title">—</h2>
+            <p class="ag-over-sub" id="ag-over-sub"></p>
+            <p class="ag-over-record" id="ag-over-record" hidden></p>
+            <div class="ag-over-actions">
+              <button class="ag-btn primary" id="ag-over-again" type="button">再来一局</button>
+              <button class="ag-btn" id="ag-over-view" type="button" hidden>看回放</button>
+              <button class="ag-btn" id="ag-over-lobby" type="button">回大厅</button>
+            </div>
+          </div>
         </div>
 
         <aside class="ag-side">
@@ -212,18 +228,7 @@ window.B8_TEST = !!window.B8_T;
       </div>
     </section>
 
-    <!-- ==================== 结果弹层 ==================== -->
-    <div class="ag-overlay" id="ag-over" hidden>
-      <p class="ag-over-kicker" id="ag-over-kicker">对局结束</p>
-      <h2 id="ag-over-title">—</h2>
-      <p class="ag-over-sub" id="ag-over-sub"></p>
-      <p class="ag-over-record" id="ag-over-record" hidden></p>
-      <div class="ag-over-actions">
-        <button class="ag-btn primary" id="ag-over-again" type="button">再来一局</button>
-        <button class="ag-btn" id="ag-over-view" type="button" hidden>看回放</button>
-        <button class="ag-btn" id="ag-over-lobby" type="button">回大厅</button>
-      </div>
-    </div>
+    <!-- ==================== 结果弹层（已移进房间棋局区域） ==================== -->
 
     <footer class="ag-foot">
       <span>八班游乐场 · 多人游戏</span>
@@ -237,7 +242,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g126' + T;
+  var V = '?v=20261101g127' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

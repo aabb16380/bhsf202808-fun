@@ -60,6 +60,7 @@
     lastList: 0,
     round: 0,
     overShown: false,
+    rematchPrompted: false,
     // v2.152：对局记录 / 回看 / 本机对局流水
     records: { mine: [], recent: [] },
     recTab: 'mine',
@@ -169,7 +170,6 @@
     if (rec.reason === 'leave') return '有人离开，对局结束';
     if (rec.reason === 'closed') return '房间已解散';
     var who = recWinnerName(rec);
-    if (rec.game === 'quoridor') return who ? '冠军 ' + who : '对局结束';
     return who ? who + ' 获胜' : '对局结束';
   }
 
@@ -326,9 +326,15 @@
       .catch(function (err) {
         S.dbMissing = true;
         var n = $('ag-db-note');
+        var msg = errText(err);
+        if (/ambiguous|column reference|r\.id/i.test(msg)) {
+          msg = '大厅 SQL 还是旧版（b8_arcade_list 有 r.id 歧义），请重跑最新 install-all.sql。';
+        }
         if (n) {
           n.hidden = false;
-          n.textContent = '多人大厅的数据库还没初始化：请管理员在 Supabase SQL Editor 跑一遍最新 install-all.sql。';
+          n.textContent = /数据库还没更新/.test(msg)
+            ? '多人大厅的数据库还没初始化：请管理员在 Supabase SQL Editor 跑一遍最新 install-all.sql。'
+            : '多人大厅读取失败：' + msg;
         }
         renderRooms([], []);
         if (window.console) console.warn('[arcade] 列表失败', err);
@@ -391,17 +397,32 @@
     }
 
     var box = $('ag-rooms');
-    if (!box) return;
-    box.innerHTML = '';
-    var open = rooms.filter(function (r) { return r.status === 'wait' && !r.is_private; });
-    if (!open.length) {
-      var q = document.createElement('p');
-      q.className = 'ag-empty';
-      q.textContent = S.dbMissing ? '数据库还没初始化。' : '现在没有公开房间。自己开一个，等人来。';
-      box.appendChild(q);
-      return;
+    if (box) {
+      box.innerHTML = '';
+      var open = rooms.filter(function (r) { return r.status === 'wait' && !r.is_private; });
+      if (!open.length) {
+        var q = document.createElement('p');
+        q.className = 'ag-empty';
+        q.textContent = S.dbMissing ? '大厅读取失败，刷新试试。' : '现在没有公开房间。自己开一个，等人来。';
+        box.appendChild(q);
+      } else {
+        open.forEach(function (r) { box.appendChild(roomRow(r, false)); });
+      }
     }
-    open.forEach(function (r) { box.appendChild(roomRow(r, false)); });
+
+    var liveBox = $('ag-live-rooms');
+    if (liveBox) {
+      liveBox.innerHTML = '';
+      var live = rooms.filter(function (r) { return r.status === 'play' && !r.is_private; });
+      if (!live.length) {
+        var lp = document.createElement('p');
+        lp.className = 'ag-empty';
+        lp.textContent = S.dbMissing ? '大厅读取失败，刷新试试。' : '现在没有正在进行的对局。';
+        liveBox.appendChild(lp);
+      } else {
+        live.forEach(function (r) { liveBox.appendChild(roomRow(r, false)); });
+      }
+    }
   }
 
   /* ============================================================
@@ -1131,6 +1152,7 @@
     S.result = '';
     S.round = 0;
     S.overShown = false;
+    S.rematchPrompted = false;
     if (remember) {
       try { history.replaceState(null, '', 'arcade.html?room=' + encodeURIComponent(room.code)); } catch (e) {}
     }
@@ -1229,9 +1251,19 @@
     var same = !!prev.code && prev.code === room.code &&
       prev.seq === room.seq && prev.status === room.status &&
       prev.turn === room.turn && prev.winner === room.winner &&
+      prev.rematch_by === room.rematch_by && prev.rematch_at === room.rematch_at &&
       JSON.stringify(prev.seats || []) === JSON.stringify(room.seats || []);
     S.room = room;
     if (typeof seat === 'number' && seat >= 0) S.seat = seat;
+    if (room.status === 'play') S.rematchPrompted = false;
+    var myno = myNo();
+    var by = room.rematch_by || '';
+    if (room.status === 'over' && by && by !== myno && !S.rematchPrompted) {
+      S.rematchPrompted = true;
+      acceptRematch(true);
+    } else if (!by || by === myno) {
+      S.rematchPrompted = false;
+    }
     if (same) return;                       // 只是心跳，别重画（会打断动画）
     renderRoom();
     if (room.status === 'play' || room.status === 'over') ensureModule();
@@ -1413,7 +1445,7 @@
     var waiting = r.status === 'wait';
     show('ag-close-room', !S.local && (isHost || (B8.auth && B8.auth.isSuper && B8.auth.isSuper())));
     show('ag-copy-link', !S.local);
-    show('ag-again', !S.local && isHost && r.status === 'over');
+    show('ag-again', !S.local && S.seat > 0 && r.status === 'over');
     txt('ag-chat-count', String((S.chat || []).length));
     // 等人：直接在房间页里显示「房号 + 座位 + 开始」，不再用全屏弹层挡住宿位和人数。
     show('ag-waitbox', waiting);
@@ -1491,6 +1523,23 @@
   }
 
 
+  function myNo() {
+    if (!S.room || S.seat < 1) return '';
+    var seats = S.room.seats || [];
+    for (var i = 0; i < seats.length; i++) {
+      if (Number(seats[i].seat) === Number(S.seat)) return seats[i].no || '';
+    }
+    return '';
+  }
+
+  function seatNameByNo(no) {
+    var seats = (S.room && S.room.seats) || [];
+    for (var i = 0; i < seats.length; i++) {
+      if (seats[i].no === no) return seats[i].name || seats[i].no || '对方';
+    }
+    return '对方';
+  }
+
   function renderOver() {
     var r = S.room;
     if (!r) return;
@@ -1528,9 +1577,18 @@
 
     var again = $('ag-over-again');
     if (again) {
-      again.hidden = !(S.seat === 1);
-      again.disabled = !(S.seat === 1);
-      again.textContent = S.seat === 1 ? '再来一局' : '等房主再开';
+      if (S.local) {
+        again.hidden = false;
+        again.disabled = false;
+        again.textContent = '再来一局';
+      } else {
+        var mine = myNo();
+        var by = r.rematch_by || '';
+        again.hidden = S.seat < 1;
+        again.disabled = !!(by && by === mine);
+        again.textContent = by && by !== mine ? '同意再来一局'
+          : (by === mine ? '已邀请，等对方' : '邀请再来一局');
+      }
     }
   }
 
@@ -1708,12 +1766,9 @@
     });
   }
 
-  function startGame() {
-    var r = S.room;
-    if (!r) return;
-    if (S.seat !== 1) { B8.toast('只有房主可以开局'); return; }
-    var seats = r.seats || [];
-    if (seats.length < 2) { B8.toast('至少两个人才能开局'); return; }
+  function buildInit(r) {
+    var seats = (r && r.seats) || [];
+    if (seats.length < 2) return null;
     var m = mod(r.game);
     var init = null;
     try {
@@ -1727,9 +1782,19 @@
       }
     } catch (e) {
       B8.toast('开局局面算不出来：' + ((e && e.message) || ''));
-      return;
+      return null;
     }
-    if (!init) { B8.toast('这个游戏还没准备好'); return; }
+    if (!init) { B8.toast('这个游戏还没准备好'); return null; }
+    return init;
+  }
+
+  function startGame() {
+    var r = S.room;
+    if (!r) return;
+    if (S.seat !== 1) { B8.toast('只有房主可以开局'); return; }
+    if ((r.seats || []).length < 2) { B8.toast('至少两个人才能开局'); return; }
+    var init = buildInit(r);
+    if (!init) return;
     rpc('b8_arcade_start', { p_token: token(), p_code: r.code, p_state: init })
       .then(function (res) {
         if (res && res.room) {
@@ -1742,6 +1807,50 @@
       })
       .catch(function (err) { B8.toast(errText(err)); });
   }
+
+  // v2.160：再来一局要对方同意；接受后同一个房间重开，两个人都还在。
+  function rematchClick() {
+    if (!S.room) return;
+    if (S.local) { startLocal(); return; }
+    var r = S.room;
+    if (r.status !== 'over' || S.seat < 1) return;
+    var mine = myNo();
+    var by = r.rematch_by || '';
+    if (by && by !== mine) { acceptRematch(false); return; }
+    if (by === mine) { B8.toast('已经邀请，等对方同意'); return; }
+    rpc('b8_arcade_rematch', { p_token: token(), p_code: r.code })
+      .then(function (res) {
+        if (res && res.room) { S.room = res.room; renderRoom(); }
+        wsSend({ type: 'changed' });
+        B8.toast('已邀请对方，等他同意');
+      })
+      .catch(function (err) { B8.toast(errText(err)); });
+  }
+
+  function acceptRematch(ask) {
+    var r = S.room;
+    if (!r || S.local || r.status !== 'over') return;
+    function go() {
+      var init = buildInit(r);
+      if (!init) return;
+      rpc('b8_arcade_rematch_accept', {
+        p_token: token(), p_code: r.code, p_state: init
+      }).then(function (res) {
+        if (res && res.room) {
+          S.rematchPrompted = false;
+          S.overShown = false;
+          showGame('ag-over', false);
+          applyRoom(res.room, S.seat);
+        }
+        wsSend({ type: 'changed' });
+      }).catch(function (err) { B8.toast(errText(err)); });
+    }
+    if (!ask) { go(); return; }
+    B8.confirm(seatNameByNo(r.rematch_by) + ' 邀请你再来一局，同意吗？', {
+      title: '再来一局', okText: '同意'
+    }).then(function (ok) { if (ok) go(); });
+  }
+
 
   /* ============================================================
      五、聊天
@@ -1854,17 +1963,15 @@
     if (again) {
       again.addEventListener('click', function () {
         if (S.local) startLocal();
-        else startGame();
+        else rematchClick();
       });
     }
 
     var overAgain = $('ag-over-again');
     if (overAgain) {
       overAgain.addEventListener('click', function () {
-        showGame('ag-over', false);
         if (S.local) startLocal();
-        else if (S.room && S.room.status === 'over' && S.seat === 1) startGame();
-        else B8.toast('等房主再开一局');
+        else rematchClick();
       });
     }
 

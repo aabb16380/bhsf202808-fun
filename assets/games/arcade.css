@@ -590,6 +590,18 @@ a:hover { text-decoration: underline; }
 .ag-wait-actions .ag-link { align-self: center; }
 
 /* ---------- 弹层 ---------- */
+.ag-stage-wrap { position: relative; }
+
+/* 结算只盖住棋局区域，不占整页 */
+#ag-over {
+  position: absolute;
+  inset: 8px;
+  z-index: 30;
+  padding: 18px 14px;
+  overflow: auto;
+  border-radius: 8px;
+}
+
 .ag-overlay {
   position: fixed;
   inset: 0;

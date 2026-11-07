@@ -4549,6 +4549,14 @@ html[data-mode="night"] .blc-players { color: var(--ink-2); }
   white-space: nowrap;
 }
 
+.hero-live-links {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hero-live-head .hero-live-links a { margin-left: 0; }
+
 .hero-live-dot {
   width: 6px;
   height: 6px;
