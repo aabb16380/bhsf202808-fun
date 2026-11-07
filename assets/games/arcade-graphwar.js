@@ -20,6 +20,31 @@
   var WORLD = { x0: -25, x1: 25, y0: -15, y1: 15 };
   var HP_MAX = 100;
   var DAMAGE = 35;
+  // v2.170：曲线越长，伤害按长度反比衰减。60 以内全额，之后 35×60/长度，最低 8。
+  var DAMAGE_REF_LEN = 60;
+  var MIN_DAMAGE = 8;
+
+  function curveLength(points) {
+    if (!Array.isArray(points) || points.length < 2) return 0;
+    var total = 0;
+    for (var i = 1; i < points.length; i++) {
+      var dx = Number(points[i][0]) - Number(points[i - 1][0]);
+      var dy = Number(points[i][1]) - Number(points[i - 1][1]);
+      if (isFinite(dx) && isFinite(dy)) total += Math.sqrt(dx * dx + dy * dy);
+    }
+    return total;
+  }
+
+  function damageForLength(len) {
+    len = Number(len);
+    if (!isFinite(len) || len <= 0) return DAMAGE;
+    return clamp(Math.round(DAMAGE * DAMAGE_REF_LEN / Math.max(DAMAGE_REF_LEN, len)),
+      MIN_DAMAGE, DAMAGE);
+  }
+
+  function curveDamage(points) {
+    return damageForLength(curveLength(points));
+  }
   var SOLDIER_R = 0.82;
   var HIT_R = 0.95;
   var NORMAL_STEP = 0.08;
@@ -1023,6 +1048,7 @@
     if (isNum(Number(shot.dir))) shooter.dir = Number(shot.dir) < 0 ? -1 : 1;
 
     var points = Array.isArray(shot.points) ? shot.points : [];
+    var shotDmg = curveDamage(points);
     var hits = [];
     var seen = {};
     if (Array.isArray(shot.hits)) {
@@ -1032,7 +1058,7 @@
         if (!aliveSoldier(st, hs)) continue;
         if ((st.mode || 'ffa') === 'team' && (hs % 2) === (seat % 2)) continue;
         seen[hs] = true;
-        hits.push({ seat: hs, dmg: DAMAGE });
+        hits.push({ seat: hs, dmg: shotDmg });
       }
     }
     /* 物理路径经过了谁，也一并结算；避免只信客户端上交的 hits。 */
@@ -1040,7 +1066,7 @@
     for (var d = 0; d < derived.length; d++) {
       if (seen[derived[d].seat]) continue;
       seen[derived[d].seat] = true;
-      hits.push({ seat: derived[d].seat, dmg: DAMAGE });
+      hits.push({ seat: derived[d].seat, dmg: shotDmg });
     }
 
     var obsBefore = st.obstacles || [];
@@ -1079,10 +1105,11 @@
     for (var m = 0; m < hits.length; m++) {
       var target = soldierOf(st, hits[m].seat);
       if (!target || target.alive === false || Number(target.hp) <= 0) continue;
-      target.hp = Math.max(0, Number(target.hp) - DAMAGE);
+      var dealt = Number(hits[m].dmg) || shotDmg;
+      target.hp = Math.max(0, Number(target.hp) - dealt);
       target.alive = target.hp > 0;
       damaged.push(hits[m].seat);
-      st.log.push(seatLabel(seat) + ' 命中 ' + seatLabel(target.seat) + ' -' + DAMAGE);
+      st.log.push(seatLabel(seat) + ' 命中 ' + seatLabel(target.seat) + ' -' + dealt);
     }
     if (!damaged.length && !carved.length) {
       st.log.push(seatLabel(seat) + ' 的炮弹落空了');
@@ -1095,7 +1122,7 @@
       angle: isNum(Number(shot.angle)) ? Number(shot.angle) : 0,
       dir: shooter.dir,
       points: compressPoints(points, 180),
-      hits: hits.map(function (x) { return { seat: x.seat, dmg: DAMAGE }; }),
+      hits: hits.map(function (x) { return { seat: x.seat, dmg: x.dmg }; }),
       destroyed: carved.slice()
     };
     if (carved.length) {
@@ -1152,9 +1179,10 @@
       obstacles: st.obstacles || []
     });
     if (!tr.points || tr.points.length < 2) return null;
+    var shotDmg = curveDamage(tr.points);
     var hits = pathHitList(st, seat, tr.points).map(function (h) {
       var target = soldierOf(st, h.seat);
-      return { seat: h.seat, dmg: DAMAGE, at: target ? [target.x, target.y] : h.at };
+      return { seat: h.seat, dmg: shotDmg, at: target ? [target.x, target.y] : h.at };
     });
     return {
       seat: seat, fnText: fnText, mode: mode, angle: angle, dir: dir,
@@ -2067,10 +2095,11 @@
     else if (view.submitted) view.dom.fire.textContent = '同步中';
     else view.dom.fire.textContent = '发 射';
     var waitTip = typeable && !editable ? '对方思考中，你可以先输入，轮到你直接发射。' : '';
+    var dmgTip = '曲线越长伤害越低（60 以内 35，之后按长度反比，最低 8）。';
     if (view.mode === 'y2') {
-      view.dom.tip.textContent = waitTip + "二阶模式：输入 y'' = f(x)。从士兵位置按 0.05 步长积分，角度用 ↑ ↓ 调（-80° ~ 80°）。已经发射过的函数不能重复使用。";
+      view.dom.tip.textContent = waitTip + dmgTip + "二阶模式：输入 y'' = f(x)。从士兵位置按 0.05 步长积分，角度用 ↑ ↓ 调（-80° ~ 80°）。已经发射过的函数不能重复使用。";
     } else {
-      view.dom.tip.textContent = waitTip + '普通模式：输入 y = f(x)。曲线会自动上下平移经过你的士兵，沿面朝方向飞。已经发射过的函数不能重复使用。';
+      view.dom.tip.textContent = waitTip + dmgTip + '普通模式：输入 y = f(x)。曲线会自动上下平移经过你的士兵，沿面朝方向飞。已经发射过的函数不能重复使用。';
     }
     var keys = view.dom.keys ? view.dom.keys.querySelectorAll('.gw-key') : [];
     for (var i = 0; i < keys.length; i++) keys[i].disabled = !typeable;
@@ -2859,7 +2888,9 @@
     if (!rec) return '';
     var hits = Array.isArray(rec.hits) ? rec.hits : [];
     if (hits.length) {
-      return '命中 ' + hits.map(function (h) { return '座位 ' + h.seat; }).join('、');
+      return '命中 ' + hits.map(function (h) {
+        return '座位 ' + h.seat + ' -' + (Number(h.dmg) || DAMAGE);
+      }).join('、');
     }
     if (rec.hitObstacle) return '击中障碍 · 炸出洞';
     return '未命中';
@@ -2920,7 +2951,7 @@
       g.stroke();
       g.fillStyle = p.seal;
       g.font = '700 11px ' + p.mono;
-      g.fillText('-' + DAMAGE, x - 8, y - Math.max(14, 1.3 * viewScale()));
+      g.fillText('-' + (Number(hits[i].dmg) || DAMAGE), x - 8, y - Math.max(14, 1.3 * viewScale()));
     }
 
     // 左上角：函数式 + 结果
@@ -3099,10 +3130,11 @@
       obstacles: st.obstacles || []
     });
     if (!tr.points || tr.points.length < 2) return { error: tr.error || '这条曲线走不出有效弹道' };
+    var shotDmg = curveDamage(tr.points);
     var hits = pathHitList(st, mySeat(), tr.points).map(function (h) {
       var target = soldierOf(st, h.seat);
       return {
-        seat: h.seat, dmg: DAMAGE,
+        seat: h.seat, dmg: shotDmg,
         at: target ? [target.x, target.y] : h.at
       };
     });
@@ -3255,6 +3287,7 @@
         p: nearestProgress(shot.points, info.cum, total, at),
         at: at,
         seat: h.seat,
+        dmg: Number(h.dmg) || DAMAGE,
         done: false
       });
     }
@@ -3311,7 +3344,7 @@
         he.done = true;
         makeBurst(a, he.at[0], he.at[1], 8, false);
         a.floats.push({
-          x: he.at[0], y: he.at[1] + 1.2, text: '-' + DAMAGE,
+          x: he.at[0], y: he.at[1] + 1.2, text: '-' + (Number(he.dmg) || DAMAGE),
           life: 0.95, max: 0.95, color: 'seal'
         });
         a.flashes.push({ x: he.at[0], y: he.at[1], life: 0.3, max: 0.3, seal: true });
@@ -3405,7 +3438,7 @@
       dir: Number(rec.dir) < 0 ? -1 : 1,
       points: pts,
       hits: (rec.hits || []).map(function (h) {
-        return { seat: Number(h.seat), dmg: DAMAGE };
+        return { seat: Number(h.seat), dmg: Number(h.dmg) || DAMAGE };
       }),
       hitObstacle: !!(rec.hitObstacle || (rec.destroyed && rec.destroyed.length)),
       obstacleIndex: rec.obstacleIndex != null ? Number(rec.obstacleIndex) : -1,
@@ -3662,6 +3695,9 @@
       teams: teams,
       normFunction: normFunction,
       usedFunctions: usedFunctions,
+      curveLength: curveLength,
+      damageForLength: damageForLength,
+      curveDamage: curveDamage,
       ctxTurn: function () {
         return view.ctx && view.ctx.state ? Number(view.ctx.state.turn) || 0 : 0;
       },
