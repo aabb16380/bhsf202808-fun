@@ -4807,48 +4807,46 @@
     var cell = boardCellSize(st.game, st, w, h);
     var r = Math.max(4.5, cell * 0.19);
     var fs = Math.max(7, Math.round(cell * 0.26));
-    var count = 0;
-    for (var i = 0; i < limit; i++) {
-      var tag = tags[i + 1];
-      if (!tag) continue;
-      var mv = S.moves[i];
-      if (!mv || !mv.move) continue;
-      var dest = null;
-      if (st.game === 'draughts') {
-        var p = mv.move.p || [];
-        dest = p.length ? p[p.length - 1] : null;
-      } else {
-        if (mv.move.pass) continue;
-        dest = mv.move.t;
-      }
-      if (dest == null) continue;
-      var pc = st.board[dest];
-      if (!pc) continue;
-      var col = pieceColor(st, pc);
-      if (col !== mv.color) continue; // 这个棋子已经走开/被吃了，不贴
-      var c = arrowCenter(st.game, dest, st, w, h, flip);
-      var cx = c[0] + cell * 0.30;
-      var cy = c[1] - cell * 0.30;
-      var tone = tagTone(tag.key);
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fillStyle = isNight() ? '#1b1a18' : '#fffdf7';
-      ctx.fill();
-      ctx.lineWidth = Math.max(1, r * 0.2);
-      ctx.strokeStyle = tone;
-      ctx.stroke();
-      ctx.fillStyle = tone;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      var icon = tag.icon || (tag.key === 'best' ? '\u2605' : '?');
-      var fsz = icon.length > 1 ? Math.round(fs * 0.76) : fs;
-      ctx.font = '700 ' + fsz + 'px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
-      ctx.fillText(icon, cx, cy + 0.5);
-      ctx.restore();
-      count++;
+    // 只显示当前这一手：回看是第 limit 手，实战是最后一手
+    var i = limit - 1;
+    var tag = tags[i + 1];
+    if (!tag) return;
+    var mv = S.moves[i];
+    if (!mv || !mv.move) return;
+    var dest = null;
+    if (st.game === 'draughts') {
+      var p = mv.move.p || [];
+      dest = p.length ? p[p.length - 1] : null;
+    } else {
+      if (mv.move.pass) return;
+      dest = mv.move.t;
     }
-    if (cv) cv.setAttribute('data-tags', String(count));
+    if (dest == null) return;
+    var pc = st.board[dest];
+    if (!pc) return;
+    var col = pieceColor(st, pc);
+    if (col !== mv.color) return; // 这个棋子已经走开/被吃了，不贴
+    var c = arrowCenter(st.game, dest, st, w, h, flip);
+    var cx = c[0] + cell * 0.30;
+    var cy = c[1] - cell * 0.30;
+    var tone = tagTone(tag.key);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = isNight() ? '#1b1a18' : '#fffdf7';
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, r * 0.2);
+    ctx.strokeStyle = tone;
+    ctx.stroke();
+    ctx.fillStyle = tone;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    var icon = tag.icon || (tag.key === 'best' ? '\u2605' : '?');
+    var fsz = icon.length > 1 ? Math.round(fs * 0.76) : fs;
+    ctx.font = '700 ' + fsz + 'px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
+    ctx.fillText(icon, cx, cy + 0.5);
+    ctx.restore();
+    if (cv) cv.setAttribute('data-tags', '1');
   }
 
   function drawBestArrow(ctx, st, opts, w, h) {
