@@ -80,6 +80,7 @@
       return {
         p1: Number(r.winrate || 50),
         scoreLead: r.score_lead,
+        ownership: Array.isArray(r.ownership) ? r.ownership : [],
         bestmove: r.bestmove,
         visits: r.visits,
         ms: r.ms

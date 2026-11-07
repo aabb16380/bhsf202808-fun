@@ -2465,7 +2465,7 @@
     show('bd-undo', playing && canOperate);
     show('bd-end', playing && localRoom && S.seat > 0);
     show('bd-restart', playing && (offline || (localRoom && S.seat > 0)));
-    show('bd-score', st.game === 'go' && (st.status === 'play' || S.reviewing));
+    show('bd-score', st.game === 'go' && (st.status === 'play' || st.status === 'over' || S.reviewing));
     show('bd-chat', online);
     show('bd-cancel-room', !!(S.isHost && S.room && S.room.status === 'wait'));
     var passBtn = $('bd-pass');
@@ -3997,6 +3997,37 @@
     });
   }
 
+  function kataGoScore(st) {
+    if (!window.B8Server || !B8Server.enabled() || st.game !== 'go') {
+      return Promise.reject(new Error('没有服务器 KataGo'));
+    }
+    var upto = S.reviewing ? Math.min(S.reviewIndex, S.moves.length) : S.moves.length;
+    var moves = S.moves.slice(0, upto).map(function (m) {
+      return [m.color === 2 ? 'W' : 'B',
+        m.move && m.move.pass ? 'pass' : E.goCoord(m.move.t, st.size)];
+    });
+    return B8Server.evalGo(st.size, moves, 100).then(function (r) {
+      var n = st.size * st.size;
+      if (!r || !r.ownership || r.ownership.length !== n) {
+        throw new Error('KataGo 没有返回归属图');
+      }
+      var dead = [];
+      for (var i = 0; i < n; i++) {
+        var p = st.board[i];
+        if (!p) continue;
+        var own = Number(r.ownership[i]) || 0;
+        if (p === 1 && own < -0.15) dead.push(i);
+        else if (p === 2 && own > 0.15) dead.push(i);
+      }
+      return {
+        dead: dead,
+        lead: Number(r.scoreLead) || 0,
+        winrate: Number(r.p1) || 50,
+        ownership: r.ownership
+      };
+    });
+  }
+
   function goChainAt(st, idx) {
     var color = st.board[idx];
     if (!color) return [];
@@ -4023,7 +4054,7 @@
     return (S && S.reviewing && S.reviewState) ? S.reviewState : (S ? S.state : null);
   }
 
-  function applyGoScore(dead, auto) {
+  function applyGoScore(dead, auto, kata) {
     var st = scoreState();
     if (!S || !st || st.game !== 'go') return;
     dead = (dead || []).slice();
@@ -4031,6 +4062,12 @@
     sc.dead = dead;
     sc.seq = st.seq;
     sc.auto = !!auto;
+    if (kata) {
+      sc.kataLead = kata.lead;
+      sc.kataWinrate = kata.winrate;
+      sc.kataDead = true;
+      sc.ownership = kata.ownership;
+    }
     S.score = sc;
     S.scoreBusy = false;
     renderScorePanel();
@@ -4050,7 +4087,7 @@
       return;
     }
     var st = scoreState();
-    if (!st || st.status !== 'play') { toast('这个局面不能点目'); return; }
+    if (!st || (st.status !== 'play' && st.status !== 'over')) { toast('这个局面不能点目'); return; }
     var seq = st.seq;
     var reviewIdx = S.reviewing ? S.reviewIndex : -1;
     S.scoreBusy = true;
@@ -4058,13 +4095,25 @@
     renderScorePanel();
     renderActions();
     draw();
-    estimateDead(st).then(function (dead) {
+    var localScore = function () {
+      return estimateDead(st).then(function (dead) { return { dead: dead, kata: null }; });
+    };
+    var scorePromise = (window.B8Server && B8Server.enabled())
+      ? kataGoScore(st).then(function (r) {
+          return { dead: r.dead, kata: r };
+        }).catch(function (err) {
+          if (window.console) console.warn('[go] KataGo 点目失败，回退本地：', err && err.message);
+          return localScore();
+        })
+      : localScore();
+
+    scorePromise.then(function (res) {
       if (!S || !S.state || S.state.game !== 'go' || !S.scoreBusy) return;
       if (S.reviewing ? (S.reviewIndex !== reviewIdx) : (S.state.seq !== seq)) return;
-      applyGoScore(dead, true);
-      toast(dead.length
-        ? '自动标出 ' + dead.length + ' 颗死子；点错的棋子可以直接点一下改正'
-        : '没有找到死子；有争议的话点棋子手动标死子');
+      applyGoScore(res.dead, true, res.kata);
+      var how = res.kata ? 'KataGo 自动判定' : '本地自动判断';
+      toast(how + '：' + (res.dead.length ? res.dead.length + ' 颗死子，点错的棋子可以点一下改正'
+        : '没找到死子；有争议的话点棋子手动标死子'));
     }).catch(function () {
       if (!S || !S.state || S.state.game !== 'go' || !S.scoreBusy) return;
       if (S.reviewing ? (S.reviewIndex !== reviewIdx) : (S.state.seq !== seq)) return;
@@ -4117,19 +4166,24 @@
     var sc = S.score;
     var deadCount = sc.dead ? sc.dead.length : 0;
     n.hidden = false;
+    var lead = (sc.kataLead == null ? null : Number(sc.kataLead));
+    var headline = lead == null
+      ? (sc.winner === 0 ? '和棋' : (sc.winner === 1 ? '黑胜 ' : '白胜 ') + fmtNum(Math.abs(sc.diff)))
+      : ('KataGo ' + (lead > 0 ? '黑领先 ' : (lead < 0 ? '白领先 ' : '和棋 ')) + fmtNum(Math.abs(lead)) + ' 目');
     n.innerHTML =
       '<div class="bd-score-line">' +
         '<span><i class="bd-sq is-b"></i>黑 <b>' + fmtNum(sc.black) + '</b></span>' +
         '<span><i class="bd-sq is-w"></i>白 <b>' + fmtNum(sc.white) + '</b></span>' +
         '<span>贴目 <b>7.5</b></span>' +
-        '<span>' + (sc.winner === 0 ? '和棋' : (sc.winner === 1 ? '黑胜 ' : '白胜 ') + fmtNum(Math.abs(sc.diff))) + '</span>' +
+        '<span>' + headline + '</span>' +
       '</div>' +
       '<p class="bd-score-note">' +
         (sc.autoFailed ? '自动判断不可用，已按无死子计分；请点棋盘上的棋子手动标死子。'
-          : (sc.auto ? '自动' : '手动') + '判定死子 ' + deadCount + ' 颗；' +
+          : (sc.kataLead != null ? 'KataGo' : (sc.auto ? '自动' : '手动')) + '判定死子 ' + deadCount + ' 颗；' +
             (deadCount ? '点一下标错的棋子可以改回来。' : '有死子的话，点棋盘上的棋子标上。')) +
-        ' 中国规则数子：黑 ' + sc.stones[0] + ' 子 + ' + sc.terr[0] + ' 空；白 ' +
-        sc.stones[1] + ' 子 + ' + sc.terr[1] + ' 空 + 贴 7.5。' +
+        (sc.kataLead != null ? ' 上方黑/白是中国规则数子明细；胜负以 KataGo 为准。'
+          : ' 中国规则数子：黑 ' + sc.stones[0] + ' 子 + ' + sc.terr[0] + ' 空；白 ' +
+            sc.stones[1] + ' 子 + ' + sc.terr[1] + ' 空 + 贴 7.5。') +
         (sc.neutral ? ' 单官 / 未定 ' + sc.neutral + ' 点。' : '') +
       '</p>';
     if (btn) { btn.disabled = false; btn.textContent = '退出点目'; }
