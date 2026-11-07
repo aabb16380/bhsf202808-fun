@@ -3324,9 +3324,9 @@
       makeBurst(a, at[0], at[1], count, true);
       a.floats.push({
         x: at[0], y: at[1] + 1.2, text: '炸出一个洞',
-        life: 0.9, max: 0.9, color: 'gold'
+        life: 0.9, max: 0.9, color: 'seal'
       });
-      a.flashes.push({ x: at[0], y: at[1], life: 0.42, max: 0.42, seal: false });
+      a.flashes.push({ x: at[0], y: at[1], life: 0.42, max: 0.42, seal: true });
     }
 
     for (i = a.particles.length - 1; i >= 0; i--) {
