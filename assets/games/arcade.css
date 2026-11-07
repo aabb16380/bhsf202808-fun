@@ -342,6 +342,31 @@ a:hover { text-decoration: underline; }
 .ag-box-head span { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); }
 
 .ag-chat-list { flex: 1 1 auto; max-height: 300px; overflow-y: auto; font-size: 11.5px; line-height: 1.7; }
+
+.ag-watchbox {
+  padding: 10px 11px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.ag-watch-list { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
+.ag-watch-list .ag-watch-name {
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card-2);
+  font-size: 10px;
+  color: var(--ink-2);
+}
+.ag-watch-list .ag-watch-name.is-me { border-color: var(--jade); color: var(--jade); }
+.ag-watch-list .ag-empty { margin: 0; font-size: 10px; color: var(--ink-3); }
+
+.ag-replay-chat-list { max-height: 180px; overflow-y: auto; font-size: 10.5px; line-height: 1.65; }
+.ag-replay-chat-row { display: flex; gap: 5px; padding: 3px 2px; border-bottom: 1px dashed var(--line); }
+.ag-replay-chat-row:last-child { border-bottom: 0; }
+.ag-replay-chat-row b { flex: 0 0 auto; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-weight: 600; }
+.ag-replay-chat-row span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--ink-2); }
+.ag-replay-chat-row em { flex: 0 0 auto; font-family: var(--mono); font-style: normal; font-size: 8.5px; color: var(--ink-3); }
 .ag-chat-item { margin-bottom: 4px; overflow-wrap: anywhere; }
 .ag-chat-item b { color: var(--jade); font-weight: 600; }
 .ag-chat-item.is-me b { color: var(--seal); }

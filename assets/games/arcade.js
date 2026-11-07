@@ -649,6 +649,23 @@
       return;
     }
 
+    // v2.173：记录尾部可能带 type=chat 的公屏消息；回放步数里过滤掉，单独展示。
+    var chatMsgs = [];
+    acts = acts.filter(function (a) {
+      var act = (a && a.act) || {};
+      if (String(act.type || '') === 'chat') {
+        chatMsgs.push({
+          seat: Number(a.seat) || 0,
+          nick: act.nick || '',
+          body: act.body || '',
+          at: act.at || a.at || ''
+        });
+        return false;
+      }
+      return true;
+    });
+    if (!Array.isArray(rec.chat)) rec.chat = chatMsgs;
+
     S.replay = {
       rec: rec,
       back: back,
@@ -688,6 +705,7 @@
     show('ag-replay', true);
     showGame('ag-over', false);
     renderReplayHead();
+    renderReplayChat();
     mountReplayModule();
     replayTo(0);
     if (rec.id && !rec.localId) {
@@ -1017,6 +1035,44 @@
     if (rec.hits && rec.hits.length) return '命中';
     if (rec.hitObstacle) return '炸洞';
     return '';
+  }
+
+  function renderReplayChat() {
+    var rp = S.replay;
+    var box = $('ag-replay-chat-list');
+    var count = $('ag-replay-chat-count');
+    if (!box) return;
+    var list = (rp && rp.rec && Array.isArray(rp.rec.chat)) ? rp.rec.chat : [];
+    if (count) count.textContent = String(list.length);
+    box.innerHTML = '';
+    if (!list.length) {
+      var empty = document.createElement('p');
+      empty.className = 'ag-empty';
+      empty.textContent = '本局没有公屏聊天';
+      box.appendChild(empty);
+      return;
+    }
+    for (var i = 0; i < list.length; i++) {
+      var msg = list[i] || {};
+      var row = document.createElement('div');
+      row.className = 'ag-replay-chat-row';
+      var name = document.createElement('b');
+      var seat = Number(msg.seat) || 0;
+      name.textContent = (seat > 0 ? recSeatName(rp.rec, seat) : '') ||
+        msg.nick || msg.no || '同学';
+      var body = document.createElement('span');
+      body.textContent = String(msg.body == null ? '' : msg.body);
+      var time = document.createElement('em');
+      try {
+        time.textContent = new Date(msg.at).toLocaleTimeString('zh-CN', {
+          hour: '2-digit', minute: '2-digit'
+        });
+      } catch (e) { time.textContent = ''; }
+      row.appendChild(name);
+      row.appendChild(body);
+      if (time.textContent) row.appendChild(time);
+      box.appendChild(row);
+    }
   }
 
   function renderReplayHead() {
@@ -1781,7 +1837,8 @@
       prev.seq === room.seq && prev.status === room.status &&
       prev.turn === room.turn && prev.winner === room.winner &&
       prev.rematch_by === room.rematch_by && prev.rematch_at === room.rematch_at &&
-      JSON.stringify(prev.seats || []) === JSON.stringify(room.seats || []);
+      JSON.stringify(prev.seats || []) === JSON.stringify(room.seats || []) &&
+      JSON.stringify(prev.watchers || []) === JSON.stringify(room.watchers || []);
     S.room = room;
     if (typeof seat === 'number' && seat >= 0) S.seat = seat;
     if (room.status === 'play') S.rematchPrompted = false;
@@ -1829,6 +1886,7 @@
       flushQueuedSync();
       if (!res || !res.room) return;
       S.chat = res.chat || [];
+      if (Array.isArray(res.watchers)) res.room.watchers = res.watchers;
       var wasSeat = Number(S.seat) || 0;
       var seatNow = typeof res.seat === 'number' ? res.seat : S.seat;
       applyRoom(res.room, seatNow);
@@ -1986,6 +2044,7 @@
     show('ag-copy-link', !S.local);
     show('ag-again', !S.local && S.seat > 0 && r.status === 'over');
     txt('ag-chat-count', String((S.chat || []).length));
+    renderWatchers(r);
     // 等人：直接在房间页里显示「房号 + 座位 + 开始」，不再用全屏弹层挡住宿位和人数。
     show('ag-waitbox', waiting);
     show('ag-stage', !waiting);
@@ -1996,6 +2055,30 @@
     } else {
       S.overShown = false;
       showGame('ag-over', false);
+    }
+  }
+
+  function renderWatchers(r) {
+    var box = $('ag-watch-list');
+    var count = $('ag-watch-count');
+    if (!box) return;
+    var list = (r && Array.isArray(r.watchers)) ? r.watchers : [];
+    if (count) count.textContent = list.length + ' 人';
+    box.innerHTML = '';
+    if (!list.length) {
+      var empty = document.createElement('p');
+      empty.className = 'ag-empty';
+      empty.textContent = '暂时没人观战';
+      box.appendChild(empty);
+      return;
+    }
+    var mine = myNo();
+    for (var i = 0; i < list.length; i++) {
+      var w = list[i] || {};
+      var name = document.createElement('span');
+      name.className = 'ag-watch-name' + (mine && w.no === mine ? ' is-me' : '');
+      name.textContent = (w.nick || w.no || '同学') + (mine && w.no === mine ? '（你）' : '');
+      box.appendChild(name);
     }
   }
 
@@ -2282,6 +2365,7 @@
       p_winner: opts.winner == null ? null : opts.winner
     }).then(function (res) {
       if (res && res.room) {
+        if (!Array.isArray(res.room.watchers)) res.room.watchers = (S.room && S.room.watchers) || [];
         S.room = res.room;
         renderRoom();
         notify();

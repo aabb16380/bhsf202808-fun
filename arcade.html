@@ -7,19 +7,19 @@
 <meta name="description" content="八班多人游戏：GraphWar 函数大战（2-8 人，输入函数打炮）、Quoridor 步步为营（2-4 人放墙堵路）。房间号加入、组队或混战、聊天；每一局自动保存，可逐步回看。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g140" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g140">
-<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g140">
+<link rel="icon" href="assets/favicon.png?v=20261101g141" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g141">
+<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g141">
 <script>
-window.B8_BUILD = '20261101g140';
+window.B8_BUILD = '20261101g141';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g140"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g140">
+<script src="assets/theme.js?v=20261101g141"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g141">
 </head>
 
 <body data-site="fun">
@@ -162,6 +162,10 @@ window.B8_TEST = !!window.B8_T;
             <div class="ag-box-head"><b>本局流水</b><span id="ag-replay-info">—</span></div>
             <div class="ag-replay-log" id="ag-replay-log"></div>
           </div>
+          <div class="ag-chat ag-replay-chat">
+            <div class="ag-box-head"><b>本局公屏</b><span id="ag-replay-chat-count">0</span></div>
+            <div class="ag-replay-chat-list" id="ag-replay-chat-list"></div>
+          </div>
           <div class="ag-side-note">
             回看是只读的：棋盘按当时的每一步重演，不会改动任何房间或记录。
           </div>
@@ -221,6 +225,11 @@ window.B8_TEST = !!window.B8_T;
         </div>
 
         <aside class="ag-side">
+          <div class="ag-watchbox">
+            <div class="ag-box-head"><b>观战</b><span id="ag-watch-count">0 人</span></div>
+            <div class="ag-watch-list" id="ag-watch-list"></div>
+          </div>
+
           <div class="ag-chat">
             <div class="ag-box-head"><b>聊天</b><span id="ag-chat-count">0</span></div>
             <div class="ag-chat-list" id="ag-chat-list"></div>
@@ -264,7 +273,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g140' + T;
+  var V = '?v=20261101g141' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
