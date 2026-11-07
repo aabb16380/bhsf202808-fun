@@ -3293,8 +3293,63 @@
     show('bd-winbar', true);
   }
 
+  function scanMap() {
+    var map = {}, by = {}, n = 0;
+    for (var y = 0; y < 10; y++) {
+      for (var x = 0; x < 10; x++) {
+        if ((x + y) % 2 === 1) {
+          n++;
+          map[y * 10 + x] = n;
+          by[n] = y * 10 + x;
+        }
+      }
+    }
+    return { map: map, by: by };
+  }
+
+  function scanFen(st) {
+    var mm = scanMap();
+    var s = st.turn === 2 ? 'B' : 'W';
+    for (var n = 1; n <= 50; n++) {
+      var p = st.board[mm.by[n]];
+      if (!p) { s += 'e'; continue; }
+      var color = p < 8 ? 1 : 2;
+      var type = p < 8 ? p : p - 8;
+      if (type === 2) s += color === 1 ? 'W' : 'B';
+      else s += color === 1 ? 'w' : 'b';
+    }
+    return s;
+  }
+
+  function scanMoves(upto) {
+    var mm = scanMap();
+    var arr = S.moves.slice(0, upto);
+    return arr.map(function (m) {
+      var mv = m.move || {};
+      var path = mv.p || [];
+      var sep = mv.c && mv.c.length ? 'x' : '-';
+      return path.map(function (idx) { return mm.map[idx]; }).join(sep);
+    }).join(' ');
+  }
+
+  function scanArrow(best) {
+    if (!best) return null;
+    var parts = String(best).split(/[-x]/);
+    if (parts.length < 2) return null;
+    var mm = scanMap();
+    var from = mm.by[Number(parts[0])];
+    var to = mm.by[Number(parts[parts.length - 1])];
+    if (from == null || to == null) return null;
+    return { from: from, to: to };
+  }
+
   function moveKey(game, mv) {
     if (!mv) return '';
+    if (game === 'draughts') {
+      var mm = scanMap();
+      return (mv.p || []).map(function (i) { return mm.map[i]; })
+        .join(mv.c && mv.c.length ? 'x' : '-');
+    }
     if (game === 'chess' || game === 'xiangqi') {
       if (mv.f == null || mv.t == null) return '';
       var c1 = game === 'chess' ? E.chessCoord(mv.f) : E.xiangqiCoord(mv.f);
@@ -3311,6 +3366,7 @@
     if (game === 'chess' || game === 'xiangqi') return String(best).toLowerCase();
     if (game === 'go') return String(best).toUpperCase();
     if (game === 'gomoku') return String(best);
+    if (game === 'draughts') return String(best);
     return '';
   }
 
@@ -3346,6 +3402,7 @@
         if (!q) return null;
         return { to: Number(q[2]) * 15 + Number(q[1]) };
       }
+      if (game === 'draughts') return scanArrow(best);
     } catch (e) {}
     return null;
   }
@@ -3363,7 +3420,7 @@
     if (!S || !S.state || S.state.status !== 'over' || !S.moves.length || ANALYSIS.analysisBusy) return;
     if (!window.B8Server || !B8Server.enabled()) return;
     var game = S.game;
-    if (game !== 'chess' && game !== 'xiangqi' && game !== 'go' && game !== 'gomoku') return;
+    if (game !== 'chess' && game !== 'xiangqi' && game !== 'go' && game !== 'gomoku' && game !== 'draughts') return;
 
     var states = reviewBuild();
     if (!states || states.length < 2) return;
@@ -3401,7 +3458,7 @@
           return { p1: r ? r.winrate : 50, best: r ? r.bestmove : '' };
         });
       });
-    } else {
+    } else if (game === 'gomoku') {
       var gpositions = states.map(function (st) {
         var stones = [];
         for (var i = 0; i < st.board.length; i++) {
@@ -3412,6 +3469,16 @@
       req = B8Server.evalGomokuBatch(gpositions, 120).then(function (rows) {
         return (rows || []).map(function (r) {
           return { p1: r ? r.winrate : 50, best: r ? r.bestmove : '' };
+        });
+      });
+    } else {
+      var dpositions = states.map(function (st, i) {
+        return { fen: scanFen(st), moves: scanMoves(i), move_time: 0.2 };
+      });
+      req = B8Server.evalDraughtsBatch(dpositions, 0.2).then(function (rows) {
+        return (rows || []).map(function (r) {
+          var p1 = 100 / (1 + Math.pow(10, -(Number(r ? r.score : 0) * 100) / 400));
+          return { p1: Math.round(p1 * 10) / 10, best: r ? r.bestmove : '' };
         });
       });
     }
@@ -3451,7 +3518,7 @@
   function refreshServerPoint() {
     if (!S || !S.state || !window.B8Server || !B8Server.enabled()) return;
     var game = S.state.game;
-    if (game !== 'chess' && game !== 'xiangqi' && game !== 'go' && game !== 'gomoku') return;
+    if (game !== 'chess' && game !== 'xiangqi' && game !== 'go' && game !== 'gomoku' && game !== 'draughts') return;
     if (ANALYSIS.serverData) return;
 
     var states = analysisStates();
@@ -3477,6 +3544,9 @@
         if (gp) stones.push([gi % gsize, Math.floor(gi / gsize), gp]);
       }
       request = B8Server.evalGomoku(stones, 200);
+    } else if (game === 'draughts') {
+      var dupto = S.reviewing ? Math.min(S.reviewIndex, S.moves.length) : S.moves.length;
+      request = B8Server.evalDraughts(scanFen(st), scanMoves(dupto), 0.2);
     } else {
       var fen = game === 'chess' ? B8Engine.fenChess(st) : B8Engine.fenXiangqi(st);
       request = B8Server.evalOne(game, fen, 120);

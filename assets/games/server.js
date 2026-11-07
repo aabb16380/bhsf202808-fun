@@ -103,6 +103,35 @@
     });
   }
 
+  function evalDraughts(fen, moves, moveTime) {
+    if (!enabled()) return Promise.resolve(null);
+    return post('/draughts/eval', {
+      fen: fen,
+      moves: moves || '',
+      move_time: moveTime || 0.2
+    }, 6000).then(function (r) {
+      return {
+        score: Number(r.score || 0),
+        p1: Math.round((100 / (1 + Math.pow(10, -(Number(r.score || 0) * 100) / 400))) * 10) / 10,
+        bestmove: r.bestmove,
+        ms: r.ms
+      };
+    });
+  }
+
+  function evalDraughtsBatch(positions, moveTime) {
+    if (!enabled()) return Promise.resolve(null);
+    return post('/draughts/batch', {
+      positions: (positions || []).map(function (p) {
+        return {
+          fen: p.fen,
+          moves: p.moves || '',
+          move_time: p.move_time || moveTime || 0.2
+        };
+      })
+    }, 120000).then(function (r) { return r.results || []; });
+  }
+
   function evalGoBatch(positions, visits) {
     if (!enabled()) return Promise.resolve(null);
     return post('/go/batch', {
@@ -173,8 +202,10 @@
     evalOne: evalOne,
     evalGo: evalGo,
     evalGomoku: evalGomoku,
+    evalDraughts: evalDraughts,
     evalGoBatch: evalGoBatch,
     evalGomokuBatch: evalGomokuBatch,
+    evalDraughtsBatch: evalDraughtsBatch,
     evalBatch: evalBatch,
     createAnalysis: createAnalysis,
     getAnalysis: getAnalysis,
