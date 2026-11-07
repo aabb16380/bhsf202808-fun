@@ -1078,6 +1078,40 @@
    * 规则补一个正确实现；等 sb.js 修好，把函数体换回去就行。
    */
   function uploadFile(bucket, path, blob) {
+    var upload = window.B8_CONFIG && window.B8_CONFIG.photoUpload;
+    if (upload && bucket === 'b8-photos') {
+      return fetch(upload, {
+        method: 'POST',
+        headers: {
+          'x-b8-token': (B8.auth && (B8.auth.memberToken() || B8.auth.token())) || '',
+          'x-b8-path': path,
+          'Content-Type': blob.type || 'image/jpeg'
+        },
+        body: blob
+      }).then(function (res) {
+        return res.text().then(function (text) {
+          if (!res.ok) {
+            var msg = 'HTTP ' + res.status;
+            try {
+              var j = JSON.parse(text);
+              msg = j.detail || j.message || msg;
+            } catch (e) {}
+            throw new Error('服务器上传失败：' + msg);
+          }
+          var j = JSON.parse(text || '{}');
+          if (!j.url) throw new Error('服务器没有返回图片地址');
+          return j.url;
+        });
+      }).catch(function (err) {
+        // 服务器图床异常时回退 Supabase，至少不丢照片；读图仍会自动回退
+        if (window.console) console.warn('[photos] 服务器上传失败，回退 Supabase：', err && err.message);
+        return uploadFileSupabase(bucket, path, blob);
+      });
+    }
+    return uploadFileSupabase(bucket, path, blob);
+  }
+
+  function uploadFileSupabase(bucket, path, blob) {
     var cfg = (window.B8_CONFIG && window.B8_CONFIG.supabase) || {};
     var base = String(cfg.url || '').replace(/\/+$/, '');
     var key = cfg.anonKey || '';
