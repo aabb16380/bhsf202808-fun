@@ -2762,7 +2762,7 @@
     $('bd-clock1').className = 'bd-clock' + (activeClock === 1 ? ' is-active' : '') + (isLow(c1) ? ' is-low' : '');
     $('bd-clock2').className = 'bd-clock' + (activeClock === 2 ? ' is-active' : '') + (isLow(c2) ? ' is-low' : '');
 
-    show('bd-watchers', S.mode === 'online' && !S.record);
+    show('bd-watchers', S.mode === 'online' && !S.record && !isLocalRoom());
     txt('bd-watchers', S.watchers > 0 ? S.watchers + ' 人观战' : '暂无人观战');
     txt('bd-turn', turnLine());
   }
