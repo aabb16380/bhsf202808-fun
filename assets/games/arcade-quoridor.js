@@ -346,6 +346,7 @@
     if (!check.ok) return null;
 
     var w = normalizeWall(wall);
+    w.seat = seat;
     var ns = cloneState(state);
     ns.walls = (ns.walls || []).concat([w]);
     ns.wallsLeft[seat] = wallLeftOf(state, seat) - 1;
@@ -479,6 +480,10 @@
     '  --qc-wall:#5f6672;',
     '  --qc-wall-edge:#3b414b;',
     '  --qc-wall-shadow:rgba(45,50,58,.28);',
+    '  --qc-wall1:#8f3e2a;',
+    '  --qc-wall2:#28584c;',
+    '  --qc-wall3:#866019;',
+    '  --qc-wall4:#3f4a6b;',
     '  --qc-ok:rgba(47,111,94,.68);',
     '  --qc-bad:rgba(193,82,47,.68);',
     '  --qc-on-seat:#fffdf7;',
@@ -501,6 +506,10 @@
     '  --qc-wall:#9aa3b2;',
     '  --qc-wall-edge:#5f6775;',
     '  --qc-wall-shadow:rgba(0,0,0,.38);',
+    '  --qc-wall1:#d98266;',
+    '  --qc-wall2:#6fa39a;',
+    '  --qc-wall3:#c2a052;',
+    '  --qc-wall4:#8391c2;',
     '  --qc-ok:rgba(111,168,179,.72);',
     '  --qc-bad:rgba(229,141,107,.74);',
     '  --qc-on-seat:#17181e;',
@@ -1168,6 +1177,10 @@
       wall: get('--qc-wall', '#5f6672'),
       wallEdge: get('--qc-wall-edge', '#3b414b'),
       wallShadow: get('--qc-wall-shadow', 'rgba(45,50,58,.28)'),
+      wall1: get('--qc-wall1', '#8f3e2a'),
+      wall2: get('--qc-wall2', '#28584c'),
+      wall3: get('--qc-wall3', '#866019'),
+      wall4: get('--qc-wall4', '#3f4a6b'),
       ok: get('--qc-ok', 'rgba(47,111,94,.68)'),
       bad: get('--qc-bad', 'rgba(193,82,47,.68)'),
       onSeat: get('--qc-on-seat', '#fff'),
@@ -1214,6 +1227,16 @@
     if (seat === 3) return pal.p3;
     if (seat === 4) return pal.p4;
     return pal.p1;
+  }
+
+  // 墙按“谁放的”着色，但用比棋子更暗的颜色，避免和棋子混淆
+  function wallColor(pal, seat) {
+    seat = Number(seat);
+    if (seat === 1) return pal.wall1;
+    if (seat === 2) return pal.wall2;
+    if (seat === 3) return pal.wall3;
+    if (seat === 4) return pal.wall4;
+    return pal.wall;
   }
 
   /* ---------- 走子 / 放墙的小动画（v2.152） ---------- */
@@ -1415,7 +1438,7 @@
       g.shadowBlur = Math.max(2, cell * 0.10);
       g.shadowOffsetY = Math.max(1, cell * 0.035);
       roundRect(g, wr.x, wr.y, wr.w, wr.h, wr.r);
-      g.fillStyle = pal.wall;
+      g.fillStyle = wallColor(pal, wall.seat);
       g.fill();
       g.restore();
       roundRect(g, wr.x, wr.y, wr.w, wr.h, wr.r);

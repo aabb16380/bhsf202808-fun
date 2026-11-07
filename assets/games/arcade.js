@@ -1768,6 +1768,13 @@
     // 回看时不要被房间的心跳覆盖（点记录时可能还有一个 sync 在路上）
     if (S.view === 'replay') return;
     var prev = S.room || {};
+    // 本地先乐观走一步后，可能有一个更早发出的 sync 才回来；
+    // 它的 seq 更小，直接丢掉，否则会把棋子画回上一步再跳回来（手机/慢网最明显）。
+    if (prev.code && prev.code === room.code &&
+        Number(room.seq) < Number(prev.seq) &&
+        !(prev.status === 'over' && room.status === 'play')) {
+      return;
+    }
     // 再来一局：别人开的新一局也要重挂载，否则停在上一局的结算画面
     if (prev.status === 'over' && room.status === 'play') S.round = (S.round || 0) + 1;
     var same = !!prev.code && prev.code === room.code &&
