@@ -2112,12 +2112,20 @@
   function togglePractice() {
     if (!S || !S.state) return;
     if (S.practice) { exitPractice(); return; }
-    var base = (S.reviewing && S.reviewState) ? S.reviewState : S.state;
-    if (!base) return;
     var fullStates = analysisStates();
-    var prefix = S.reviewing
-      ? fullStates.slice(0, Math.min(fullStates.length, (S.reviewIndex || 0) + 1))
-      : fullStates.slice();
+    if (!fullStates.length) return;
+    var idx = S.reviewing
+      ? Math.min(fullStates.length - 1, S.reviewIndex || 0)
+      : fullStates.length - 1;
+    var rewound = false;
+    // 从终局点演练没有合法着法；自动退到最后一手之前，才能试别的走法
+    if (fullStates[idx] && fullStates[idx].status === 'over' && idx > 0) {
+      idx -= 1;
+      rewound = true;
+    }
+    var base = fullStates[idx];
+    if (!base) return;
+    var prefix = fullStates.slice(0, idx + 1);
     clearTimeout(NET.timer);
     S.practice = true;
     S.practicePrefix = prefix;
@@ -2136,7 +2144,9 @@
     netPause('演练中 · 不上传');
     ANALYSIS.on = true;
     renderAll();
-    toast('演练模式：随便走，不会上传；「重置演练」回到起点，胜率图会按这条分支重画');
+    toast(rewound
+      ? '演练模式：已退到最后一手之前，可以试别的走法；不会上传'
+      : '演练模式：随便走，不会上传；「重置演练」回到起点，胜率图会按这条分支重画');
   }
 
   function practiceApply(mv) {
@@ -2153,6 +2163,39 @@
     if (S.practiceState.status === 'over') {
       toast('演练结束；可以重置或退出演练');
     }
+  }
+
+  function practiceGoto(i) {
+    if (!S || !S.practice) return;
+    var arr = analysisStates();
+    if (!arr || !arr.length) return;
+    var baseIndex = (S.practicePrefix && S.practicePrefix.length)
+      ? S.practicePrefix.length - 1 : 0;
+    baseIndex = Math.max(0, Math.min(baseIndex, arr.length - 1));
+    i = Math.max(0, Math.min(arr.length - 1, i));
+    if (i < baseIndex) {
+      // 演练起点之前的棋是原局，不能当成演练分支；棋谱可以退出演练回到回看
+      if (S.state && S.state.status === 'over') {
+        exitPractice();
+        reviewGoto(i);
+      } else {
+        toast('演练从第 ' + baseIndex + ' 手开始');
+      }
+      return;
+    }
+    var cur = baseIndex + (S.practiceMoves || []).length;
+    if (i > cur) return;
+    var branch = arr.slice(baseIndex, i + 1);
+    if (!branch.length) return;
+    S.practiceStack = branch.slice(0, -1);
+    S.practiceState = E.clone(branch[branch.length - 1]);
+    S.practiceMoves = (S.practiceMoves || []).slice(0, i - baseIndex);
+    S.practiceLast = S.practiceMoves.length
+      ? S.practiceMoves[S.practiceMoves.length - 1].move : null;
+    S.sel = null;
+    S.targets = [];
+    ANALYSIS.bestArrow = null;
+    renderAll();
   }
 
   function practiceClick(idx) {
@@ -5981,7 +6024,9 @@
         var i = chartIndexAt(e.clientX);
         if (i < 0) return;
         ANALYSIS.hover = i;
-        if (S && S.state && S.state.status === 'over' && S.moves && S.moves.length) {
+        if (S && S.practice) {
+          practiceGoto(i);
+        } else if (S && S.state && S.state.status === 'over' && S.moves && S.moves.length) {
           reviewGoto(i);
         } else {
           drawWinChart();
