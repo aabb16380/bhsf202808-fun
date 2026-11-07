@@ -1364,7 +1364,7 @@
     submitted: false, anim: null, raf: 0,
     resultDismissed: '', lastStatus: '',
     initialized: false, initSent: false,
-    statusText: '', resizeObs: null
+    statusText: '', resizeObs: null, obsLayers: []
   };
 
   var KEY_ROWS = [
@@ -1530,15 +1530,20 @@
     return s !== 'wait' && s !== 'over';
   }
 
-  function canEdit() {
+  function canInput() {
     if (!view.mounted || !view.ctx || view.anim || view.submitted) return false;
     var seat = mySeat();
     if (seat < 1) return false;
     var st = gameState();
     var r = room();
     if (!st || !r || isWaiting() || gameOver(st)) return false;
-    if (Number(st.turn) !== seat) return false;
     return aliveSoldier(st, seat);
+  }
+
+  function canEdit() {
+    if (!canInput()) return false;
+    var st = gameState();
+    return Number(st.turn) === mySeat();
   }
 
   function stateIsMine(st) {
@@ -1689,10 +1694,10 @@
 
   function onKeyClick(ev) {
     var btn = ev.currentTarget;
-    if (!canEdit()) {
+    if (!canInput()) {
       if (gameState() && !gameOver(gameState()) && mySeat() > 0) {
-        var st = gameState();
-        if (stateIsMine(st)) ctxToast('炮弹飞行中，稍等一下');
+        if (view.anim) ctxToast('炮弹飞行中，稍等一下');
+        else if (view.submitted) ctxToast('发射已提交，等同步');
         else ctxToast('还没轮到你');
       }
       return;
@@ -1701,7 +1706,7 @@
   }
 
   function onSpecialKey(ev) {
-    if (!canEdit()) return;
+    if (!canInput()) return;
     if (ev.currentTarget.getAttribute('data-act') === 'backspace') {
       if (view.expr.length) {
         view.expr = view.expr.slice(0, -1);
@@ -1761,8 +1766,8 @@
     box.innerHTML = '';
     var src = view.expr;
     if (!src) {
-      box.appendChild(gwEl('span', 'gw-ph', canEdit()
-        ? '点下面的屏幕键输入函数…'
+      box.appendChild(gwEl('span', 'gw-ph', canInput()
+        ? '点下面的屏幕键输入函数（对方回合也可以先写）…'
         : (isReplay() ? '回看中，不能操作' : (mySeat() === 0 ? '观战中，不能输入' : '等待你的回合…'))));
       var c0 = gwEl('span', 'gw-caret');
       c0.setAttribute('aria-hidden', 'true');
@@ -2034,6 +2039,7 @@
   function updateControls() {
     if (!view.dom.mode) return;
     var st = displayedState();
+    var typeable = canInput();
     var editable = canEdit();
     var modeTxt = view.mode === 'y2' ? "y'' = f(x)" : 'y = f(x)';
     view.dom.mode.textContent = modeTxt + ' ⇄';
@@ -2042,28 +2048,31 @@
     view.dom.badge.textContent = view.mode === 'y2' ? "y'' = f(x) · 二阶" : 'y = f(x) · 普通';
     view.dom.angleWrap.hidden = view.mode !== 'y2';
     view.dom.angleVal.textContent = view.angle + '°';
-    var showDir = st && stateIsMine(st) ? activeDir(st) : (st && currentSoldier(st) ? (currentSoldier(st).dir || 1) : 1);
+    var showDir = st && mySeat() > 0 && currentSoldier(st)
+      ? activeDir(st)
+      : (st && currentSoldier(st) ? (currentSoldier(st).dir || 1) : 1);
     if (mySeat() < 1 && st && Number(st.turn) > 0) {
       var cs = soldierOf(st, st.turn);
       showDir = cs && cs.dir < 0 ? -1 : 1;
     }
     view.dom.dir.textContent = showDir < 0 ? '←' : '→';
-    view.dom.flip.disabled = !editable;
-    view.dom.mode.disabled = !editable;
-    view.dom.angleUp.disabled = !editable || view.mode !== 'y2';
-    view.dom.angleDown.disabled = !editable || view.mode !== 'y2';
+    view.dom.flip.disabled = !typeable;
+    view.dom.mode.disabled = !typeable;
+    view.dom.angleUp.disabled = !typeable || view.mode !== 'y2';
+    view.dom.angleDown.disabled = !typeable || view.mode !== 'y2';
     view.dom.fire.disabled = !(editable && view.expr && view.parseRes && view.parseRes.ok);
     view.dom.fire.classList[view.anim || view.submitted ? 'add' : 'remove']('is-busy');
     if (view.anim) view.dom.fire.textContent = '飞行中';
     else if (view.submitted) view.dom.fire.textContent = '同步中';
     else view.dom.fire.textContent = '发 射';
+    var waitTip = typeable && !editable ? '对方思考中，你可以先输入，轮到你直接发射。' : '';
     if (view.mode === 'y2') {
-      view.dom.tip.textContent = "二阶模式：输入 y'' = f(x)。从士兵位置按 0.05 步长积分，角度用 ↑ ↓ 调（-80° ~ 80°）。已经发射过的函数不能重复使用。";
+      view.dom.tip.textContent = waitTip + "二阶模式：输入 y'' = f(x)。从士兵位置按 0.05 步长积分，角度用 ↑ ↓ 调（-80° ~ 80°）。已经发射过的函数不能重复使用。";
     } else {
-      view.dom.tip.textContent = '普通模式：输入 y = f(x)。曲线会自动上下平移经过你的士兵，沿面朝方向飞。已经发射过的函数不能重复使用。';
+      view.dom.tip.textContent = waitTip + '普通模式：输入 y = f(x)。曲线会自动上下平移经过你的士兵，沿面朝方向飞。已经发射过的函数不能重复使用。';
     }
     var keys = view.dom.keys ? view.dom.keys.querySelectorAll('.gw-key') : [];
-    for (var i = 0; i < keys.length; i++) keys[i].disabled = !editable;
+    for (var i = 0; i < keys.length; i++) keys[i].disabled = !typeable;
     updateExprView();
     updateError();
     updateConstHint();
@@ -2115,8 +2124,11 @@
       text = '轮到你了 · 用屏幕键输入函数，再点「发射」';
       summary = '第 ' + (st.round || 1) + ' 轮 · 轮到你';
     } else {
-      text = '第 ' + (st.round || 1) + ' 轮 · 等 座位 ' + st.turn + '「' + playerName(st.turn) + '」开炮';
-      summary = '第 ' + (st.round || 1) + ' 轮 · 座位 ' + st.turn + ' 行动';
+      var oppRemain = view.turnDeadline ? Math.max(0, view.turnDeadline - Date.now()) : TURN_MS;
+      var oppSec = Math.ceil(oppRemain / 1000);
+      text = '第 ' + (st.round || 1) + ' 轮 · 座位 ' + st.turn + '「' + playerName(st.turn) +
+        '」输入中 · 剩余 ' + oppSec + 's';
+      summary = '第 ' + (st.round || 1) + ' 轮 · 对方剩余 ' + oppSec + 's';
     }
     view.dom.status.textContent = text;
     ctxStatus(summary);
@@ -2156,7 +2168,11 @@
       live = true;
       low = sec <= 10;
     } else {
-      text = '等 座位 ' + st.turn + ' …';
+      var oppRemain = view.turnDeadline ? Math.max(0, view.turnDeadline - Date.now()) : TURN_MS;
+      var oppSec = Math.ceil(oppRemain / 1000);
+      text = '对方 · ' + oppSec + 's';
+      live = true;
+      low = oppSec <= 10;
     }
     el.textContent = text;
     el.classList[live ? 'add' : 'remove']('is-live');
@@ -2200,6 +2216,10 @@
   function tickClock() {
     if (!view.mounted) return;
     updateClock();
+    var st = gameState();
+    if (st && mySeat() > 0 && Number(st.turn) !== mySeat() && !gameOver(st)) {
+      updateStatus(st);
+    }
     if (canTimeout()) sendTimeout();
   }
 
@@ -2236,8 +2256,8 @@
       }
     }
     renderResult(st);
-    if (st && !isWaiting() && !overNow && canEdit()) schedulePreview();
-    if (!canEdit()) view.preview = null;
+    if (st && !isWaiting() && !overNow && canInput()) schedulePreview();
+    if (!canInput()) view.preview = null;
     if (!view.anim) drawStatic();
   }
 
@@ -2253,13 +2273,13 @@
       clearTimeout(view.previewTimer);
       view.previewTimer = 0;
     }
-    if (!canEdit()) {
+    if (!canInput()) {
       view.preview = null;
       return;
     }
     view.previewTimer = setTimeout(function () {
       view.previewTimer = 0;
-      if (!view.mounted || !canEdit()) return;
+      if (!view.mounted || !canInput()) return;
       computePreview();
       drawStatic();
     }, 150);
@@ -2267,7 +2287,7 @@
 
   function computePreview() {
     var st = gameState();
-    if (!st || !canEdit() || !view.parseRes.ok || !view.expr) {
+    if (!st || !canInput() || !view.parseRes.ok || !view.expr) {
       view.preview = null;
       return;
     }
@@ -2540,7 +2560,7 @@
 
   function drawPreview(g, st, p) {
     if (!view.preview || !view.preview.points || view.preview.points.length < 2) return;
-    if (!canEdit()) return;
+    if (!canInput()) return;
     var pts = view.preview.points;
     g.save();
     g.strokeStyle = p.jade;
@@ -2561,69 +2581,116 @@
     g.restore();
   }
 
-  function drawObstacle(g, ob, p) {
+  function drawObstacle(g, ob, p, idx) {
     if (!obstacleAlive(ob)) return;
     var scale = viewScale();
     var x = toSX(ob.x), y = toSY(ob.y);
     var r = Math.max(2, obstacleRadius(ob) * scale);
     var holes = Array.isArray(ob.holes) ? ob.holes : [];
-    g.save();
-    // 只允许画在障碍圆内，再把洞用 evenodd 规则挖掉：
-    // 洞是真的透过去（能看到后面的网格），不是盖一块背景色。
-    g.beginPath();
-    g.arc(x, y, r, 0, Math.PI * 2);
-    g.clip();
-    g.beginPath();
-    g.arc(x, y, r, 0, Math.PI * 2);
+    var hs = [];
     for (var i = 0; i < holes.length; i++) {
       var h = holes[i];
       var hr = Math.max(1, Number(h.r) * scale);
       if (!isFinite(hr) || hr <= 0) continue;
-      var hx = toSX(h.x), hy = toSY(h.y);
-      g.moveTo(hx + hr, hy);
-      g.arc(hx, hy, hr, 0, Math.PI * 2, true);
+      hs.push({ hx: toSX(h.x), hy: toSY(h.y), hr: hr });
     }
-    g.fillStyle = p.obstacle;
-    g.fill('evenodd');
-    g.strokeStyle = p.obstacleRim;
-    g.lineWidth = 1.4;
-    g.stroke();
-    // 洞不是盖一块背景色：边缘加一圈亮口 + 内侧暗影 + 四道裂纹，
-    // 这样球被炸掉一块之后，外轮廓会真的缺一角，里面也像个坑。
-    for (var h = 0; h < holes.length; h++) {
-      var hole = holes[h];
-      var hr = Math.max(1, Number(hole.r) * scale);
-      if (!isFinite(hr) || hr <= 0) continue;
-      var hx = toSX(hole.x), hy = toSY(hole.y);
-      // 洞口内侧压一圈淡淡的暗影，看起来像坑，而不是贴了一张白纸
-      var grad = g.createRadialGradient(hx, hy, hr * 0.35, hx, hy, hr);
-      grad.addColorStop(0, 'rgba(0,0,0,0)');
-      grad.addColorStop(0.72, 'rgba(0,0,0,.06)');
-      grad.addColorStop(1, 'rgba(0,0,0,.34)');
-      g.fillStyle = grad;
-      g.beginPath();
-      g.arc(hx, hy, hr, 0, Math.PI * 2);
-      g.fill();
-      g.beginPath();
-      g.arc(hx, hy, hr, 0, Math.PI * 2);
-      g.strokeStyle = p.gold;
-      g.lineWidth = 1.6;
-      g.globalAlpha = 0.75;
-      g.stroke();
-      g.beginPath();
-      g.arc(hx, hy, Math.max(1, hr - 1.2), 0, Math.PI * 2);
-      g.strokeStyle = 'rgba(0,0,0,.38)';
-      g.lineWidth = 1;
-      g.globalAlpha = 1;
-      g.stroke();
+
+    /*
+     * 障碍物 = 圆 − 所有洞的并集。
+     * 先把“圆 + 外轮廓”画在离屏层上，再用 destination-out 挖洞：
+     *  - 两个洞重叠时，destination-out 只减一次，交集不会按 evenodd 又变回实心；
+     *  - 外轮廓在挖洞前画，所以洞口经过的圆弧会被一起挖掉，不会留下原来的整圆；
+     *  - 洞是透明的，能看见后面的网格。
+     */
+    var pad = 2;
+    var bx = x - r - pad, by = y - r - pad;
+    var bw = 2 * (r + pad), bh = 2 * (r + pad);
+    var dpr = view.dpr || 1;
+    var layers = view.obsLayers || (view.obsLayers = []);
+    var layer = layers[idx] || (layers[idx] = document.createElement('canvas'));
+    var lw = Math.max(1, Math.ceil(bw * dpr));
+    var lh = Math.max(1, Math.ceil(bh * dpr));
+    if (layer.width !== lw || layer.height !== lh) {
+      layer.width = lw;
+      layer.height = lh;
+    }
+    var lc = layer.getContext && layer.getContext('2d');
+    if (!lc) return;
+    lc.setTransform(1, 0, 0, 1, 0, 0);
+    lc.clearRect(0, 0, lw, lh);
+    lc.setTransform(dpr, 0, 0, dpr, -bx * dpr, -by * dpr);
+
+    lc.beginPath();
+    lc.arc(x, y, r, 0, Math.PI * 2);
+    lc.fillStyle = p.obstacle;
+    lc.fill();
+    // 外轮廓先画，挖洞时会被一起挖掉
+    lc.strokeStyle = p.obstacleRim;
+    lc.lineWidth = 1.4;
+    lc.stroke();
+
+    if (hs.length) {
+      lc.globalCompositeOperation = 'destination-out';
+      lc.beginPath();
+      for (var q = 0; q < hs.length; q++) {
+        lc.moveTo(hs[q].hx + hs[q].hr, hs[q].hy);
+        lc.arc(hs[q].hx, hs[q].hy, hs[q].hr, 0, Math.PI * 2);
+      }
+      lc.fill();
+      lc.globalCompositeOperation = 'source-over';
+    }
+
+    g.save();
+    g.drawImage(layer, bx, by, bw, bh);
+
+    // 洞口边缘：只画“还贴着实体”的那几段圆弧，重叠部分不画假边。
+    function onSolidEdge(px, py, self) {
+      var dx = px - x, dy = py - y;
+      if (dx * dx + dy * dy > (r + 0.5) * (r + 0.5)) return false;
+      for (var k = 0; k < hs.length; k++) {
+        if (hs[k] === self) continue;
+        var ox = px - hs[k].hx, oy = py - hs[k].hy;
+        if (ox * ox + oy * oy < (hs[k].hr - 0.15) * (hs[k].hr - 0.15)) return false;
+      }
+      return true;
+    }
+
+    for (var s = 0; s < hs.length; s++) {
+      var hole = hs[s];
+      var N = 96;
+      var on = false, start = 0;
+      for (var a = 0; a <= N; a++) {
+        var ang = a / N * Math.PI * 2;
+        var vis = onSolidEdge(hole.hx + Math.cos(ang) * hole.hr,
+                              hole.hy + Math.sin(ang) * hole.hr, hole);
+        if (vis && !on) { start = ang; on = true; }
+        if (on && (a === N || !vis)) {
+          var end = a === N ? Math.PI * 2 : ang;
+          if (end - start > 0.02) {
+            g.beginPath();
+            g.arc(hole.hx, hole.hy, hole.hr, start, end);
+            g.strokeStyle = p.gold;
+            g.lineWidth = 1.7;
+            g.globalAlpha = 0.8;
+            g.stroke();
+            g.beginPath();
+            g.arc(hole.hx, hole.hy, Math.max(1, hole.hr - 1.2), start, end);
+            g.strokeStyle = 'rgba(0,0,0,.34)';
+            g.lineWidth = 1;
+            g.globalAlpha = 1;
+            g.stroke();
+          }
+          on = false;
+        }
+      }
       // 四道短裂纹，从洞口往外裂
       g.beginPath();
       for (var c = 0; c < 4; c++) {
-        var ang = Math.PI * 0.25 + c * Math.PI * 0.5;
-        var x1 = hx + Math.cos(ang) * hr;
-        var y1 = hy + Math.sin(ang) * hr;
-        var x2 = hx + Math.cos(ang) * (hr + Math.max(3, 0.5 * scale));
-        var y2 = hy + Math.sin(ang) * (hr + Math.max(3, 0.5 * scale));
+        var ca = Math.PI * 0.25 + c * Math.PI * 0.5;
+        var x1 = hole.hx + Math.cos(ca) * hole.hr;
+        var y1 = hole.hy + Math.sin(ca) * hole.hr;
+        var x2 = hole.hx + Math.cos(ca) * (hole.hr + Math.max(3, 0.5 * scale));
+        var y2 = hole.hy + Math.sin(ca) * (hole.hr + Math.max(3, 0.5 * scale));
         g.moveTo(x1, y1);
         g.lineTo(x2, y2);
       }
@@ -2635,7 +2702,6 @@
     }
     g.restore();
   }
-
   function drawSoldier(g, st, sd, p, anim) {
     var x = toSX(sd.x), y = toSY(sd.y);
     var r = clamp(SOLDIER_R * viewScale(), 8, 27);
@@ -2915,7 +2981,7 @@
     if (st) {
       var obstacles = st.obstacles || [];
       var i;
-      for (i = 0; i < obstacles.length; i++) drawObstacle(g, obstacles[i], p);
+      for (i = 0; i < obstacles.length; i++) drawObstacle(g, obstacles[i], p, i);
       drawPreview(g, st, p);
       var soldiers = (st.soldiers || []).slice().sort(function (a, b) {
         var da = a.alive === false || Number(a.hp) <= 0 ? 0 : 1;
@@ -3329,7 +3395,7 @@
 
   /* ---------- 事件、开局与生命周期 ---------- */
   function onModeClick() {
-    if (!canEdit()) return;
+    if (!canInput()) return;
     view.mode = view.mode === 'y' ? 'y2' : 'y';
     revalidate();
     updateControls();
@@ -3338,7 +3404,7 @@
   }
 
   function onFlipClick() {
-    if (!canEdit()) return;
+    if (!canInput()) return;
     view.flipped = !view.flipped;
     updateControls();
     drawStatic();
@@ -3346,7 +3412,7 @@
   }
 
   function bumpAngle(delta) {
-    if (!canEdit() || view.mode !== 'y2') return;
+    if (!canInput() || view.mode !== 'y2') return;
     view.angle = clamp(view.angle + delta, -80, 80);
     updateControls();
     schedulePreview();
@@ -3490,6 +3556,7 @@
     view.resizeObs = null;
     view.themeObs = null;
     view.paletteCache = null;
+    view.obsLayers = [];
     view.lastState = gameState() ? copyState(gameState()) : null;
 
     injectStyle();
@@ -3582,6 +3649,7 @@
     view.submitted = false;
     view.drag = null;
     view.lastState = null;
+    view.obsLayers = [];
     var root = view.root;
     if (root) {
       try { root.innerHTML = ''; } catch (e) {}
