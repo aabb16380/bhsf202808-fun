@@ -68,6 +68,25 @@
     });
   }
 
+  function evalGo(size, moves, visits) {
+    if (!enabled()) return Promise.resolve(null);
+    return post('/go/eval', {
+      size: size,
+      moves: moves || [],
+      komi: 7.5,
+      rules: 'chinese',
+      visits: visits || 100
+    }, 8000).then(function (r) {
+      return {
+        p1: Number(r.winrate || 50),
+        scoreLead: r.score_lead,
+        bestmove: r.bestmove,
+        visits: r.visits,
+        ms: r.ms
+      };
+    });
+  }
+
   function evalBatch(game, fens, movetime) {
     if (!enabled()) return Promise.resolve(null);
     return post('/eval-batch', {
@@ -108,6 +127,7 @@
   window.B8Server = {
     enabled: enabled,
     evalOne: evalOne,
+    evalGo: evalGo,
     evalBatch: evalBatch,
     createAnalysis: createAnalysis,
     getAnalysis: getAnalysis,

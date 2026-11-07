@@ -3281,7 +3281,7 @@
   function refreshServerPoint() {
     if (!S || !S.state || !window.B8Server || !B8Server.enabled()) return;
     var game = S.state.game;
-    if (game !== 'chess' && game !== 'xiangqi') return;
+    if (game !== 'chess' && game !== 'xiangqi' && game !== 'go') return;
     if (ANALYSIS.serverData) return;
 
     var states = analysisStates();
@@ -3291,8 +3291,20 @@
     if (key === ANALYSIS.serverPointKey) return;
     ANALYSIS.serverPointKey = key;
 
-    var fen = game === 'chess' ? B8Engine.fenChess(st) : B8Engine.fenXiangqi(st);
-    B8Server.evalOne(game, fen, 120).then(function (r) {
+    var request;
+    if (game === 'go') {
+      var upto = S.reviewing ? Math.min(S.reviewIndex, S.moves.length) : S.moves.length;
+      var moves = S.moves.slice(0, upto).map(function (m) {
+        return [m.color === 2 ? 'W' : 'B',
+          m.move && m.move.pass ? 'pass' : E.goCoord(m.move.t, S.size)];
+      });
+      request = B8Server.evalGo(S.size, moves, 100);
+    } else {
+      var fen = game === 'chess' ? B8Engine.fenChess(st) : B8Engine.fenXiangqi(st);
+      request = B8Server.evalOne(game, fen, 120);
+    }
+
+    request.then(function (r) {
       if (!r || !ANALYSIS.data || ANALYSIS.serverPointKey !== key) return;
       var idx = ANALYSIS.cur;
       if (idx < 0 || idx >= ANALYSIS.data.length) return;
