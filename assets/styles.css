@@ -1,4 +1,4 @@
-/* 由 _shared/sync.ps1 生成：base.css + assets/site.css，请勿直接改这个文件 */
+/* 鐢?_shared/sync.ps1 鐢熸垚锛歜ase.css + assets/site.css锛岃鍕跨洿鎺ユ敼杩欎釜鏂囦欢 */
 /* ============================================================
    北京四中 2028 届 8 班 · 三站共用设计系统
    ------------------------------------------------------------
@@ -1522,6 +1522,109 @@ body.menu-merged .nav-toggle { display: none !important; }
     max-height: calc(100dvh - 150px);
     min-height: 300px;
   }
+}
+/* ============================================================
+   站内通知（超管控制台发布 · 首页与棋室共用 · notice-bar.js）
+   ------------------------------------------------------------
+   页面里 [data-notice] 的盒子由脚本填，没有通知时整块 hidden。
+   ============================================================ */
+
+[data-notice] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* hidden 必须压过上面的 display:flex */
+[data-notice][hidden] { display: none !important; }
+
+.notice-top { margin: 16px auto 0; }
+.notice-inline { margin: 14px 0 2px; }
+
+.ntc {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 34px 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--jade);
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--jade-soft), transparent 72%), var(--card);
+  box-shadow: var(--shadow-1);
+  text-align: left;
+}
+
+.ntc.is-warn {
+  border-left-color: var(--seal);
+  background: linear-gradient(180deg, var(--seal-soft), transparent 72%), var(--card);
+}
+
+.ntc.is-pinned {
+  border-left-width: 4px;
+  border-left-color: var(--gold);
+  background: linear-gradient(180deg, rgba(192, 140, 44, .13), transparent 72%), var(--card);
+}
+
+.ntc-main { flex: 1 1 auto; min-width: 0; }
+
+.ntc-kicker {
+  display: block;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .16em;
+  color: var(--ink-3);
+}
+
+.ntc-title {
+  display: block;
+  margin-top: 1px;
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: .02em;
+  color: var(--ink);
+}
+
+.ntc-body {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ntc-meta {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+}
+
+.ntc-x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--ink-3);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ntc-x:hover { color: var(--seal); border-color: var(--seal); }
+
+@media (max-width: 640px) {
+  .ntc { padding: 9px 32px 9px 10px; }
+  .ntc-title { font-size: 14px; }
 }
 
 /* ============================================================

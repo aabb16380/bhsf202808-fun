@@ -1532,6 +1532,116 @@ html[data-mode="night"] .bd-winbar-p.is-second { color: #8fa6c4; }
 .bd-foot a { color: var(--ink-3); }
 .bd-foot span:first-child { margin-right: auto; }
 
+/* ---------- 站内通知（具体样式在 styles.css 的 .ntc，这里只管位置） ---------- */
+.bd-notice-top { margin: 0 0 16px; }
+.bd-notice-inline { margin: 12px 0 6px; }
+
+/* ---------- 本局双方评分（胜利页 + 复盘胜率上方） ---------- */
+.bd-grade {
+  width: 100%;
+  max-width: 400px;
+  margin: 10px auto 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card-2);
+  text-align: left;
+}
+
+.bd-grade-compact { max-width: none; margin: 0 0 8px; padding: 8px 10px; }
+
+.bd-grade-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.bd-grade-head b {
+  font-family: var(--serif);
+  font-size: 12.5px;
+  letter-spacing: .08em;
+  color: var(--ink-2);
+}
+
+.bd-grade-head em {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+}
+
+.bd-grade-wait,
+.bd-grade-foot {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+.bd-grade-foot { margin-top: 5px; }
+
+.bd-grade-sec { padding: 6px 0 4px; border-top: 1px dashed var(--line); }
+.bd-grade-sec:first-of-type { border-top: 0; padding-top: 2px; }
+
+.bd-grade-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bd-grade-who {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.bd-grade-who i {
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+}
+
+.bd-grade-num {
+  min-width: 44px;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--jade);
+}
+
+.bd-grade-num.is-low { color: var(--seal); }
+
+.bd-grade-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.bd-grade-tags .bd-mv-tag { margin-left: 0; }
+
+.bd-grade-tags .bd-mv-tag.is-zero { opacity: .38; }
+
+/* 胜利页那块地方有限：内容多了能在卡片里滚动 */
+#bd-result { max-height: 100%; overflow-y: auto; }
+#bd-result .bd-grade { max-width: 360px; padding: 8px 10px; }
+
+html[data-mode="night"] .bd-grade {
+  background: var(--card-2, var(--card));
+  border-color: var(--line);
+}
+
 /* ---------- 夜间 ---------- */
 html[data-mode="night"] body {
   background-color: #101014;

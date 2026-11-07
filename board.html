@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；3 位数字邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g104" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g104">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g104">
+<link rel="icon" href="assets/favicon.png?v=20261101g105" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g105">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g105">
 <script>
-window.B8_BUILD = '20261101g104';
+window.B8_BUILD = '20261101g105';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g104"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g104">
+<script src="assets/theme.js?v=20261101g105"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g105">
 </head>
 
 <body data-site="fun">
@@ -51,6 +51,8 @@ window.B8_TEST = !!window.B8_T;
 
     <!-- ==================== 大厅 ==================== -->
     <section class="bd-view" id="bd-lobby">
+      <!-- 置顶通知：超管发的「置顶」通知显示在大厅最上面（notice-bar.js 自己填） -->
+      <div class="bd-notice-top" data-notice="top" hidden></div>
       <div class="bd-intro">
         <p class="bd-eyebrow">CHINESE CHESS · CHESS · GO · GOMOKU · DRAUGHTS</p>
         <h1>摆一盘</h1>
@@ -111,6 +113,9 @@ window.B8_TEST = !!window.B8_T;
 
           <h2 class="bd-h2">我的对局</h2>
           <div class="bd-rooms" id="bd-mine"></div>
+
+          <!-- 普通通知：和「正在对弈」同一块地方，但排在它上面 -->
+          <div class="bd-notice-inline" data-notice="inline" hidden></div>
 
           <h2 class="bd-h2">正在对弈 <span class="bd-live-dot" id="bd-live-dot" hidden></span></h2>
           <div class="bd-rooms" id="bd-live"></div>
@@ -253,6 +258,7 @@ window.B8_TEST = !!window.B8_T;
               <p class="bd-over-kicker" id="bd-result-kicker">对局结束</p>
               <h2 id="bd-result-title">—</h2>
               <p class="bd-over-sub" id="bd-result-sub"></p>
+              <div class="bd-grade" id="bd-result-grade" hidden></div>
               <div class="bd-over-actions">
                 <button class="bd-btn primary" id="bd-again" type="button">再来一局</button>
                 <button class="bd-btn" id="bd-view-board" type="button">逐手回看</button>
@@ -301,6 +307,7 @@ window.B8_TEST = !!window.B8_T;
           <div class="bd-offer" id="bd-undo-box" hidden></div>
 
           <div class="bd-analysis" id="bd-analysis-panel" hidden>
+            <div class="bd-grade bd-grade-compact" id="bd-analysis-grade" hidden></div>
             <div class="bd-analysis-head">
               <b>局面胜率</b>
               <span id="bd-analysis-label">—</span>
@@ -441,12 +448,13 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g104' + T;
+  var V = '?v=20261101g105' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
     ['assets/sb.js', 1],
     ['assets/auth.js', 1],
+    ['assets/notice-bar.js', 1],
     ['assets/games/board-engine.js', 1],
     ['assets/games/server.js', 1],
     ['assets/games/board.js', 1]

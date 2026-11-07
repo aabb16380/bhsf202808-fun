@@ -71,6 +71,7 @@
       { key: 'members', name: '成员' },
       { key: 'keys', name: '密钥' },
       { key: 'scores', name: '排行' },
+      { key: 'notices', name: '通知' },
       { key: 'deletions', name: '最近删除' },
       { key: 'visits', name: '上线' }
     ];
@@ -110,6 +111,7 @@
 
     if (tab === 'members') loadMembers();
     else if (tab === 'keys') loadKeys();
+    else if (tab === 'notices') loadNotices();
     else if (tab === 'deletions') loadDeletions();
     else if (tab === 'visits') loadVisits();
     else loadScores();
@@ -483,6 +485,192 @@
           btn.disabled = true;
           B8.sb.rpc('b8_super_key_unbind', { p_token: tok(), p_id: id })
             .then(function () { B8.toast('已解绑'); loadKeys(); })
+            .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
+        });
+      });
+    });
+  }
+
+  /* ---------- 通知 ---------- */
+  var notices = [];
+  var noticeKind = 'once';
+  var noticePinned = false;
+  var noticeLevel = 'info';
+  var NOTICE_MINS = [5, 15, 30, 60, 120, 240, 720, 1440];
+
+  function noticeMinLabel(m) {
+    if (m < 60) return m + ' 分钟';
+    if (m === 1440) return '1 天';
+    return (m / 60) + ' 小时';
+  }
+
+  function noticeMinOptions() {
+    var html = '';
+    NOTICE_MINS.forEach(function (m) {
+      html += '<option value="' + m + '"' + (m === 60 ? ' selected' : '') + '>' +
+        noticeMinLabel(m) + '</option>';
+    });
+    return html;
+  }
+
+  function loadNotices() {
+    return B8.sb.rpc('b8_super_notices', { p_token: tok(), p_limit: 50 })
+      .then(function (rows) {
+        notices = rows || [];
+        paintNotices();
+      }, function (err) {
+        var b = body();
+        if (!b) return;
+        var msg = err && err.message ? err.message : '网络异常';
+        if (/Could not find the function|schema cache|does not exist/i.test(msg)) {
+          msg = '「通知」要更新数据库：请在 Supabase SQL Editor 里跑一遍 supabase/install-all.sql（只需一次）。';
+        }
+        b.innerHTML = '<p class="form-status err">读取失败：' + esc(msg) + '</p>';
+      });
+  }
+
+  function chipOn(btn, on) {
+    if (!btn) return;
+    btn.classList.toggle('on', !!on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+
+  function paintNotices() {
+    var b = body();
+    if (!b) return;
+
+    var html = '<p class="form-note">发布后大厅 45 秒内就能看到。' +
+      '<b>单次通知</b>一直留着，谁点 × 谁就不再看到；' +
+      '<b>时段通知</b>只在选定的时间内可见，过点自动消失（点 × 也是各人各关）。' +
+      '勾了<b>置顶</b>显示在大厅最上面，普通通知显示在「正在对弈」上方。' +
+      '关闭只在控制台可见记录，大厅里立刻消失。</p>';
+
+    html += '<div class="console-add" style="grid-template-columns:1fr 1fr">' +
+      '<div class="field"><label>类型</label><div class="chip-row">' +
+        '<button class="chip' + (noticeKind === 'once' ? ' on' : '') + '" type="button" data-nk="once" aria-pressed="' +
+          (noticeKind === 'once') + '">单次通知</button>' +
+        '<button class="chip' + (noticeKind === 'period' ? ' on' : '') + '" type="button" data-nk="period" aria-pressed="' +
+          (noticeKind === 'period') + '">时段通知</button>' +
+      '</div></div>' +
+      '<div class="field"><label>样式</label><div class="chip-row">' +
+        '<button class="chip' + (noticePinned ? ' on' : '') + '" type="button" data-npin="1" aria-pressed="' +
+          noticePinned + '">置顶</button>' +
+        '<button class="chip' + (noticeLevel === 'warn' ? ' on' : '') + '" type="button" data-nlv="warn" aria-pressed="' +
+          (noticeLevel === 'warn') + '">重要（红）</button>' +
+      '</div></div>' +
+      '<div class="field" id="notice-min-field"' + (noticeKind === 'period' ? '' : ' hidden') + '>' +
+        '<label for="notice-min">时段长度</label>' +
+        '<select class="input" id="notice-min">' + noticeMinOptions() + '</select></div>' +
+      '<div class="field"><label for="notice-title">标题</label>' +
+        '<input class="input" id="notice-title" maxlength="80" placeholder="例：周五 16:00 棋类比赛"></div>' +
+    '</div>' +
+    '<div class="console-add" style="grid-template-columns:1fr;margin-top:8px">' +
+      '<div class="field"><label for="notice-body">正文（可空）</label>' +
+        '<textarea class="input" id="notice-body" rows="3" maxlength="800" ' +
+          'placeholder="时间、地点、要带什么"></textarea></div>' +
+      '<button class="btn sm" type="button" id="notice-pub">发布通知</button>' +
+    '</div>';
+
+    html += '<div class="console-list">';
+    if (!notices.length) {
+      html += '<p class="form-note">还没发过通知。</p>';
+    }
+    notices.forEach(function (n) {
+      var bits = [];
+      bits.push(n.active
+        ? '<span class="tag jade">' + (n.kind === 'period' ? '时段' : '单次') + '</span>'
+        : '<span class="tag plain">已关闭</span>');
+      if (n.pinned) bits.push('<span class="tag">置顶</span>');
+      if (n.level === 'warn') bits.push('<span class="tag">重要</span>');
+
+      var bodyTxt = String(n.body || '');
+      if (bodyTxt.length > 60) bodyTxt = bodyTxt.slice(0, 60) + '…';
+
+      html += '<div class="console-row' + (n.active ? '' : ' is-off') + '">' +
+        '<div class="console-main">' +
+          '<div class="console-title">' + bits.join(' ') + ' ' + esc(n.title) +
+            ' <span class="console-dim">#' + esc(n.id) + '</span></div>' +
+          '<div class="console-meta">' + (bodyTxt ? esc(bodyTxt) : '（没有正文）') + '</div>' +
+          '<div class="console-meta">' +
+            '发布 ' + esc(B8.dateTime(n.created_at)) +
+            (n.created_name ? ' · ' + esc(n.created_name) : '') +
+            (n.kind === 'period'
+              ? (n.expires_at ? ' · 到 ' + esc(B8.dateTime(n.expires_at)) + ' 结束' : '')
+              : ' · 一直有效') +
+            ' · 已关 ' + (Number(n.dismissed_count) || 0) + ' 人' +
+          '</div>' +
+        '</div>' +
+        (n.active
+          ? '<div class="chip-row"><button class="btn ghost sm" type="button" data-nclose="' +
+              esc(n.id) + '">关闭</button></div>'
+          : '') +
+      '</div>';
+    });
+    html += '</div>';
+    b.innerHTML = html;
+
+    B8.qsa('[data-nk]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        noticeKind = btn.getAttribute('data-nk') === 'period' ? 'period' : 'once';
+        B8.qsa('[data-nk]', b).forEach(function (o) { chipOn(o, o === btn); });
+        var mf = document.getElementById('notice-min-field');
+        if (mf) mf.hidden = noticeKind !== 'period';
+      });
+    });
+
+    B8.qsa('[data-npin]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        noticePinned = !noticePinned;
+        chipOn(btn, noticePinned);
+      });
+    });
+
+    B8.qsa('[data-nlv]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        noticeLevel = noticeLevel === 'warn' ? 'info' : 'warn';
+        chipOn(btn, noticeLevel === 'warn');
+      });
+    });
+
+    var pub = document.getElementById('notice-pub');
+    B8.on(pub, 'click', function () {
+      var titleEl = document.getElementById('notice-title');
+      var bodyEl = document.getElementById('notice-body');
+      var minEl = document.getElementById('notice-min');
+      var title = (titleEl && titleEl.value || '').trim();
+      var text = (bodyEl && bodyEl.value || '').trim();
+      var mins = Math.floor(Number(minEl && minEl.value) || 60);
+      if (!title) { B8.toast('先写个标题'); if (titleEl) titleEl.focus(); return; }
+      pub.disabled = true;
+      B8.sb.rpc('b8_notice_publish', {
+        p_token: tok(),
+        p_kind: noticeKind,
+        p_pinned: noticePinned,
+        p_title: title,
+        p_body: text,
+        p_minutes: noticeKind === 'period' ? mins : 0,
+        p_level: noticeLevel
+      }).then(function (res) {
+        B8.toast(res && res.expires_at
+          ? '已发布，到 ' + B8.dateTime(res.expires_at) + ' 自动消失'
+          : '已发布，一直留着直到有人点关闭');
+        loadNotices();
+      }).catch(function (err) {
+        pub.disabled = false;
+        B8.toast(errText(err));
+      });
+    });
+
+    B8.qsa('[data-nclose]', b).forEach(function (btn) {
+      B8.on(btn, 'click', function () {
+        var id = Number(btn.getAttribute('data-nclose'));
+        B8.confirm('关闭这条通知？大厅里立刻消失，记录还留在控制台里。', {
+          title: '关闭通知', okText: '关闭', danger: true
+        }).then(function (ok) {
+          if (!ok) return;
+          btn.disabled = true;
+          B8.sb.rpc('b8_notice_close', { p_token: tok(), p_id: id })
+            .then(function () { B8.toast('已关闭'); loadNotices(); })
             .catch(function (err) { btn.disabled = false; B8.toast(errText(err)); });
         });
       });

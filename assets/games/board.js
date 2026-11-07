@@ -3914,6 +3914,131 @@
     return { key: 'blunder', label: '败着', icon: '??' };
   }
 
+  /* ---------- 本局评分 ----------
+     每种着法一个权重，评分 = 100 × Σ(这种着法的次数 × 权重) ÷ 已评手数，
+     再夹到 0–100。全正手 = 100，全败着 = 0。双方各按自己的手数算。 */
+  var TAG_META = {
+    best:       { icon: '★',  label: '正手', weight: 1.00 },
+    excellent:  { icon: '◎',  label: '优秀', weight: 0.92 },
+    good:       { icon: '●',  label: '良好', weight: 0.78 },
+    inaccuracy: { icon: '△',  label: '一般', weight: 0.55 },
+    mistake:    { icon: '?',  label: '失误', weight: 0.28 },
+    blunder:    { icon: '??', label: '败着', weight: 0.00 }
+  };
+  var TAG_KEYS = ['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder'];
+
+  function blankGradeSide() {
+    var counts = {};
+    for (var k = 0; k < TAG_KEYS.length; k++) counts[TAG_KEYS[k]] = 0;
+    return { counts: counts, moves: 0, graded: 0, score: null };
+  }
+
+  // 返回 { 1: {score, counts, moves, graded}, 2: {...}, graded, total }；
+  // 没有评谱标签（还没分析）时各 side.score 是 null。
+  function gameGrades() {
+    if (!S || !S.moves || !S.moves.length) return null;
+    var tags = ANALYSIS.tags || {};
+    var out = { 1: blankGradeSide(), 2: blankGradeSide(), graded: 0, total: S.moves.length };
+    for (var i = 0; i < S.moves.length; i++) {
+      var mv = S.moves[i] || {};
+      var side = out[mv.color === 2 ? 2 : 1];
+      side.moves++;
+      var tag = tags[i + 1];
+      if (tag && side.counts[tag.key] != null) {
+        side.counts[tag.key]++;
+        side.graded++;
+        out.graded++;
+      }
+    }
+    for (var c = 1; c <= 2; c++) {
+      var sd = out[c];
+      if (!sd.graded) continue;
+      var sum = 0;
+      for (var t = 0; t < TAG_KEYS.length; t++) {
+        sum += sd.counts[TAG_KEYS[t]] * TAG_META[TAG_KEYS[t]].weight;
+      }
+      sd.score = Math.max(0, Math.min(100, Math.round(100 * sum / sd.graded)));
+    }
+    return out;
+  }
+
+  function gradeChips(counts) {
+    var html = '';
+    for (var k = 0; k < TAG_KEYS.length; k++) {
+      var key = TAG_KEYS[k];
+      var meta = TAG_META[key];
+      var n = (counts && counts[key]) || 0;
+      html += '<span class="bd-mv-tag is-' + key + (n ? '' : ' is-zero') + '" title="' +
+        meta.label + ' ' + n + ' 手">' + meta.icon + ' ' + n + '</span>';
+    }
+    return html;
+  }
+
+  function gradeHtml(g, waitText) {
+    var html = '<div class="bd-grade-head"><b>本局评分</b>' +
+      '<em>每种着法按权重折算 · 满分 100</em></div>';
+    if (!g || !g.graded) {
+      html += '<p class="bd-grade-wait">' + B8.esc(waitText || '还没有分析数据。') + '</p>';
+      return html;
+    }
+    for (var c = 1; c <= 2; c++) {
+      var side = g[c];
+      var nm = S ? shortName(c) : (c === 1 ? '先手' : '后手');
+      var cl = S ? colorName(c) : '';
+      html += '<div class="bd-grade-sec">' +
+        '<div class="bd-grade-row">' +
+          '<span class="bd-grade-who">' + B8.esc(nm) + '<i>' + B8.esc(cl) +
+            ' · ' + side.moves + ' 手</i></span>' +
+          '<b class="bd-grade-num' + (side.score != null && side.score < 60 ? ' is-low' : '') + '">' +
+            (side.score == null ? '—' : side.score) + '</b>' +
+        '</div>' +
+        '<div class="bd-grade-tags">' + gradeChips(side.counts) + '</div>' +
+      '</div>';
+    }
+    if (g.graded < g.total) {
+      html += '<p class="bd-grade-foot">已评 ' + g.graded + ' / ' + g.total +
+        ' 手；没算进评分的手不计。</p>';
+    }
+    return html;
+  }
+
+  // 还没出分时提示「在算」还是「这盘没分析过」，别让人一直等。
+  function gradeWaitText() {
+    if (ANALYSIS.analysisBusy) return '分析中…胜率曲线算完就出分（一般几秒）。';
+    var n = ANALYSIS.tags ? Object.keys(ANALYSIS.tags).length : 0;
+    if (ANALYSIS.saved || n) return '这一局还没有可用的评分（分析数据不全）。';
+    return '这盘还没有分析过，暂时没有评分；对局双方或管理员打开时会自动分析一次。';
+  }
+
+  // 胜利页 + 复盘「局面胜率」上方的双方评分，同一个数据源。
+  function renderGameGrades() {
+    if (!S || !S.state) return;
+    // 演练是本地分支，不是这盘棋本身，不评
+    var on = S.state.status === 'over' && !S.practice;
+    var g = on ? gameGrades() : null;
+    var wait = gradeWaitText();
+
+    var box = $('bd-result-grade');
+    if (box) {
+      if (on && S.resultShown) {
+        box.innerHTML = gradeHtml(g, wait);
+        box.hidden = false;
+      } else {
+        box.hidden = true;
+      }
+    }
+
+    var inline = $('bd-analysis-grade');
+    if (inline) {
+      if (on) {
+        inline.innerHTML = gradeHtml(g, wait);
+        inline.hidden = false;
+      } else {
+        inline.hidden = true;
+      }
+    }
+  }
+
   var ANALYZABLE = { chess: 1, xiangqi: 1, go: 1, gomoku: 1, draughts: 1 };
 
   function p1OfRow(row) {
@@ -4490,6 +4615,7 @@
     renderYouWinrate(p);
     txt('bd-analysis-label', '第 ' + ANALYSIS.cur + ' / ' + last + ' 手');
     renderWinBar(p, ANALYSIS.cur);
+    renderGameGrades();
 
     show('bd-analysis-panel', !!ANALYSIS.on);
     if (!ANALYSIS.on) {
@@ -4675,6 +4801,7 @@
         again.textContent = S.rematchOffered ? '已邀请，等对方' : (S.mode === 'online' && !isLocalRoom() ? '邀请再来一局' : '再来一局');
       }
     }
+    renderGameGrades();
   }
 
   function resultInfo() {
@@ -6711,6 +6838,7 @@
       move: function (mv) { commit(mv); },
       sync: function () { syncNow(); },
       refresh: function () { loadLists(true); },
+      grades: function () { return gameGrades(); },
       open: function (code, watch) { openRoom(code, { watch: !!watch }); },
       chat: function (body) {
         var i = $('bd-chat-input');
