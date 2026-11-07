@@ -3,23 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>多人大厅 · 函数大战 / 步步为营 / 扫雷 · 八班游乐场</title>
-<meta name="description" content="八班多人大厅：GraphWar 函数大战（2-8 人，输入函数打炮）、Quoridor 步步为营（2-4 人放墙堵路）、单人无猜扫雷。房间号加入、聊天、排行榜。">
+<title>多人游戏 · 函数大战 / 步步为营 · 八班游乐场</title>
+<meta name="description" content="八班多人游戏：GraphWar 函数大战（2-8 人，输入函数打炮）、Quoridor 步步为营（2-4 人放墙堵路）。房间号加入、组队或混战、聊天。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g106" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g106">
-<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g106">
+<link rel="icon" href="assets/favicon.png?v=20261101g107" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g107">
+<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g107">
 <script>
-window.B8_BUILD = '20261101g106';
+window.B8_BUILD = '20261101g107';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g106"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g106">
+<script src="assets/theme.js?v=20261101g107"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g107">
 </head>
 
 <body data-site="fun">
@@ -29,8 +29,8 @@ window.B8_TEST = !!window.B8_T;
   <header class="ag-head">
     <a class="ag-back" href="index.html">← 游乐场</a>
     <div class="ag-brand">
-      <b>多人大厅</b>
-      <span>函数大战 · 步步为营 · 扫雷</span>
+      <b>多人游戏</b>
+      <span>函数大战 · 步步为营</span>
     </div>
     <span class="ag-who" id="ag-who"></span>
   </header>
@@ -41,10 +41,10 @@ window.B8_TEST = !!window.B8_T;
     <section class="ag-view" id="ag-lobby">
       <div class="ag-intro">
         <p class="ag-eyebrow">GRAPHWAR · QUORIDOR · MINESWEEPER</p>
-        <h1>多人大厅</h1>
+        <h1>多人游戏</h1>
         <p class="ag-lead">
-          两个多人棋战：<b>函数大战</b>输入一条函数当炮弹，<b>步步为营</b>放墙把对手堵死；
-          还有一个单人的<b>无猜扫雷</b>。多人房间支持 2–8 人、可组队、可聊天。
+          两个多人棋战：<b>函数大战</b>输入一条函数当炮弹，<b>步步为营</b>放墙把对手堵死。
+          房间支持 2–8 人，可组队、可聊天。扫雷在首页「下课十分钟」里。
         </p>
       </div>
 
@@ -83,9 +83,8 @@ window.B8_TEST = !!window.B8_T;
           <div class="ag-btns">
             <button class="ag-btn primary" id="ag-quick" type="button">快速匹配</button>
             <button class="ag-btn" id="ag-create" type="button">建房</button>
-            <button class="ag-btn" id="ag-solo-start" type="button" hidden>开始扫雷</button>
-          </div>
-          <p class="ag-hint" id="ag-start-hint">多人房间要登录；扫雷不登录也能玩，但上榜要登录。</p>
+            </div>
+          <p class="ag-hint" id="ag-start-hint">多人房间要登录：座位、分数、聊天都跟着账号走。</p>
           <p class="ag-hint is-warn" id="ag-db-note" hidden></p>
 
           <form class="ag-join" id="ag-join-form">
@@ -106,15 +105,6 @@ window.B8_TEST = !!window.B8_T;
         </div>
       </div>
 
-      <!-- 单人扫雷直接挂在大厅下面 -->
-      <div class="ag-card ag-solo" id="ag-solo" hidden>
-        <div class="ag-solo-head">
-          <h2>无猜扫雷</h2>
-          <p class="ag-muted" id="ag-solo-note">难度系数 × 基础分 − 用时 = 本局得分</p>
-        </div>
-        <div class="ag-stage ag-stage-solo" id="ag-stage-solo"></div>
-      </div>
-    </section>
 
     <!-- ==================== 房间 / 对局 ==================== -->
     <section class="ag-view" id="ag-room" hidden>
@@ -177,7 +167,7 @@ window.B8_TEST = !!window.B8_T;
     </div>
 
     <footer class="ag-foot">
-      <span>八班游乐场 · 多人大厅</span>
+      <span>八班游乐场 · 多人游戏</span>
       <a href="board.html">棋类对弈</a>
       <a href="index.html">游乐场</a>
       <a href="changelog.html">更新日志</a>
@@ -188,7 +178,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g106' + T;
+  var V = '?v=20261101g107' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
@@ -196,7 +186,6 @@ window.B8_TEST = !!window.B8_T;
     ['assets/auth.js', 1],
     ['assets/notice-bar.js', 1],
     ['assets/games/arcade.js', 1],
-    ['assets/games/arcade-mines.js', 1],
     ['assets/games/arcade-quoridor.js', 1],
     ['assets/games/arcade-graphwar.js', 1]
   ];

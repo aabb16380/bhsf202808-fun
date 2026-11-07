@@ -31,7 +31,6 @@
   var META = {
     quoridor: { title: '步步为营', icon: '墙', sub: '2-4 人 · 放墙堵路', seats: [2, 3, 4] },
     graphwar: { title: '函数大战', icon: 'ƒ', sub: '2-8 人 · 输入函数打炮', seats: [2, 3, 4, 5, 6, 7, 8] },
-    mines: { title: '扫雷', icon: '雷', sub: '单人 · 无猜版 · 三档', seats: [1] }
   };
 
   var S = {
@@ -58,8 +57,6 @@
     lastList: 0,
     round: 0,
     overShown: false,
-    soloMounted: false,
-    lastMinesLevel: ''
   };
 
   function mod(key) { return A.games[key] || null; }
@@ -114,7 +111,7 @@
     var box = $('ag-games');
     if (!box) return;
     box.innerHTML = '';
-    ['graphwar', 'quoridor', 'mines'].forEach(function (key) {
+    ['graphwar', 'quoridor'].forEach(function (key) {
       var m = meta(key);
       var btn = document.createElement('button');
       btn.type = 'button';
@@ -131,24 +128,18 @@
   function selectGame(key) {
     S.game = key;
     var m = meta(key);
-    if (m.mode === 'solo') {
-      S.seats = 1;
-    } else if (m.seats.indexOf(S.seats) < 0) {
+    if (m.seats.indexOf(S.seats) < 0) {
       S.seats = m.seats[0];
     }
     renderGames();
     renderOptions();
-    if (m.mode === 'solo') showSolo();
-    else hideSolo();
   }
 
   function renderOptions() {
     var m = meta(S.game);
     var multi = m.mode === 'multi';
-    txt('ag-start-title', multi ? '开一局' + m.title : '无猜扫雷');
-    txt('ag-start-note', multi
-      ? '选人数，然后建房或快速匹配。房号 4 位，发同学就能进来。'
-      : '三档难度，每局棋盘都经过逻辑求解器校验：一定能靠推理推完。得分 = 难度系数 × 基础分 − 用时秒数。');
+    txt('ag-start-title', '开一局' + m.title);
+    txt('ag-start-note', '选人数，然后建房或快速匹配。房号 4 位，发同学就能进来。');
 
     show('ag-seat-row', multi);
     show('ag-mode-row', multi && S.game === 'graphwar');
@@ -156,7 +147,6 @@
     show('ag-name-row', multi);
     show('ag-create', multi);
     show('ag-quick', multi);
-    show('ag-solo-start', !multi);
     show('ag-join-form', multi);
 
     var seats = $('ag-seats');
@@ -369,7 +359,6 @@
     showGame('ag-over', false);
     showGame('ag-wait', false);
     loadLists(true);
-    if (S.game === 'mines') showSolo();
   }
 
   /* ============================================================
@@ -757,86 +746,6 @@
   }
 
   /* ============================================================
-     六、扫雷（单人）
-     ============================================================ */
-
-  function showSolo() {
-    show('ag-solo', true);
-    if (S.soloMounted) return;
-    var m = mod('mines');
-    var stage = $('ag-stage-solo');
-    if (!m || !stage) return;
-    S.soloMounted = true;
-    try {
-      m.mount(stage, {
-        game: 'mines',
-        toast: function (msg) { B8.toast(msg); },
-        setStatus: function (msg) { txt('ag-solo-note', msg || '难度系数 × 基础分 − 用时 = 本局得分'); },
-        onFinish: onSoloFinish,
-        submitScore: function (score, detail) { return submitMinesScore(score, detail); },
-        best: function (level, cb) {
-          if (typeof level === 'function') { cb = level; level = ''; }
-          return loadMinesBest(level, cb);
-        }
-      });
-    } catch (e) {
-      stage.innerHTML = '<p class="ag-empty">扫雷模块出错：' + esc(e && e.message) + '</p>';
-    }
-  }
-
-  function hideSolo() {
-    show('ag-solo', false);
-    if (S.soloMounted) {
-      var m = mod('mines');
-      if (m && typeof m.destroy === 'function') { try { m.destroy(); } catch (e) {} }
-      S.soloMounted = false;
-      var stage = $('ag-stage-solo');
-      if (stage) stage.innerHTML = '';
-    }
-  }
-
-  function onSoloFinish(res) {
-    res = res || {};
-    if (!res.won) return;
-    var score = Math.max(0, Math.floor(Number(res.score) || 0));
-    S.lastMinesLevel = res.level || 'easy';
-    if (!logged()) {
-      B8.toast('本局 ' + score + ' 分。登录后能上榜');
-      return;
-    }
-    submitMinesScore(score, res).then(function () {
-      B8.toast('上榜：' + (res.level || '') + ' ' + score + ' 分');
-    }).catch(function () {});
-  }
-
-  function submitMinesScore(score, detail) {
-    if (!logged() || !B8.sb || !B8.sb.ready) return Promise.resolve(null);
-    var game = 'mines:' + ((detail && detail.level) || S.lastMinesLevel || 'easy');
-    return rpc('b8_score_add', { p_token: token(), p_game: game, p_score: Math.floor(score) })
-      .catch(function (err) { if (window.console) console.warn('[arcade] 上榜失败', err); return null; });
-  }
-
-  function loadMinesBest(level, cb) {
-    if (typeof cb !== 'function') return;
-    if (!logged() || !B8.sb || !B8.sb.ready) { cb([]); return; }
-    var games = level ? ['mines:' + level] : ['mines:easy', 'mines:medium', 'mines:hard'];
-    Promise.all(games.map(function (g) {
-      return rpc('b8_score_top', { p_token: token(), p_game: g, p_limit: 5 })
-        .then(function (rows) { return rows || []; })
-        .catch(function () { return []; });
-    })).then(function (lists) {
-      var all = [];
-      lists.forEach(function (rows, i) {
-        rows.forEach(function (r) {
-          all.push({ nick: r.nick, score: r.score, level: games[i].split(':')[1], created_at: r.created_at });
-        });
-      });
-      all.sort(function (a, b) { return b.score - a.score; });
-      cb(all.slice(0, 5));
-    }).catch(function () { cb([]); });
-  }
-
-  /* ============================================================
      七、绑定 / 启动
      ============================================================ */
 
@@ -845,8 +754,6 @@
     if (quick) quick.addEventListener('click', function () { createRoom(true); });
     var create = $('ag-create');
     if (create) create.addEventListener('click', function () { createRoom(false); });
-    var solo = $('ag-solo-start');
-    if (solo) solo.addEventListener('click', showSolo);
 
     var ffa = $('ag-mode-ffa');
     if (ffa) ffa.addEventListener('click', function () { S.teamMode = 'ffa'; renderOptions(); });
