@@ -456,8 +456,15 @@
   }
 
   function syncRoom(force) {
-    if (!S.room || S.syncBusy) return;
-    if (!force && Date.now() - (S.lastSync || 0) < 900) return;
+    if (!S.room) return;
+    if (S.syncBusy) return;
+    var now = Date.now();
+    // 900ms 冷却 + 合流：onChange 里再调 refresh 也只会排在后面跑一次
+    if (!force && now - (S.lastSync || 0) < 900) {
+      clearTimeout(S.syncLater);
+      S.syncLater = setTimeout(function () { syncRoom(false); }, 950);
+      return;
+    }
     S.syncBusy = true;
     S.lastSync = Date.now();
     rpc('b8_arcade_sync', {
@@ -525,8 +532,10 @@
       schedulePoll();
       if (S.view === 'room' && S.room && S.room.code === code) {
         S.wsRetry = Math.min(6, S.wsRetry + 1);
-        setTimeout(function () { if (S.view === 'room' && S.room) wsConnect(S.room.code); },
-          1500 * S.wsRetry);
+        clearTimeout(S.reconnectTimer);
+        S.reconnectTimer = setTimeout(function () {
+          if (S.view === 'room' && S.room && !S.ws) wsConnect(S.room.code);
+        }, 1500 * S.wsRetry);
       }
     };
     sock.onerror = function () {};
@@ -546,6 +555,15 @@
   }
 
   function wsSend(obj) {
+    if (obj && obj.type === 'changed') {
+      var now = Date.now();
+      if (now - (S.changedAt || 0) < 450) {
+        clearTimeout(S.changedTimer);
+        S.changedTimer = setTimeout(function () { wsSend(obj); }, 460);
+        return;
+      }
+      S.changedAt = now;
+    }
     if (S.ws && S.ws.readyState === 1) {
       try { S.ws.send(JSON.stringify(obj)); return; } catch (e) {}
     }
@@ -743,6 +761,13 @@
     opts = opts || {};
     if (!S.room) return Promise.reject(new Error('还没进房间'));
     if (S.seat <= 0) return Promise.reject(new Error('观战不能操作'));
+
+    var sig = S.seat + '|' + JSON.stringify(action || {});
+    if (S.lastActionSig === sig && Date.now() - (S.lastActionAt || 0) < 600) {
+      return Promise.resolve({ deduped: true });
+    }
+    S.lastActionSig = sig;
+    S.lastActionAt = Date.now();
 
     // 先把本端画面推进（动起来），服务器回来再对齐；失败就回滚
     var before = {
