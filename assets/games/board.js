@@ -2826,12 +2826,17 @@
     var arr = reviewBuild();
     if (!arr.length) return;
     var was = S.reviewing;
+    var old = S.reviewIndex;
     i = Math.max(0, Math.min(arr.length - 1, i));
     S.reviewing = true;
     S.reviewClosed = false;
     S.reviewIndex = i;
     S.reviewState = arr[i];
     S.anim = null;
+    // 只在这一手向前走一步时做移动动画；跳转/后退不硬做
+    if (was && i === old + 1 && i > 0 && !document.hidden) {
+      S.anim = buildAnim(arr[i - 1], S.moves[i - 1].move, arr[i]);
+    }
     S.resultShown = false;
     S.score = null;
     S.scoreBusy = false;
@@ -2842,6 +2847,7 @@
       ANALYSIS.on = true;
     }
     renderAll();
+    if (S.anim) ensureAnimLoop();
   }
 
   function exitReview() {
@@ -5551,14 +5557,14 @@
       flip: S.flip,
       score: practicing ? null : (S.score || null),
       dead: (!practicing && S.score && S.score.dead) ? S.score.dead : [],
-      anim: (S.reviewing || practicing) ? null : S.anim,
+      anim: practicing ? null : S.anim,
       arrow: showArrow ? ANALYSIS.bestArrow : null
     });
-    renderer.draw(!!S.anim && !S.reviewing && !practicing);
+    renderer.draw(!!S.anim && !practicing);
     var tags = boardTagSet();
     var limit = S.moves ? S.moves.length : 0;
     if (S.reviewing) limit = Math.min(limit, S.reviewIndex);
-    if (tags && limit > 0) {
+    if (!S.anim && tags && limit > 0) {
       drawBoardTags(renderer.ctx, st, tags, limit, S.flip, renderer.w, renderer.h, renderer.cv);
     } else if (renderer.cv) {
       renderer.cv.setAttribute('data-tags', '0');
