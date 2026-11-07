@@ -986,7 +986,7 @@
       startedAt: room.created_at ? (Date.parse(room.created_at) || Date.now()) : Date.now(),
       turnStarted: Date.now(),
       practice: false, practicePrefix: null, practiceBase: null, practiceState: null,
-      practiceStack: [], practiceLast: null,
+      practiceStack: [], practiceMoves: [], practiceLast: null,
       rematchOffered: false, rematchPrompted: false
     };
     rebuildTexts();
@@ -1105,7 +1105,7 @@
       reviewing: false, reviewClosed: false, reviewIndex: 0, reviewStates: null, reviewState: null,
       room: null, code: '', playerNames: [name1 || '玩家一', name2 || '玩家二'],
       startedAt: Date.now(), turnStarted: Date.now(),
-      practice: false, practicePrefix: null, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
+      practice: false, practicePrefix: null, practiceBase: null, practiceState: null, practiceStack: [], practiceMoves: [], practiceLast: null,
       rematchOffered: false, rematchPrompted: false
     };
     resetAnalysisMarks();
@@ -1459,7 +1459,7 @@
       room: null, code: '',
       playerNames: saved.names || ['玩家一', '玩家二'],
       startedAt: saved.startedAt || Date.now(), turnStarted: Date.now(),
-      practice: false, practicePrefix: null, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
+      practice: false, practicePrefix: null, practiceBase: null, practiceState: null, practiceStack: [], practiceMoves: [], practiceLast: null,
       rematchOffered: false, rematchPrompted: false
     };
     var tmp = E.init(saved.game, { size: saved.size });
@@ -1516,7 +1516,7 @@
       isHost: false,
       startedAt: room && room.created_at ? Date.parse(room.created_at) || Date.now() : Date.now(),
       turnStarted: room && room.turn_started ? room.turn_started : Date.now(),
-      practice: false, practicePrefix: null, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
+      practice: false, practicePrefix: null, practiceBase: null, practiceState: null, practiceStack: [], practiceMoves: [], practiceLast: null,
       rematchOffered: false, rematchPrompted: false
     };
     saveLast(code);
@@ -2083,7 +2083,9 @@
     if (!S || !S.practice || !S.practiceBase) return;
     S.practiceState = E.clone(S.practiceBase);
     S.practiceStack = [];
+    S.practiceMoves = [];
     S.practiceLast = null;
+    ANALYSIS.bestArrow = null;
     S.sel = null;
     S.targets = [];
     renderAll();
@@ -2097,6 +2099,7 @@
     S.practiceBase = null;
     S.practiceState = null;
     S.practiceStack = [];
+    S.practiceMoves = [];
     S.practiceLast = null;
     S.sel = null;
     S.targets = [];
@@ -2121,11 +2124,13 @@
     S.practiceBase = E.clone(base);
     S.practiceState = E.clone(base);
     S.practiceStack = [];
+    S.practiceMoves = [];
     S.practiceLast = null;
     S.sel = null;
     S.targets = [];
     S.score = null;
     S.scoreBusy = false;
+    ANALYSIS.bestArrow = null;
     show('bd-result', false);
     // 演练是纯本地的分支，不轮询、不上传；顺带把胜率图打开
     netPause('演练中 · 不上传');
@@ -2138,10 +2143,12 @@
     if (!S || !S.practice || !S.practiceState) return;
     var prev = S.practiceState;
     S.practiceStack.push(prev);
+    S.practiceMoves.push({ color: prev.turn, move: mv });
     S.practiceState = E.apply(E.clone(prev), mv);
     S.practiceLast = mv;
     S.sel = null;
     S.targets = [];
+    ANALYSIS.bestArrow = null;
     renderAll();
     if (S.practiceState.status === 'over') {
       toast('演练结束；可以重置或退出演练');
@@ -3190,8 +3197,11 @@
 
   function stateSig(st) {
     if (!st) return '';
+    var b = st.board || [], h = 0;
+    for (var i = 0; i < b.length; i++) h = (h * 33 + (b[i] || 0)) | 0;
     return (st.game || '') + '|' + (st.size || 0) + '|' + (st.seq || 0) + '|' +
-      (st.turn || 0) + '|' + (st.status || '') + '|' + (st.winner || 0);
+      (st.turn || 0) + '|' + (st.status || '') + '|' + (st.winner || 0) +
+      '|' + b.length + ':' + h;
   }
 
   // 下完的棋谱按 b8_board_rooms.id 访问；还在桌上的房间用 3 位码。
@@ -3235,7 +3245,7 @@
     var game = S.game || (S.room && S.room.game);
     var size = S.size || (S.room && S.room.size);
     var mlen = (S.moves && S.moves.length) || 0;
-    var lk = 'l|' + (S.code || 'local') + '|' + game + '|' + size + '|' + mlen + '|' + (S.state ? S.state.seq : -1);
+    var lk = 'l|' + (S.code || 'local') + '|' + game + '|' + size + '|' + mlen + '|' + (S.state ? stateSig(S.state) : '');
     if (ANALYSIS.liveKey === lk && ANALYSIS.liveStates) return ANALYSIS.liveStates;
 
     var prev = ANALYSIS.liveStates;
@@ -3539,7 +3549,7 @@
     txt('bd-winbar-p2', (100 - pct) + '% ' + n2);
     var fill = $('bd-winbar-fill');
     if (fill) fill.style.width = Math.max(2, Math.min(98, pct)) + '%';
-    bar.title = '局面胜率（本地估算） · 第 ' + cur + ' 手 · 点开看整盘折线图';
+    bar.title = '局面胜率（服务器评估） · 第 ' + cur + ' 手 · 点开看整盘折线图';
     bar.setAttribute('aria-label',
       '局面胜率：' + n1 + ' ' + pct + '%，' + n2 + ' ' + (100 - pct) + '%。点开看折线图');
     show('bd-winbar', true);
@@ -3691,6 +3701,29 @@
     return null;
   }
 
+  function bestArrowValid(game, a, st) {
+    if (!a || !st || !st.board) return false;
+    if (game === 'go' || game === 'gomoku') {
+      return a.to != null && !st.board[a.to];
+    }
+    if (game === 'chess' || game === 'xiangqi') {
+      if (a.from == null || a.to == null) return false;
+      var fp = st.board[a.from];
+      if (!fp || pieceColor(st, fp) !== st.turn) return false;
+      var tp = st.board[a.to];
+      if (tp && pieceColor(st, tp) === st.turn) return false;
+      return true;
+    }
+    if (game === 'draughts') {
+      if (!a.path || !a.path.length) return false;
+      var from = a.path[0], to = a.path[a.path.length - 1];
+      var dfp = st.board[from];
+      if (!dfp || pieceColor(st, dfp) !== st.turn) return false;
+      return !st.board[to];
+    }
+    return false;
+  }
+
   function tagFor(loss, isBest) {
     if (isBest || loss <= 0.01) return { key: 'best', label: '正手', icon: '★' };
     if (loss <= 0.03) return { key: 'excellent', label: '优秀', icon: '◎' };
@@ -3817,7 +3850,8 @@
     ANALYSIS.serverPointKey = '';
     var cur = Math.max(0, Math.min(ANALYSIS.cur, states.length - 1));
     var best = rows[cur] && rows[cur].best;
-    ANALYSIS.bestArrow = best ? bestMoveArrow(game, best, states[cur]) : null;
+    var ba = best ? bestMoveArrow(game, best, states[cur]) : null;
+    ANALYSIS.bestArrow = bestArrowValid(game, ba, states[cur]) ? ba : null;
     renderMoves();
     renderAnalysis();
     draw();
@@ -4003,7 +4037,7 @@
   }
 
   function analyzeGame() {
-    if (!S || !S.state || S.state.status !== 'over' || !S.moves.length) return;
+    if (!S || !S.state || S.practice || S.state.status !== 'over' || !S.moves.length) return;
     if (!window.B8Server || !B8Server.enabled()) return;
     if (ANALYSIS.saved || ANALYSIS.analysisBusy) return;
     var game = S.game;
@@ -4059,11 +4093,12 @@
 
   function refreshServerPoint() {
     if (!S || !S.state || !window.B8Server || !B8Server.enabled()) return;
-    // 整盘曲线已经存进棋谱 / 已经下完：不要再用单点评估把保存的折线改掉
-    if (ANALYSIS.saved || isRecordMode() || S.state.status !== 'play') return;
+    var practice = !!S.practice;
+    // 演练是本地分支，允许从已结束的棋谱/已保存分析进入；普通实战/回看才挡
+    if (!practice && (ANALYSIS.saved || isRecordMode() || S.state.status !== 'play')) return;
+    if (!practice && ANALYSIS.serverData) return;
     var game = S.state.game;
     if (game !== 'chess' && game !== 'xiangqi' && game !== 'go' && game !== 'gomoku' && game !== 'draughts') return;
-    if (ANALYSIS.serverData) return;
 
     var states = analysisStates();
     var st = states[ANALYSIS.cur];
@@ -4072,20 +4107,27 @@
     if (key === ANALYSIS.serverPointKey) return;
     ANALYSIS.serverPointKey = key;
 
+    // 演练的着法 = 原局前缀 + 演练分支，不能错用 S.moves（否则分析的是另一盘）
+    var allMoves = S.moves || [];
+    if (practice) {
+      var baseSeq = Math.max(0, Math.min(allMoves.length, (S.practiceBase && S.practiceBase.seq) || 0));
+      allMoves = allMoves.slice(0, baseSeq).concat(S.practiceMoves || []);
+    }
+    var upto = practice ? allMoves.length :
+      (S.reviewing ? Math.min(S.reviewIndex, allMoves.length) : allMoves.length);
+
     var request;
     if (game === 'go') {
-      var upto = S.reviewing ? Math.min(S.reviewIndex, S.moves.length) : S.moves.length;
-      var moves = S.moves.slice(0, upto).map(function (m) {
+      var moves = allMoves.slice(0, upto).map(function (m) {
         return [m.color === 2 ? 'W' : 'B',
           m.move && m.move.pass ? 'pass' : E.goCoord(m.move.t, S.size)];
       });
       request = B8Server.evalGo(S.size, moves, 100);
     } else if (game === 'gomoku') {
       // 禁手模式要按落子顺序发；当前回看到第几手就发前几手
-      var upto = S.reviewing ? Math.min(S.reviewIndex, S.moves.length) : S.moves.length;
       var stones = [];
       for (var gi = 0; gi < upto; gi++) {
-        var gm = S.moves[gi];
+        var gm = allMoves[gi];
         var gt = gm && gm.move ? gm.move.t : null;
         if (gt == null) continue;
         stones.push([gt % 15, Math.floor(gt / 15), gm.color]);
@@ -4106,9 +4148,16 @@
       if (idx < 0 || idx >= ANALYSIS.data.length) return;
       ANALYSIS.data[idx] = r.p1 / 100;
       ANALYSIS.pointAt[idx] = true;
-      if (r.bestmove) ANALYSIS.bestArrow = bestMoveArrow(game, r.bestmove, st);
+      if (r.bestmove) {
+        var ba = bestMoveArrow(game, r.bestmove, st);
+        ANALYSIS.bestArrow = bestArrowValid(game, ba, st) ? ba : null;
+      }
       drawWinChart();
       renderWinBar(ANALYSIS.data[idx], idx);
+      var pct = Math.round(ANALYSIS.data[idx] * 100);
+      txt('bd-an-p1', pct + '%');
+      txt('bd-an-p2', (100 - pct) + '%');
+      txt('bd-analysis-label', '第 ' + idx + ' / ' + Math.max(0, ANALYSIS.data.length - 1) + ' 手');
       draw();
     }).catch(function () { /* 服务器不可用就保持 P1 */ });
   }
@@ -4119,7 +4168,7 @@
     var over = !!(S && S.state && S.state.status === 'over');
     var serverBtn = $('bd-server-run');
     if (serverBtn) {
-      serverBtn.hidden = !has || over || !window.B8Server || !B8Server.enabled();
+      serverBtn.hidden = !has || over || S.practice || !window.B8Server || !B8Server.enabled();
     }
     var note = $('bd-analysis-note');
     if (note) {
@@ -4146,9 +4195,10 @@
     var p = (ANALYSIS.data && ANALYSIS.data.length) ? ANALYSIS.data[ANALYSIS.cur] : 0.5;
     var pct = Math.round(p * 100);
 
-    if (ANALYSIS.bestMoves && ANALYSIS.bestMoves.length && states[ANALYSIS.cur]) {
+    if (!S.practice && ANALYSIS.bestMoves && ANALYSIS.bestMoves.length && states[ANALYSIS.cur]) {
       var bm = ANALYSIS.bestMoves[ANALYSIS.cur];
-      ANALYSIS.bestArrow = bm ? bestMoveArrow(S.game, bm, states[ANALYSIS.cur]) : null;
+      var ba = bm ? bestMoveArrow(S.game, bm, states[ANALYSIS.cur]) : null;
+      ANALYSIS.bestArrow = bestArrowValid(S.game, ba, states[ANALYSIS.cur]) ? ba : null;
       draw();
     }
 
