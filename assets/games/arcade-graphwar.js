@@ -1262,6 +1262,7 @@
     '.gw-rank-meta{font-family:var(--mono,monospace);font-size:9px;font-weight:400;color:var(--ink-3,#8a8375);margin-left:5px}',
     '.gw-rank-hp{font-family:var(--mono,monospace);font-size:9.5px;color:var(--ink-2,#4b463c);white-space:nowrap}',
     '.gw-panel{margin-top:10px;padding:10px 11px 11px;background:var(--card,#fffdf7);border:1px solid var(--line,#e2d9c7);border-radius:calc(var(--radius,4px) + 3px);box-shadow:var(--shadow-1,0 1px 2px rgba(25,23,19,.04))}',
+    '.gw-shell.is-replay .gw-panel{display:none}',
     '.gw-toolrow{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px}',
     '.gw-chip{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:28px;padding:4px 9px;border:1px solid var(--line-2,#cfc3ab);border-radius:var(--radius,4px);background:var(--card,#fffdf7);color:var(--ink-2,#4b463c);font-size:11.5px;cursor:pointer;white-space:nowrap}',
     '.gw-chip:hover:not(:disabled){border-color:var(--seal,#a33228);color:var(--seal,#a33228)}',
@@ -2233,6 +2234,9 @@
 
   function render() {
     if (!view.mounted) return;
+    if (view.dom.shell) {
+      view.dom.shell.classList[isReplay() ? 'add' : 'remove']('is-replay');
+    }
     var st = displayedState();
     updateRound(st);
     renderPlayers(st);
@@ -2667,15 +2671,10 @@
         if (on && (a === N || !vis)) {
           var end = a === N ? Math.PI * 2 : ang;
           if (end - start > 0.02) {
-            g.beginPath();
-            g.arc(hole.hx, hole.hy, hole.hr, start, end);
-            g.strokeStyle = p.gold;
-            g.lineWidth = 1.7;
-            g.globalAlpha = 0.8;
-            g.stroke();
+            // 洞口只留一圈很淡的深色边，不再有金色描边
             g.beginPath();
             g.arc(hole.hx, hole.hy, Math.max(1, hole.hr - 1.2), start, end);
-            g.strokeStyle = 'rgba(0,0,0,.34)';
+            g.strokeStyle = 'rgba(0,0,0,.30)';
             g.lineWidth = 1;
             g.globalAlpha = 1;
             g.stroke();
@@ -2684,21 +2683,6 @@
         }
       }
       // 四道短裂纹，从洞口往外裂
-      g.beginPath();
-      for (var c = 0; c < 4; c++) {
-        var ca = Math.PI * 0.25 + c * Math.PI * 0.5;
-        var x1 = hole.hx + Math.cos(ca) * hole.hr;
-        var y1 = hole.hy + Math.sin(ca) * hole.hr;
-        var x2 = hole.hx + Math.cos(ca) * (hole.hr + Math.max(3, 0.5 * scale));
-        var y2 = hole.hy + Math.sin(ca) * (hole.hr + Math.max(3, 0.5 * scale));
-        g.moveTo(x1, y1);
-        g.lineTo(x2, y2);
-      }
-      g.strokeStyle = p.gold;
-      g.globalAlpha = 0.45;
-      g.lineWidth = 1;
-      g.stroke();
-      g.globalAlpha = 1;
     }
     g.restore();
   }
@@ -2916,7 +2900,7 @@
     var ex = toSX(pts[pts.length - 1][0]);
     var ey = toSY(pts[pts.length - 1][1]);
     g.globalAlpha = 1;
-    g.strokeStyle = p.gold;
+    g.strokeStyle = p.ink2;
     g.lineWidth = 1.8;
     g.beginPath();
     g.moveTo(ex - 5, ey - 5); g.lineTo(ex + 5, ey + 5);
@@ -2937,15 +2921,6 @@
       g.fillStyle = p.seal;
       g.font = '700 11px ' + p.mono;
       g.fillText('-' + DAMAGE, x - 8, y - Math.max(14, 1.3 * viewScale()));
-    }
-    if (rec.hitObstacle && rec.blockedAt) {
-      x = toSX(rec.blockedAt[0]);
-      y = toSY(rec.blockedAt[1]);
-      g.strokeStyle = p.gold;
-      g.lineWidth = 2;
-      g.beginPath();
-      g.arc(x, y, Math.max(8, HOLE_R * viewScale()), 0, Math.PI * 2);
-      g.stroke();
     }
 
     // 左上角：函数式 + 结果
