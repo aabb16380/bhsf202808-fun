@@ -72,7 +72,10 @@
     serverData: null, serverKey: '',
     serverPointKey: '',
     tags: {}, analysisKey: '', analysisBusy: false,
-    bestMoves: [], bestArrow: null
+    bestMoves: [], bestArrow: null,
+    // v2.135：胜率曲线跟着棋谱存库，一局只算一次
+    saved: false, savedAt: 0, claimState: '', autoFor: '', progress: '',
+    reloadTimer: 0, saveBusy: false
   };
   function resetAnalysisMarks() {
     ANALYSIS.tags = {};
@@ -80,6 +83,27 @@
     ANALYSIS.bestArrow = null;
     ANALYSIS.analysisKey = '';
     ANALYSIS.analysisBusy = false;
+    ANALYSIS.saved = false;
+    ANALYSIS.savedAt = 0;
+    ANALYSIS.claimState = '';
+    ANALYSIS.autoFor = '';
+    ANALYSIS.progress = '';
+    ANALYSIS.saveBusy = false;
+    ANALYSIS.serverData = null;
+    ANALYSIS.serverKey = '';
+    ANALYSIS.serverPointKey = '';
+    ANALYSIS.data = [];
+    ANALYSIS.baseSig = '';
+    ANALYSIS.lastSig = '';
+    ANALYSIS.liveKey = '';
+    ANALYSIS.liveCode = '';
+    ANALYSIS.liveStates = null;
+    ANALYSIS.practiceKey = '';
+    ANALYSIS.practiceStates = null;
+    if (ANALYSIS.reloadTimer) {
+      clearTimeout(ANALYSIS.reloadTimer);
+      ANALYSIS.reloadTimer = 0;
+    }
   }
 
   var SPECT = { last: 0, inflight: false };
@@ -422,7 +446,7 @@
     return {
       checkmate: '将死', stalemate: '困毙', resign: '认输', timeout: '超时',
       agreement: '和棋', manual: '手动结束', score: '点目', 'no-move': '无子可动',
-      nomove: '无子可动', five: '五连', full: '棋盘填满'
+      nomove: '无子可动', abandoned: '双方离开', five: '五连', full: '棋盘填满'
     }[r.reason] || '';
   }
 
@@ -501,9 +525,9 @@
     return arr;
   }
 
-  function historyRowByCode(code) {
+  function historyRowById(id) {
     var arr = LOBBY.history || [];
-    for (var i = 0; i < arr.length; i++) if (arr[i].code === code) return arr[i];
+    for (var i = 0; i < arr.length; i++) if (Number(arr[i].id) === Number(id)) return arr[i];
     return null;
   }
 
@@ -514,14 +538,14 @@
     if (box) box.scrollTop = top;
   }
 
-  function toggleHistoryLike(code) {
+  function toggleHistoryLike(id) {
     if (!logged()) {
-      requireLogin(function () { toggleHistoryLike(code); });
+      requireLogin(function () { toggleHistoryLike(id); });
       return;
     }
-    B8.sb.rpc('b8_board_like', { p_token: token(), p_code: code })
+    B8.sb.rpc('b8_board_like', { p_token: token(), p_id: id })
       .then(function (res) {
-        var r = historyRowByCode(code);
+        var r = historyRowById(id);
         if (r && res) {
           r.likes = res.likes || 0;
           r.mine_like = !!res.liked;
@@ -532,14 +556,14 @@
       .catch(function (err) { toast((err && err.message) || '点赞失败'); });
   }
 
-  function rateHistory(code, stars) {
+  function rateHistory(id, stars) {
     if (!logged()) {
-      requireLogin(function () { rateHistory(code, stars); });
+      requireLogin(function () { rateHistory(id, stars); });
       return;
     }
-    B8.sb.rpc('b8_board_rate', { p_token: token(), p_code: code, p_stars: stars })
+    B8.sb.rpc('b8_board_rate', { p_token: token(), p_id: id, p_stars: stars })
       .then(function (res) {
-        var r = historyRowByCode(code);
+        var r = historyRowById(id);
         if (r && res) {
           r.rating_avg = Number(res.avg) || 0;
           r.rating_count = res.count || 0;
@@ -551,10 +575,10 @@
       .catch(function (err) { toast((err && err.message) || '评分失败'); });
   }
 
-  function bumpHistoryView(code) {
+  function bumpHistoryView(id) {
     if (!B8.sb || !B8.sb.ready) return;
-    B8.sb.rpc('b8_board_view', { p_code: code }).then(function (n) {
-      var r = historyRowByCode(code);
+    B8.sb.rpc('b8_board_view', { p_id: id }).then(function (n) {
+      var r = historyRowById(id);
       if (r) r.views = Number(n) || (r.views || 0) + 1;
     }).catch(function () {});
   }
@@ -612,12 +636,14 @@
       var info = GAMES[r.game] || { name: r.game, colors: ['先', '后'] };
       var row = document.createElement('div');
       row.className = 'bd-hrow';
-      row.setAttribute('data-code', r.code);
+      row.setAttribute('data-record', r.id);
       var main = document.createElement('div');
       main.className = 'bd-hrow-main';
       var title = document.createElement('b');
-      title.innerHTML = B8.esc(info.name) + (r.casual ? '<i>随便下下</i>' : '') +
-        (r.mode === 'local' && !r.casual ? '<i>本机</i>' : '');
+      title.innerHTML = '<span class="bd-hno">#' + B8.esc(r.id == null ? '?' : String(r.id)) + '</span> ' +
+        B8.esc(info.name) + (r.casual ? '<i>随便下下</i>' : '') +
+        (r.mode === 'local' && !r.casual ? '<i>本机</i>' : '') +
+        (r.analysis_ready ? '<i>已分析</i>' : '');
       var sub = document.createElement('span');
       var when = B8.dateTime ? B8.dateTime(r.ended_at || r.created_at) : '';
       var why = historyReason(r);
@@ -644,7 +670,7 @@
       like.className = 'bd-hlike' + (r.mine_like ? ' is-on' : '');
       like.textContent = '👍 ' + (r.likes || 0);
       like.title = r.mine_like ? '取消点赞' : '点赞';
-      like.addEventListener('click', function () { toggleHistoryLike(r.code); });
+      like.addEventListener('click', function () { toggleHistoryLike(r.id); });
       social.appendChild(like);
 
       var stars = document.createElement('span');
@@ -658,7 +684,7 @@
         star.textContent = '★';
         star.setAttribute('aria-label', s + ' 星');
         star.addEventListener('click', (function (n) {
-          return function () { rateHistory(r.code, n); };
+          return function () { rateHistory(r.id, n); };
         })(s));
         stars.appendChild(star);
       }
@@ -685,10 +711,15 @@
       btn.type = 'button';
       btn.className = 'bd-room-btn';
       btn.textContent = '看棋谱';
-      btn.title = /^[0-9]{3}$/.test(r.code) ? '只读回看这盘棋' : '旧版 6 位棋谱 · 只读回看';
+      btn.title = r.id == null
+        ? '数据库待更新：重跑 install-all.sql 后棋谱才有编号'
+        : '棋谱 #' + r.id + ' · 只读回看（按编号保存，不占房间号）';
       btn.addEventListener('click', function () {
-        bumpHistoryView(r.code);
-        openRoom(r.code, { watch: true, review: true, legacy: !/^[0-9]{3}$/.test(r.code) });
+        if (r.id == null) {
+          toast('历史棋谱要等数据库更新（重跑 install-all.sql）后才有编号');
+          return;
+        }
+        openRecord(r.id);
       });
 
       row.appendChild(main);
@@ -700,9 +731,9 @@
         del.className = 'bd-room-btn bd-del';
         del.textContent = '删除';
         del.title = '超级管理员：删除这盘记录';
-        del.addEventListener('click', (function (code) {
-          return function () { deleteHistory(code); };
-        })(r.code));
+        del.addEventListener('click', (function (id) {
+          return function () { deleteHistory(id); };
+        })(r.id));
         row.appendChild(del);
       }
       box.appendChild(row);
@@ -713,17 +744,17 @@
     if (more) more.textContent = '再显示 100 局（还有 ' + (list.length - limit) + ' 局）';
   }
 
-  function deleteHistory(code) {
+  function deleteHistory(id) {
     B8.confirm('删除这盘棋谱？对局记录、着法、观战评论都会删掉，不能恢复。', {
       title: '删除对局', danger: true, okText: '删除'
     }).then(function (ok) {
       if (!ok) return;
       B8.sb.rpc('b8_board_admin_delete', {
         p_token: (B8.auth && B8.auth.token && B8.auth.token()) || '',
-        p_code: code
+        p_id: id
       }).then(function (res) {
         if (!res || !res.ok) throw new Error('删除没成功');
-        toast('已删除 ' + code);
+        toast('已删除棋谱 #' + id);
         loadLists(true);
       }).catch(function (err) {
         toast((err && err.message) || '删除没成功');
@@ -831,10 +862,98 @@
     });
   }
 
+  /* ---------- 棋谱：按编号只读回看（不占房间号） ---------- */
+  function openRecord(id, opts) {
+    opts = opts || {};
+    id = Number(id);
+    if (!id) { toast('棋谱编号不对'); return; }
+    if (!B8.sb || !B8.sb.ready) {
+      setTimeout(function () {
+        if (B8.sb && B8.sb.ready) openRecord(id, opts);
+      }, 400);
+      return;
+    }
+    B8.sb.rpc('b8_board_sync', {
+      p_token: logged() ? token() : null,
+      p_code: null,
+      p_since: 0,
+      p_ping: false,
+      p_id: id
+    }).then(function (res) {
+      if (!res || !res.room || !res.state) throw new Error('这盘棋谱读不出来');
+      if (opts.bump !== false) bumpHistoryView(id);
+      enterRecord(id, res);
+    }).catch(function (err) {
+      toast((err && err.message) || '这盘棋谱不存在');
+    });
+  }
+
+  function enterRecord(id, res) {
+    releaseAnalysisClaim();
+    resetAnalysisMarks();
+    SPECT.last = 0;
+    SPECT.inflight = false;
+    stopChat();
+    clearTimeout(NET.timer);
+    CHAT.items = [];
+    CHAT.lastId = 0;
+    CHAT.hidden = false;
+    CHAT.inited = false;
+    CHAT.sig = null;
+    NET.inflight = false;
+    NET.again = false;
+    NET.fails = 0;
+    NET.lastOk = 0;
+    NET.paused = true;
+    ANALYSIS.hover = -1;
+    var room = res.room;
+    var moves = (res.moves || []).map(function (m) {
+      return { seq: m.seq, color: m.color, move: m.move, at: m.at };
+    });
+    var prevAt = 0;
+    for (var i = 0; i < moves.length; i++) {
+      if (prevAt && moves[i].at) moves[i].spent = Math.max(0, moves[i].at - prevAt);
+      prevAt = moves[i].at || prevAt;
+    }
+    S = {
+      mode: 'online', record: true, recordId: id, code: '',
+      room: room, state: res.state,
+      game: room.game, size: room.size,
+      timed: !!room.timed, minutes: room.minutes || 0,
+      seat: (res.me && res.me.seat) || 0, me: res.me || null,
+      watchers: 0, presence: null, offer: null, undo: null,
+      undoPrompted: null, undoBusy: false, anim: null,
+      scoreBusy: false, pendingDead: null,
+      spectators: [], spectatorError: '',
+      reviewing: false, reviewClosed: false, reviewIndex: 0,
+      reviewStates: null, reviewState: null,
+      commentsHidden: false, moves: moves, texts: [], moveBusy: false,
+      sel: null, targets: [], drPath: null, drMoves: null,
+      score: null, flip: false, resultShown: false, watch: true, reviewOnOpen: true,
+      isHost: false,
+      startedAt: room.created_at ? (Date.parse(room.created_at) || Date.now()) : Date.now(),
+      turnStarted: Date.now(),
+      practice: false, practicePrefix: null, practiceBase: null, practiceState: null,
+      practiceStack: [], practiceLast: null,
+      rematchOffered: false, rematchPrompted: false
+    };
+    rebuildTexts();
+    if (res.analysis) applySavedAnalysis(res.analysis);
+    try {
+      if (history.replaceState) history.replaceState(null, '', 'board.html?rec=' + id);
+    } catch (e) {}
+    closePromo();
+    showGame();
+    renderAll();
+    reviewGoto(0);
+  }
+
   function inviteRematch() {
     if (!S || S.mode !== 'online' || isLocalRoom()) return;
     if (S.rematchOffered) { toast('已经邀请了，等对方同意'); return; }
-    B8.sb.rpc('b8_board_rematch', { p_token: token(), p_code: S.code })
+    var rid = recordId();
+    if (!rid) { toast('这盘还没存好，稍等一下再试'); return; }
+    B8.sb.rpc('b8_board_rematch', { p_token: token(), p_id: rid })
       .then(function () {
         S.rematchOffered = true;
         toast('已邀请对方再来一局，等他点同意');
@@ -848,45 +967,16 @@
 
   function acceptRematch() {
     if (!S || S.seat === 0) return;
+    var rid = recordId();
+    if (!rid) { toast('这盘还没存好，稍等一下再试'); return; }
     var st = E.init(S.game, { size: S.size, forbid: !!(S.state && S.state.forbid) });
     B8.sb.rpc('b8_board_rematch_accept', {
-      p_token: token(), p_code: S.code, p_state: st
+      p_token: token(), p_id: rid, p_state: st
     }).then(function (res) {
       if (!res || !res.room) throw new Error('重开没成功');
-      var oldSeat = S.seat;
-      S.room = res.room;
-      S.state = res.state;
-      S.seat = oldSeat ? 3 - oldSeat : 0;
-      S.flip = S.seat === 2;
-      S.moves = [];
-      S.texts = [];
-      S.stack = [];
-      S.score = null;
-      S.scoreBusy = false;
-      S.undo = null;
-      S.offer = null;
-      S.reviewing = false;
-      S.reviewIndex = 0;
-      S.reviewStates = null;
-      S.reviewState = null;
-      S.resultShown = false;
-      S.rematchOffered = false;
-      S.rematchPrompted = false;
-      S.startedAt = Date.now();
-      S.turnStarted = Date.now();
-      S.pendingDead = null;
-      S.clock = { 1: (S.room.minutes || 0) * 60000, 2: (S.room.minutes || 0) * 60000 };
-      S.clockStart = 0;
-      S.clockRunning = 0;
-      CHAT.items = [];
-      CHAT.lastId = 0;
-      CHAT.inited = false;
-      CHAT.sig = null;
-      show('bd-result', false);
-      renderAll();
-      initChat();
+      var code = res.code || res.room.code;
       toast('再来一局！执子已经交换');
-      syncNow();
+      enterOnline(code, res.room, res.state, res.seat || 0, {});
     }).catch(function (err) {
       toast((err && err.message) || '重开没成功');
     });
@@ -947,6 +1037,7 @@
   }
 
   function startOfflineLocal(name1, name2, settings) {
+    releaseAnalysisClaim();
     var g = settings ? settings.game : LOBBY.game;
     var size = settings ? settings.size : LOBBY.size;
     var minutes = settings ? settings.minutes : LOBBY.minutes;
@@ -1284,6 +1375,7 @@
   }
 
   function resumeLocal(saved) {
+    releaseAnalysisClaim();
     var moves = saved.moves || [];
     var st;
     try {
@@ -1325,6 +1417,7 @@
       var meta = saved.moveMeta && saved.moveMeta[i] ? saved.moveMeta[i] : {};
       S.moves.push({ seq: tmp.seq, color: 3 - tmp.turn, move: moves[i], at: meta.at || 0, spent: meta.spent || 0 });
     }
+    resetAnalysisMarks();
     showGame();
     renderAll();
     toast('接着上次的本机对局');
@@ -1335,6 +1428,7 @@
      ============================================================ */
   function enterOnline(code, room, state, seat, opts) {
     opts = opts || {};
+    releaseAnalysisClaim();
     resetAnalysisMarks();
     SPECT.last = 0;
     SPECT.inflight = false;
@@ -1356,7 +1450,8 @@
     ANALYSIS.practiceKey = '';
     ANALYSIS.practiceStates = null;
     S = {
-      mode: 'online', code: code, room: room || null, state: state || null,
+      mode: 'online', record: false, recordId: room ? Number(room.id) || 0 : 0,
+      code: code, room: room || null, state: state || null,
       game: room ? room.game : '', size: room ? room.size : 0,
       timed: room ? !!room.timed : false, minutes: room ? room.minutes : 0,
       seat: seat || 0, me: null, watchers: 0, presence: null, offer: null, undo: null, undoPrompted: null, undoBusy: false, anim: null,
@@ -1391,6 +1486,7 @@
   }
 
   function backToLobby() {
+    releaseAnalysisClaim();
     SPECT.last = 0;
     SPECT.inflight = false;
     show('bd-spectators', false);
@@ -1439,6 +1535,7 @@
 
   function syncNow() {
     if (!S || S.mode !== 'online') return;
+    if (S.record) { clearTimeout(NET.timer); return; }
     if (NET.paused || S.reviewing || S.practice) { clearTimeout(NET.timer); return; }
     NET.paused = false;
     if (NET.inflight) { NET.again = true; return; }
@@ -1455,12 +1552,17 @@
     var since = (S.moves && S.moves.length) ? (S.state.seq || 0) : 0;
     var ping = Date.now() - NET.lastPing > 6000;
     if (ping) NET.lastPing = Date.now();
-    B8.sb.rpc('b8_board_sync', {
+    var args = {
       p_token: logged() ? token() : null,
       p_code: S.code,
       p_since: since,
       p_ping: ping
-    }).then(function (res) {
+    };
+    // 编号和房间号一起带上：下完那一秒房间号可能已经被回收，
+    // 服务端先按 id 找棋谱，找不到再按 3 位码找桌上的房间。
+    var rid = (S.room && S.room.id) || S.recordId;
+    if (rid) args.p_id = rid;
+    B8.sb.rpc('b8_board_sync', args).then(function (res) {
       if (!S || S.mode !== 'online' || S.code !== myCode) return;
       applySync(res);
       NET.inflight = false;
@@ -1496,6 +1598,7 @@
     var prevSeq = S.room ? S.room.seq : -1;
     var prevState = S.state;
     S.room = res.room;
+    S.recordId = res.room && res.room.id ? Number(res.room.id) : S.recordId;
     S.me = res.me;
     S.game = res.room.game;
     S.size = res.room.size;
@@ -1514,6 +1617,8 @@
     var undoBack = !!(res.room && res.room.seq < prevSeq);
     var rematchReset = !!(res.room && res.room.status === 'play' && res.room.seq === 0 && prevSeq > 0);
     if (rematchReset) {
+      releaseAnalysisClaim();
+      resetAnalysisMarks();
       S.moves = [];
       S.texts = [];
       S.stack = [];
@@ -1576,7 +1681,17 @@
       S.anim = buildAnim(prevState, added[0].move, S.state);
     }
 
-    if (res.rematch) {
+    if (res.rematch && res.rematch.to) {
+      // 对方已经同意：新房间是另开的，旧棋谱原样留着
+      var to = String(res.rematch.to);
+      S.rematchOffered = false;
+      if (to && to !== S.code && S.rematchTo !== to) {
+        S.rematchTo = to;
+        toast('对方同意再来一局，正在进入新房间…');
+        openRoom(to, { watch: false });
+        return;
+      }
+    } else if (res.rematch) {
       if (res.rematch.mine) {
         S.rematchOffered = true;
       } else if (!S.rematchPrompted) {
@@ -1593,6 +1708,8 @@
     }
 
     if (S.room.status === 'over' || S.state.status === 'over') {
+      // 下完房间号就回收了，别再拿旧号「回上次的对局」
+      clearLast();
       clearTimeout(NET.timer);
       if (!S.reviewing && !S.resultShown) {
         S.resultShown = true;
@@ -1652,7 +1769,7 @@
 
   function schedulePoll(delay) {
     clearTimeout(NET.timer);
-    if (!S || S.mode !== 'online') return;
+    if (!S || S.mode !== 'online' || S.record) return;
     if (NET.paused || S.reviewing || S.practice) return;
     if (S.room && S.room.status === 'over') {
       NET.timer = setTimeout(syncNow, 3000);
@@ -1860,6 +1977,7 @@
         S.moves.pop();
         S.texts.pop();
         S.room = res.room;
+        S.recordId = res.room && res.room.id ? Number(res.room.id) : S.recordId;
         S.state = res.state;
         S.resultShown = true;
         renderAll();
@@ -1868,6 +1986,7 @@
       }
       if (res && res.room) {
         S.room = res.room;
+        S.recordId = res.room.id ? Number(res.room.id) : S.recordId;
         S.state = res.state;
         if (S.room.status === 'over') {
           S.resultShown = true;
@@ -2209,7 +2328,7 @@
   }
 
   function loadSpectators(force) {
-    if (!S || S.mode !== 'online' || !isAdminUser()) return;
+    if (!S || S.mode !== 'online' || S.record || !isAdminUser()) return;
     if (SPECT.inflight) return;
     if (!force && Date.now() - SPECT.last < 8000) return;
     SPECT.inflight = true;
@@ -2232,7 +2351,7 @@
   }
 
   function renderSpectators() {
-    var on = !!(S && S.mode === 'online' && isAdminUser());
+    var on = !!(S && S.mode === 'online' && !S.record && isAdminUser());
     show('bd-spectators', on);
     if (!on) return;
     var list = S.spectators || [];
@@ -2267,8 +2386,12 @@
     txt('bd-gname', info ? info.name : '对局');
     var bits = [];
     if (S.mode === 'online') {
-      bits.push('房间 ' + S.code);
+      var recNo = S.recordId || recordId();
+      var over = S.record || (S.room && S.room.status === 'over');
+      if (over && recNo) bits.push('棋谱 #' + recNo);
+      else bits.push('房间 ' + S.code);
       if (isLocalRoom()) bits.push('本机双人 · 房主操作两边');
+      else if (S.record) bits.push(S.seat > 0 ? '对局者 · 只读回看' : '只读回看');
       else bits.push(S.seat > 0 ? '你执' + colorName(S.seat) : '观战');
     } else {
       bits.push('本机双人 · 不上传');
@@ -2277,7 +2400,7 @@
     if (S.room && S.room.status === 'wait') bits.push('等待对手');
     if (S.practice) bits.push('演练模式 · 不上传');
     txt('bd-gmeta', bits.join(' · '));
-    show('bd-net', S.mode === 'online');
+    show('bd-net', S.mode === 'online' && !S.record);
     show('bd-invite', S.mode === 'online' && S.room && S.seat > 0 &&
       (S.room.status === 'wait' || isLocalRoom()));
     show('bd-admin-close', !!(B8.auth && B8.auth.isSuper && B8.auth.isSuper() &&
@@ -2748,8 +2871,12 @@
     $('bd-review-prev').disabled = i <= 0;
     $('bd-review-next').disabled = i >= total;
     $('bd-review-end').disabled = i >= total;
-    if (S.state.status === 'over' && !S.practice && !ANALYSIS.analysisKey) {
-      setTimeout(analyzeGame, 500);
+    if (S.state.status === 'over' && !S.practice && !ANALYSIS.saved && !ANALYSIS.analysisBusy) {
+      var gk = analysisGameKey();
+      if (ANALYSIS.autoFor !== gk) {
+        ANALYSIS.autoFor = gk;
+        setTimeout(analyzeGame, 450);
+      }
     }
   }
 
@@ -3006,6 +3133,26 @@
     if (!st) return '';
     return (st.game || '') + '|' + (st.size || 0) + '|' + (st.seq || 0) + '|' +
       (st.turn || 0) + '|' + (st.status || '') + '|' + (st.winner || 0);
+  }
+
+  // 下完的棋谱按 b8_board_rooms.id 访问；还在桌上的房间用 3 位码。
+  function recordId() {
+    return (S && S.room && S.room.id) ? Number(S.room.id) : 0;
+  }
+
+  function isRecordMode() {
+    return !!(S && S.record);
+  }
+
+  // 一局一个 key：换房间 / 再来一局 / 开新本机局都必须不同，
+  // 否则上一盘的标签和曲线会被下一盘复用。
+  function analysisGameKey() {
+    if (!S) return '';
+    if (isRecordMode()) return 'rec' + (S.recordId || recordId() || 0);
+    if (S.mode === 'online') {
+      return 'room' + (recordId() || 0) + '|' + (S.code || '') + '|' + (S.startedAt || 0);
+    }
+    return 'local|' + (S.startedAt || 0) + '|' + (S.game || '') + '|' + (S.size || 0);
   }
 
   // 回看 / 演练 / 实战都在这里取「整盘的局面序列」。
@@ -3433,7 +3580,8 @@
 
   function bestMoveKey(game, best) {
     if (!best) return '';
-    if (game === 'chess' || game === 'xiangqi') return String(best).toLowerCase();
+    if (game === 'chess') return String(best).toLowerCase().slice(0, 4);
+    if (game === 'xiangqi') return String(best).toLowerCase();
     if (game === 'go') return String(best).toUpperCase();
     if (game === 'gomoku') return String(best);
     if (game === 'draughts') return String(best);
@@ -3486,49 +3634,56 @@
     return { key: 'blunder', label: '败着', icon: '??' };
   }
 
-  function analyzeGame() {
-    if (!S || !S.state || S.state.status !== 'over' || !S.moves.length || ANALYSIS.analysisBusy) return;
-    if (!window.B8Server || !B8Server.enabled()) return;
-    var game = S.game;
-    if (game !== 'chess' && game !== 'xiangqi' && game !== 'go' && game !== 'gomoku' && game !== 'draughts') return;
+  var ANALYZABLE = { chess: 1, xiangqi: 1, go: 1, gomoku: 1, draughts: 1 };
 
-    var states = reviewBuild();
-    if (!states || states.length < 2) return;
-    var key = game + ':' + S.size + ':' + S.moves.map(function (m) { return m.seq; }).join(',');
-    if (key === ANALYSIS.analysisKey) return;
+  function p1OfRow(row) {
+    var v = Number(row && row.p1);
+    if (!isFinite(v)) v = 50;
+    return Math.max(0, Math.min(1, v / 100));
+  }
 
-    ANALYSIS.analysisBusy = true;
-    ANALYSIS.analysisKey = key;
-    var note = '正在分析整盘棋谱…';
-    if (game !== 'go' && game !== 'gomoku') note = '服务器正在分析 ' + (states.length - 1) + ' 手棋谱…';
-    engineNote(note);
+  // 终局局面（尤其国跳「无子可动」）引擎可能没有合法着法。
+  // 最后一点直接按胜负补，避免整盘分析因为最后一手失败。
+  function terminalRow(st) {
+    var w = st && st.winner;
+    if (w === 1) return { p1: 100, best: '' };
+    if (w === 2) return { p1: 0, best: '' };
+    return { p1: 50, best: '' };
+  }
 
-    var req;
+  function requestAnalysis(game, states) {
+    function progress(done, total) {
+      ANALYSIS.progress = done + '/' + total;
+      engineNote('正在分析棋谱 ' + done + ' / ' + total + ' …');
+    }
     if (game === 'chess' || game === 'xiangqi') {
       var fens = states.map(function (st) {
         return game === 'chess' ? B8Engine.fenChess(st) : B8Engine.fenXiangqi(st);
       });
-      req = B8Server.evalBatch(game, fens, 80).then(function (rows) {
+      return B8Server.evalBatch(game, fens, 80, progress).then(function (rows) {
         return (rows || []).map(function (r) {
           return { p1: r ? r.p1 : 50, best: r ? r.bestmove : '' };
         });
       });
-    } else if (game === 'go') {
+    }
+    if (game === 'go') {
       var positions = states.map(function (st, i) {
         return {
           size: S.size,
           moves: S.moves.slice(0, i).map(function (m) {
-            return [m.color === 2 ? 'W' : 'B', m.move && m.move.pass ? 'pass' : E.goCoord(m.move.t, S.size)];
+            return [m.color === 2 ? 'W' : 'B',
+              m.move && m.move.pass ? 'pass' : E.goCoord(m.move.t, S.size)];
           }),
-          visits: 30
+          visits: 24
         };
       });
-      req = B8Server.evalGoBatch(positions, 30).then(function (rows) {
+      return B8Server.evalGoBatch(positions, 24, progress).then(function (rows) {
         return (rows || []).map(function (r) {
           return { p1: r ? r.winrate : 50, best: r ? r.bestmove : '' };
         });
       });
-    } else if (game === 'gomoku') {
+    }
+    if (game === 'gomoku') {
       var gpositions = states.map(function (st) {
         var stones = [];
         for (var i = 0; i < st.board.length; i++) {
@@ -3536,64 +3691,293 @@
         }
         return { size: 15, stones: stones, timeout_ms: 120 };
       });
-      req = B8Server.evalGomokuBatch(gpositions, 120).then(function (rows) {
+      return B8Server.evalGomokuBatch(gpositions, 120, progress).then(function (rows) {
         return (rows || []).map(function (r) {
           return { p1: r ? r.winrate : 50, best: r ? r.bestmove : '' };
         });
       });
-    } else {
-      var dpositions = states.map(function (st) {
-        // 每个 state 都是完整局面，moves 留空，避免重复应用
-        return { fen: scanFen(st), moves: '', move_time: 0.2 };
+    }
+    var dpositions = states.map(function (st) {
+      // 每个 state 都是完整局面，moves 留空，避免重复应用
+      return { fen: scanFen(st), moves: '', move_time: 0.2 };
+    });
+    return B8Server.evalDraughtsBatch(dpositions, 0.2, progress).then(function (rows) {
+      return (rows || []).map(function (r) {
+        var score = Number(r ? r.score : 0);
+        var turn = String((r && r.turn) || 'W').toUpperCase() === 'B' ? 'B' : 'W';
+        var whiteScore = turn === 'W' ? score : -score;
+        var p1 = 100 / (1 + Math.pow(10, -(whiteScore * 100) / 400));
+        return { p1: Math.round(p1 * 10) / 10, best: r ? r.bestmove : '' };
       });
-      req = B8Server.evalDraughtsBatch(dpositions, 0.2).then(function (rows) {
-        return (rows || []).map(function (r) {
-          var score = Number(r ? r.score : 0);
-          var turn = String((r && r.turn) || 'W').toUpperCase() === 'B' ? 'B' : 'W';
-          var whiteScore = turn === 'W' ? score : -score;
-          var p1 = 100 / (1 + Math.pow(10, -(whiteScore * 100) / 400));
-          return { p1: Math.round(p1 * 10) / 10, best: r ? r.bestmove : '' };
-        });
+    });
+  }
+
+  function applyAnalysisRows(rows, states, game) {
+    var tags = {};
+    for (var i = 0; i < S.moves.length; i++) {
+      var mv = S.moves[i];
+      var before = p1OfRow(rows[i]);
+      var after = p1OfRow(rows[i + 1]);
+      var mover = mv.color;
+      var eb = mover === 1 ? before : 1 - before;
+      var ea = mover === 1 ? after : 1 - after;
+      var loss = Math.max(0, eb - ea);
+      var isBest = bestMoveKey(game, rows[i].best) === moveKey(game, mv.move);
+      tags[i + 1] = tagFor(loss, isBest);
+      tags[i + 1].loss = loss;
+    }
+    ANALYSIS.tags = tags;
+    ANALYSIS.bestMoves = rows.map(function (r) { return r.best || ''; });
+    ANALYSIS.serverData = rows.map(function (r) { return p1OfRow(r); });
+    ANALYSIS.serverKey = stateSig(states[0]) + '|' + stateSig(states[states.length - 1]);
+    ANALYSIS.data = ANALYSIS.serverData.slice();
+    ANALYSIS.baseSig = stateSig(states[0]);
+    ANALYSIS.lastSig = stateSig(states[states.length - 1]);
+    ANALYSIS.serverPointKey = '';
+    var cur = Math.max(0, Math.min(ANALYSIS.cur, states.length - 1));
+    var best = rows[cur] && rows[cur].best;
+    ANALYSIS.bestArrow = best ? bestMoveArrow(game, best, states[cur]) : null;
+    renderMoves();
+    renderAnalysis();
+    draw();
+  }
+
+  function analysisPayload(states) {
+    return {
+      v: 1,
+      n: states.length,
+      p1: (ANALYSIS.serverData || []).map(function (x) {
+        return Math.round(Number(x) * 10000) / 10000;
+      }),
+      best: ANALYSIS.bestMoves || [],
+      tags: ANALYSIS.tags || {},
+      engine: 'server',
+      plies: Math.max(0, states.length - 1)
+    };
+  }
+
+  function saveAnalysisToRecord(states) {
+    if (!S) return;
+    var rid = recordId();
+    if (!rid || S.mode !== 'online' || !logged()) return;
+    if (!B8.sb || !B8.sb.ready || ANALYSIS.saveBusy) return;
+    ANALYSIS.saveBusy = true;
+    B8.sb.rpc('b8_board_analysis_save', {
+      p_token: token(),
+      p_id: rid,
+      p_analysis: analysisPayload(states)
+    }).then(function (res) {
+      ANALYSIS.saveBusy = false;
+      if (!res || !res.ok) return;
+      ANALYSIS.saved = true;
+      ANALYSIS.savedAt = Date.now();
+      renderAnalysis();
+      engineNote('棋谱分析完成，胜率曲线已存进 #' + rid + '。', false);
+    }).catch(function (err) {
+      ANALYSIS.saveBusy = false;
+      ANALYSIS.saved = false;
+      releaseAnalysisClaim();
+      engineNote('分析完成，但曲线没保存上：' + ((err && err.message) || '未知错误') +
+        '（下次打开会再试）', true);
+    });
+  }
+
+  function releaseClaimFor(rid) {
+    if (!rid || !logged() || !B8.sb || !B8.sb.ready) return;
+    B8.sb.rpc('b8_board_analysis_release', { p_token: token(), p_id: rid })
+      .catch(function () {});
+  }
+
+  function releaseAnalysisClaim() {
+    if (!S) return;
+    var rid = recordId();
+    if (!rid || S.mode !== 'online' || !logged()) return;
+    var st = String(ANALYSIS.claimState);
+    if (st.indexOf('ok:' + rid) !== 0 && st.indexOf('check:' + rid) !== 0) return;
+    ANALYSIS.claimState = '';
+    releaseClaimFor(rid);
+  }
+
+  function applySavedAnalysis(a) {
+    if (!a || !Array.isArray(a.p1) || !a.p1.length) return false;
+    var n = a.p1.length;
+    if (a.n && Number(a.n) !== n) return false;
+    ANALYSIS.saved = true;
+    ANALYSIS.savedAt = Number(a.at) || Date.now();
+    ANALYSIS.serverData = a.p1.map(function (x) {
+      var v = Number(x);
+      return isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5;
+    });
+    ANALYSIS.bestMoves = Array.isArray(a.best) ? a.best.slice(0, n) : [];
+    while (ANALYSIS.bestMoves.length < n) ANALYSIS.bestMoves.push('');
+    ANALYSIS.tags = (a.tags && typeof a.tags === 'object') ? a.tags : {};
+    ANALYSIS.analysisKey = 'saved:' + (recordId() || (S && S.recordId) || '');
+    ANALYSIS.data = ANALYSIS.serverData.slice();
+    ANALYSIS.claimState = 'cached:' + (recordId() || '');
+    var states = analysisStates();
+    if (states.length) {
+      ANALYSIS.serverKey = stateSig(states[0]) + '|' + stateSig(states[states.length - 1]);
+      ANALYSIS.baseSig = stateSig(states[0]);
+      ANALYSIS.lastSig = stateSig(states[states.length - 1]);
+    }
+    return true;
+  }
+
+  // 另一个人在算：过几秒去棋谱里看一眼，算好就自动换上。
+  function scheduleAnalysisReload(rid, tries) {
+    if (!rid || ANALYSIS.reloadTimer) return;
+    tries = tries || 0;
+    if (tries >= 5) return;
+    ANALYSIS.reloadTimer = setTimeout(function () {
+      ANALYSIS.reloadTimer = 0;
+      if (!S || (recordId() || S.recordId) !== rid || ANALYSIS.saved) return;
+      B8.sb.rpc('b8_board_sync', {
+        p_token: logged() ? token() : null,
+        p_code: null,
+        p_since: 0,
+        p_ping: false,
+        p_id: rid
+      }).then(function (res) {
+        if (!S || (recordId() || S.recordId) !== rid) return;
+        if (res && res.analysis && applySavedAnalysis(res.analysis)) {
+          renderMoves();
+          renderAnalysis();
+          draw();
+          engineNote('对方分析完成，胜率曲线已载入。', false);
+          return;
+        }
+        scheduleAnalysisReload(rid, tries + 1);
+      }).catch(function () {
+        scheduleAnalysisReload(rid, tries + 1);
       });
+    }, 8000);
+  }
+
+  function runAnalysis(states, gk) {
+    if (ANALYSIS.analysisBusy) return;
+    ANALYSIS.analysisBusy = true;
+    ANALYSIS.analysisKey = 'run:' + gk;
+    engineNote('正在分析整盘棋谱…');
+    var game = S.game;
+    var lastSt = states[states.length - 1];
+    var tail = null;
+    var send = states.slice();
+    // 国跳无子可动 / 其他棋种规则终局：最后一个局面引擎可能没有着法
+    if (lastSt && lastSt.status === 'over' &&
+        (game === 'draughts' || /nomove|no-move/.test(lastSt.reason || ''))) {
+      tail = terminalRow(lastSt);
+      send = states.slice(0, -1);
+    }
+
+    function accept(rows, note) {
+      if (tail) rows = rows.concat([tail]);
+      if (!rows || rows.length < states.length) throw new Error('分析结果数量不对');
+      if (!S || analysisGameKey() !== gk) return;
+      applyAnalysisRows(rows.slice(0, states.length), states, game);
+      ANALYSIS.analysisKey = 'done:' + gk;
+      ANALYSIS.saved = false;
+      engineNote(note, false);
+      saveAnalysisToRecord(states);
+    }
+
+    var req;
+    try {
+      req = requestAnalysis(game, send);
+    } catch (e) {
+      ANALYSIS.analysisBusy = false;
+      ANALYSIS.analysisKey = '';
+      releaseAnalysisClaim();
+      engineNote('棋谱分析失败：' + ((e && e.message) || '未知错误'), true);
+      return;
     }
 
     req.then(function (rows) {
-      if (!rows || rows.length < states.length) throw new Error('分析结果数量不对');
-      var tags = {};
-      for (var i = 0; i < S.moves.length; i++) {
-        var mv = S.moves[i];
-        var before = Number(rows[i].p1) / 100;
-        var after = Number(rows[i + 1].p1) / 100;
-        var mover = mv.color;
-        var eb = mover === 1 ? before : 1 - before;
-        var ea = mover === 1 ? after : 1 - after;
-        var loss = Math.max(0, eb - ea);
-        var isBest = bestMoveKey(game, rows[i].best) === moveKey(game, mv.move);
-        tags[i + 1] = tagFor(loss, isBest);
-        tags[i + 1].loss = loss;
-      }
-      ANALYSIS.tags = tags;
-      ANALYSIS.analysisKey = key;
-      ANALYSIS.bestMoves = rows.map(function (r) { return r.best || ''; });
-      ANALYSIS.serverData = rows.map(function (r) { return Number(r.p1) / 100; });
-      ANALYSIS.serverKey = stateSig(states[0]) + '|' + stateSig(states[states.length - 1]);
-      ANALYSIS.bestArrow = null;
-      var cur = Math.min(ANALYSIS.cur, states.length - 1);
-      var best = rows[cur] && rows[cur].best;
-      if (best) ANALYSIS.bestArrow = bestMoveArrow(game, best, states[cur]);
-      renderMoves();
-      renderAnalysis();
-      draw();
-      engineNote('棋谱分析完成：' + S.moves.length + ' 手已标注。', false);
+      if (!S || analysisGameKey() !== gk) return;
+      accept(rows, '棋谱分析完成：' + S.moves.length + ' 手已标注。');
     }).catch(function (err) {
-      engineNote('棋谱分析失败：' + (err && err.message ? err.message : '未知错误'), true);
+      // 终局局面引擎抽风：去掉最后一手再算一次，终点按胜负补
+      if (tail || states.length < 2) throw err;
+      var t = terminalRow(lastSt);
+      return requestAnalysis(game, states.slice(0, -1)).then(function (rows) {
+        rows = rows.concat([t]);
+        if (!S || analysisGameKey() !== gk) return;
+        if (!rows || rows.length < states.length) throw new Error('分析结果数量不对');
+        applyAnalysisRows(rows.slice(0, states.length), states, game);
+        ANALYSIS.analysisKey = 'done:' + gk;
+        ANALYSIS.saved = false;
+        engineNote('棋谱分析完成：' + S.moves.length + ' 手已标注（终局按胜负补点）。', false);
+        saveAnalysisToRecord(states);
+      });
+    }).catch(function (err) {
+      ANALYSIS.analysisKey = '';
+      releaseAnalysisClaim();
+      engineNote('棋谱分析失败：' + ((err && err.message) || '未知错误'), true);
     }).then(function () {
       ANALYSIS.analysisBusy = false;
+      ANALYSIS.progress = '';
     });
+  }
+
+  function analyzeGame() {
+    if (!S || !S.state || S.state.status !== 'over' || !S.moves.length) return;
+    if (!window.B8Server || !B8Server.enabled()) return;
+    if (ANALYSIS.saved || ANALYSIS.analysisBusy) return;
+    var game = S.game;
+    if (!ANALYZABLE[game]) return;
+    if ((game === 'chess' || game === 'xiangqi') && !window.B8Engine) return;
+    var states = reviewBuild();
+    if (!states || states.length < 2) return;
+    var gk = analysisGameKey();
+    if (ANALYSIS.analysisKey === 'done:' + gk) return;
+
+    var rid = recordId();
+    if (rid && S.mode === 'online' && logged()) {
+      if (!(S.seat > 0 || isAdminUser())) {
+        engineNote('这盘棋还没分析；对局双方或管理员打开时会自动分析一次。', false);
+        return;
+      }
+      var st = ANALYSIS.claimState;
+      if (st === 'busy:' + rid || st === 'check:' + rid) return;
+      if (st.indexOf('ok:' + rid) === 0) { runAnalysis(states, gk); return; }
+      ANALYSIS.claimState = 'check:' + rid;
+      B8.sb.rpc('b8_board_analysis_claim', { p_token: token(), p_id: rid })
+        .then(function (res) {
+          if (!S || (recordId() || S.recordId) !== rid) {
+            // 已经换到别的棋谱/房间了：把刚拿到的占位还回去，别人可以立刻算
+            if (res && res.need) releaseClaimFor(rid);
+            return;
+          }
+          if (res && res.cached && res.analysis) {
+            applySavedAnalysis(res.analysis);
+            renderMoves();
+            renderAnalysis();
+            draw();
+            engineNote('这盘棋已经分析过了，直接读保存的曲线。', false);
+            return;
+          }
+          if (res && res.need) {
+            ANALYSIS.claimState = 'ok:' + rid;
+            runAnalysis(states, gk);
+            return;
+          }
+          ANALYSIS.claimState = 'busy:' + rid;
+          engineNote('另一个人正在分析这盘棋，算好后会自动出现。', false);
+          scheduleAnalysisReload(rid, 0);
+        })
+        .catch(function (err) {
+          ANALYSIS.claimState = '';
+          engineNote('分析没开始：' + ((err && err.message) || '未知错误'), true);
+        });
+      return;
+    }
+    // 没登录 / 纯本机：只在本地算一次，不上传
+    runAnalysis(states, gk);
   }
 
   function refreshServerPoint() {
     if (!S || !S.state || !window.B8Server || !B8Server.enabled()) return;
+    // 整盘曲线已经存进棋谱 / 已经下完：不要再用单点评估把保存的折线改掉
+    if (ANALYSIS.saved || isRecordMode() || S.state.status !== 'play') return;
     var game = S.state.game;
     if (game !== 'chess' && game !== 'xiangqi' && game !== 'go' && game !== 'gomoku' && game !== 'draughts') return;
     if (ANALYSIS.serverData) return;
@@ -3644,12 +4028,21 @@
   function renderAnalysis() {
     var has = !!(S && S.state);
     show('bd-analysis', has);
+    var over = !!(S && S.state && S.state.status === 'over');
     var engineBtn = $('bd-engine-run');
-    if (engineBtn) engineBtn.hidden = !has || (S.state.game !== 'chess' && S.state.game !== 'xiangqi');
+    // 下完的棋谱用保存好的整盘曲线，不再单独分析当前局面
+    if (engineBtn) engineBtn.hidden = !has || over || (S.state.game !== 'chess' && S.state.game !== 'xiangqi');
     var serverBtn = $('bd-server-run');
     if (serverBtn) {
-      serverBtn.hidden = !has || !window.B8Server || !B8Server.enabled() ||
+      serverBtn.hidden = !has || over || !window.B8Server || !B8Server.enabled() ||
         (S.state.game !== 'chess' && S.state.game !== 'xiangqi');
+    }
+    var note = $('bd-analysis-note');
+    if (note) {
+      note.textContent = ANALYSIS.saved
+        ? '折线：服务器整盘分析，胜率曲线随这盘棋谱保存（只算一次）。点开棋谱就能看，不会重复分析。'
+        : '折线：本地战术搜索 + 位置评估（国象/象棋 1 层、国跳 2 层；围棋影响力）。' +
+          '下完自动用服务器整盘分析一次；之后直接读保存的曲线。';
     }
     var btn = $('bd-analysis');
     if (btn) {
@@ -3737,6 +4130,10 @@
   function serverCurve() {
     if (!S || !S.state || serverBusy) return;
     var game = S.state.game;
+    if (S.state.status === 'over' || isRecordMode()) {
+      engineNote('棋谱下完会自动整盘分析一次并存进棋谱，不用再点服务器。', true);
+      return;
+    }
     if (game !== 'chess' && game !== 'xiangqi') {
       engineNote('服务器曲线目前支持国象/象棋；围棋请用保存后深度分析。', true);
       return;
@@ -3888,11 +4285,14 @@
     else if (S.resultShown) {
       show('bd-result', true);
       var info = resultInfo();
-      txt('bd-result-kicker', isLocalGame() ? '本机对局结束' : '对局结束 · ' + S.code);
+      txt('bd-result-kicker', isLocalGame() ? '本机对局结束'
+        : (S.room && S.room.id ? '对局结束 · 棋谱 #' + S.room.id : '对局结束'));
       txt('bd-result-title', info.title);
       txt('bd-result-sub', info.sub);
       var again = $('bd-again');
       if (again) {
+        // 棋谱是只读回看，不能从历史里直接邀请「再来一局」
+        again.hidden = !!S.record;
         again.disabled = !!S.rematchOffered;
         again.textContent = S.rematchOffered ? '已邀请，等对方' : (S.mode === 'online' && !isLocalRoom() ? '邀请再来一局' : '再来一局');
       }
@@ -5126,6 +5526,7 @@
 
   function scheduleChat() {
     clearTimeout(CHAT.timer);
+    if (S && S.record) return;
     CHAT.timer = setTimeout(function () {
       if (S && chatVisible()) refreshChat(false);
     }, 2600);
@@ -5135,13 +5536,16 @@
     if (!S || !chatVisible() || CHAT.inflight) return;
     CHAT.inflight = true;
     var myCode = S.code;
+    var myId = (S.room && S.room.id) || S.recordId || 0;
     if (reset) { CHAT.items = []; CHAT.lastId = 0; }
-    B8.sb.rpc('b8_board_comments', {
+    var args = {
       p_token: logged() ? token() : null,
       p_code: S.code,
       p_since: CHAT.lastId
-    }).then(function (res) {
-      if (!S || S.code !== myCode) return;
+    };
+    if (myId) args.p_id = myId;
+    B8.sb.rpc('b8_board_comments', args).then(function (res) {
+      if (!S || S.code !== myCode || ((S.room && S.room.id) || S.recordId || 0) !== myId) return;
       CHAT.inflight = false;
       if (!chatVisible()) return;
       if (res.hidden) {
@@ -5223,6 +5627,12 @@
     show('bd-chat-form', vis);
     var input = $('bd-chat-input');
     if (input) input.placeholder = logged() ? '说两句…（80 字以内）' : '登录后可以评论';
+    if (S.record) {
+      // 棋谱是静态的：读一次评论就够，不用每 2.6 秒轮询
+      renderChatList();
+      if (!CHAT.inited && !CHAT.inflight) refreshChat(false);
+      return;
+    }
     if (vis) {
       renderChatList();
       if (!CHAT.timer && !CHAT.inflight) refreshChat(false);
@@ -5237,9 +5647,10 @@
     var body = (input.value || '').trim();
     if (!body) return;
     input.disabled = true;
-    B8.sb.rpc('b8_board_comment_add', {
-      p_token: token(), p_code: S.code, p_body: body
-    }).then(function (res) {
+    var args = { p_token: token(), p_body: body, p_code: S.code };
+    var rid = (S.room && S.room.id) || S.recordId;
+    if (rid) args.p_id = rid;
+    B8.sb.rpc('b8_board_comment_add', args).then(function (res) {
       input.value = '';
       input.disabled = false;
       if (res && res.comment) {
@@ -5712,6 +6123,13 @@
       updateWho();
       loadLists(true);
     });
+
+    // 棋谱链接：board.html?rec=123（按编号，不占房间号）
+    var rec = query('rec');
+    if (rec) {
+      B8.auth.ready(function () { openRecord(Number(rec)); });
+      return;
+    }
 
     // 邀请码：登录后自动进房
     var code = query('code');

@@ -4,9 +4,15 @@
    配置：site-config.js 的 engineApi
      engineApi: 'https://api.bhsf202808.fun'
    没有配置时，所有函数返回 null，页面继续用本地 P1 / WASM。
+
+   整盘分析必须分批：服务端每个请求最多 220 个局面，而且 2C2G 的
+   机器一次算太多会超时。这里统一按棋种切成小批（go 一批 24 个），
+   顺序发、边发边报进度，调用方拿到的还是完整结果数组。
    ============================================================ */
 (function () {
   'use strict';
+
+  var CHUNK = { eval: 100, go: 24, gomoku: 60, draughts: 40 };
 
   function base() {
     var cfg = window.B8_CONFIG || {};
@@ -40,6 +46,29 @@
     }).finally(function () {
       if (timer) clearTimeout(timer);
     });
+  }
+
+  // 把 items 切成 batches，顺序执行 fn(batch)，把每批结果拼起来。
+  // 任何一批失败都 reject —— 整盘分析宁可报错，也不要半条曲线。
+  function runBatches(items, size, fn, timeoutMs, onProgress) {
+    var list = items || [];
+    var total = list.length;
+    var out = [];
+    var i = 0;
+    if (!total) return Promise.resolve(out);
+    function step() {
+      if (i >= total) return Promise.resolve(out);
+      var batch = list.slice(i, Math.min(total, i + size));
+      i += batch.length;
+      return fn(batch, timeoutMs).then(function (rows) {
+        for (var k = 0; k < rows.length; k++) out.push(rows[k]);
+        if (onProgress) {
+          try { onProgress(out.length, total); } catch (e) {}
+        }
+        return step();
+      });
+    }
+    return step();
   }
 
   function scoreToP1(cp, mate, turn) {
@@ -124,65 +153,77 @@
     });
   }
 
-  function evalDraughtsBatch(positions, moveTime) {
+  function evalDraughtsBatch(positions, moveTime, onProgress) {
     if (!enabled()) return Promise.resolve(null);
-    return post('/draughts/batch', {
-      positions: (positions || []).map(function (p) {
-        return {
-          fen: p.fen,
-          moves: p.moves || '',
-          move_time: p.move_time || moveTime || 0.2
-        };
-      })
-    }, 120000).then(function (r) { return r.results || []; });
+    var list = positions || [];
+    return runBatches(list, CHUNK.draughts, function (batch, timeoutMs) {
+      return post('/draughts/batch', {
+        positions: batch.map(function (p) {
+          return {
+            fen: p.fen,
+            moves: p.moves || '',
+            move_time: p.move_time || moveTime || 0.2
+          };
+        })
+      }, timeoutMs).then(function (r) { return r.results || []; });
+    }, 90000, onProgress);
   }
 
-  function evalGoBatch(positions, visits) {
+  function evalGoBatch(positions, visits, onProgress) {
     if (!enabled()) return Promise.resolve(null);
-    return post('/go/batch', {
-      positions: (positions || []).map(function (p) {
-        return {
-          size: p.size || 19,
-          moves: p.moves || [],
-          komi: p.komi == null ? 7.5 : p.komi,
-          rules: p.rules || 'chinese',
-          visits: p.visits || visits || 30
-        };
-      })
-    }, 120000).then(function (r) { return r.results || []; });
+    var list = positions || [];
+    return runBatches(list, CHUNK.go, function (batch, timeoutMs) {
+      return post('/go/batch', {
+        positions: batch.map(function (p) {
+          return {
+            size: p.size || 19,
+            moves: p.moves || [],
+            komi: p.komi == null ? 7.5 : p.komi,
+            rules: p.rules || 'chinese',
+            visits: p.visits || visits || 30
+          };
+        })
+      }, timeoutMs).then(function (r) { return r.results || []; });
+    }, 120000, onProgress);
   }
 
-  function evalGomokuBatch(positions, timeoutMs) {
+  function evalGomokuBatch(positions, timeoutMs, onProgress) {
     if (!enabled()) return Promise.resolve(null);
-    return post('/gomoku/batch', {
-      positions: (positions || []).map(function (p) {
-        return {
-          size: p.size || 15,
-          stones: p.stones || [],
-          timeout_ms: p.timeout_ms || timeoutMs || 150
-        };
-      })
-    }, 120000).then(function (r) { return r.results || []; });
+    var list = positions || [];
+    return runBatches(list, CHUNK.gomoku, function (batch, timeout) {
+      return post('/gomoku/batch', {
+        positions: batch.map(function (p) {
+          return {
+            size: p.size || 15,
+            stones: p.stones || [],
+            timeout_ms: p.timeout_ms || timeoutMs || 150
+          };
+        })
+      }, timeout).then(function (r) { return r.results || []; });
+    }, 120000, onProgress);
   }
 
-  function evalBatch(game, fens, movetime) {
+  function evalBatch(game, fens, movetime, onProgress) {
     if (!enabled()) return Promise.resolve(null);
-    return post('/eval-batch', {
-      game: game,
-      fens: fens,
-      movetime_ms: movetime || 80
-    }, 120000).then(function (r) {
-      return (r.results || []).map(function (x) {
-        return {
-          p1: scoreToP1(x.cp, x.mate, x.turn),
-          cp: x.cp,
-          mate: x.mate,
-          depth: x.depth,
-          bestmove: x.bestmove,
-          ms: x.ms
-        };
+    var list = fens || [];
+    return runBatches(list, CHUNK.eval, function (batch, timeoutMs) {
+      return post('/eval-batch', {
+        game: game,
+        fens: batch,
+        movetime_ms: movetime || 80
+      }, timeoutMs).then(function (r) {
+        return (r.results || []).map(function (x) {
+          return {
+            p1: scoreToP1(x.cp, x.mate, x.turn),
+            cp: x.cp,
+            mate: x.mate,
+            depth: x.depth,
+            bestmove: x.bestmove,
+            ms: x.ms
+          };
+        });
       });
-    });
+    }, 90000, onProgress);
   }
 
   function createAnalysis(game, fens, movetime) {

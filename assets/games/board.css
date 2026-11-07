@@ -1835,6 +1835,15 @@ html[data-mode="night"] .bd-room-btn.is-live {
   letter-spacing: .03em;
 }
 
+.bd-hno {
+  display: inline-block;
+  margin-right: 2px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0;
+  color: var(--ink-3);
+}
+
 .bd-haccount {
   display: block;
   margin-top: 2px;
