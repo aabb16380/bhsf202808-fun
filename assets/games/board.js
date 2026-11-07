@@ -6389,6 +6389,20 @@
      ============================================================ */
   function bind() {
     // 「← 游乐场」是普通链接，直接回首页；「← 离开」才回大厅
+    var pageBack = $('bd-back');
+    if (pageBack) {
+      pageBack.addEventListener('click', function (e) {
+        var ref = document.referrer || '';
+        if (!ref) return;
+        try {
+          var u = new URL(ref);
+          if (u.origin === location.origin && u.pathname !== location.pathname) {
+            e.preventDefault();
+            history.back();
+          }
+        } catch (err) {}
+      });
+    }
     $('bd-back-lobby').addEventListener('click', backToLobby);
     $('bd-exit').addEventListener('click', leaveGame);
     $('bd-practice').addEventListener('click', togglePractice);
@@ -6826,10 +6840,10 @@
       if (!S || !S.reviewing) return;
       var tag = (e.target && e.target.tagName) || '';
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
-      if (e.key === 'ArrowLeft') {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
         reviewStep(-1);
-      } else if (e.key === 'ArrowRight') {
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
         reviewStep(1);
       } else if (e.key === 'Home') {

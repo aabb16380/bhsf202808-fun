@@ -7,19 +7,19 @@
 <meta name="description" content="八班多人游戏：GraphWar 函数大战（2-8 人，输入函数打炮）、Quoridor 步步为营（2-4 人放墙堵路）。房间号加入、组队或混战、聊天；每一局自动保存，可逐步回看。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g128" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g128">
-<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g128">
+<link rel="icon" href="assets/favicon.png?v=20261101g129" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g129">
+<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g129">
 <script>
-window.B8_BUILD = '20261101g128';
+window.B8_BUILD = '20261101g129';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g128"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g128">
+<script src="assets/theme.js?v=20261101g129"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g129">
 </head>
 
 <body data-site="fun">
@@ -27,7 +27,7 @@ window.B8_TEST = !!window.B8_T;
 <div class="ag-wrap">
 
   <header class="ag-head">
-    <a class="ag-back" href="index.html">← 游乐场</a>
+    <a class="ag-back" id="ag-page-back" href="index.html">← 返回</a>
     <div class="ag-brand">
       <b>多人游戏</b>
       <span>函数大战 · 步步为营</span>
@@ -146,7 +146,15 @@ window.B8_TEST = !!window.B8_T;
             <button class="ag-mini" id="ag-replay-last" type="button" aria-label="跳到终局">⏭</button>
             <span class="ag-replay-step" id="ag-replay-step">第 0 / 0 步</span>
           </div>
-          <p class="ag-status" id="ag-replay-status">回看中：← → 翻步，空格自动播放，Esc 退出。</p>
+          <p class="ag-status" id="ag-replay-status">回看中：↑ ↓ / ← → 翻步，空格自动播放，Esc 退出。</p>
+
+          <div class="ag-analysis" id="ag-quoridor-analysis" hidden>
+            <div class="ag-analysis-head">
+              <b>全局分析</b>
+              <span>横轴：步数 · 纵轴：每个人到终点的最短路线长</span>
+            </div>
+            <canvas id="ag-analysis-canvas" aria-label="步步为营全局分析：每个人到终点的最短路线长"></canvas>
+          </div>
         </div>
 
         <aside class="ag-side">
@@ -242,7 +250,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g128' + T;
+  var V = '?v=20261101g129' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

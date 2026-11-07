@@ -174,7 +174,11 @@
   }
 
   function recSourceText(rec) {
-    if (rec && rec.source === 'local') return '本机';
+    if (rec && rec.source === 'local') {
+      var who = rec.owner_name || '';
+      var no = rec.owner_no || '';
+      return '本机' + (who ? ' · ' + who : '') + (no ? '（' + no + '）' : '');
+    }
     return rec && rec.room_code ? '房号 ' + rec.room_code : '联机';
   }
 
@@ -761,6 +765,25 @@
     S.room.winner = i >= rp.total ? (Number(rp.rec.winner) || 0) : 0;
     notify();
     renderReplayBar();
+    drawQuoridorAnalysis();
+  }
+
+  function sameOriginReferrer() {
+    var ref = document.referrer || '';
+    if (!ref) return false;
+    try {
+      var u = new URL(ref);
+      return u.origin === location.origin && u.pathname !== location.pathname;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function backFromReplay() {
+    var rp = S.replay;
+    if (rp && rp.back && rp.back.room) { closeReplay(false); return; }
+    if (sameOriginReferrer()) { history.back(); return; }
+    closeReplay(false);
   }
 
   function stopReplayTimer() {
@@ -768,6 +791,169 @@
       clearInterval(S.replay.timer);
       S.replay.timer = 0;
     }
+  }
+
+  /* ---------- 步步为营全局分析：每人到终点的最短路线长 ---------- */
+
+  var QC_LINE_COLORS = ['#c1522f', '#2f6f5e', '#ac7c25', '#52618c'];
+
+  function quoridorAnalysis() {
+    var rp = S.replay;
+    if (!rp || rp.rec.game !== 'quoridor') return null;
+    var m = mod('quoridor');
+    var T = m && m._test;
+    if (!T || typeof T.pathLen !== 'function') return null;
+    var players = (rp.rec.players || []).slice().sort(function (a, b) {
+      return Number(a.seat) - Number(b.seat);
+    });
+    if (!players.length) return null;
+    var series = players.map(function (p) {
+      return {
+        seat: Number(p.seat),
+        name: p.name || p.no || ('座位 ' + p.seat),
+        color: QC_LINE_COLORS[(Number(p.seat) - 1) % QC_LINE_COLORS.length],
+        values: []
+      };
+    });
+    var total = rp.total;
+    for (var i = 0; i <= total; i++) {
+      var st = replayFrameAt(i) || {};
+      for (var s = 0; s < series.length; s++) {
+        var seat = series[s].seat;
+        var v = null;
+        if ((st.rank || []).indexOf(seat) >= 0) {
+          v = 0;
+        } else {
+          var pv = T.pathLen(st, seat);
+          if (isFinite(pv) && pv >= 0) v = Number(pv);
+        }
+        series[s].values.push(v);
+      }
+    }
+    return { series: series, total: total, index: rp.index };
+  }
+
+  function drawQuoridorAnalysis() {
+    var box = $('ag-quoridor-analysis');
+    var cv = $('ag-analysis-canvas');
+    if (!box || !cv) return;
+    var data = quoridorAnalysis();
+    if (!data) { box.hidden = true; return; }
+    box.hidden = false;
+
+    var w = Math.max(280, box.clientWidth - 24);
+    var h = 180;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+    if (cv.width !== pw || cv.height !== ph) {
+      cv.width = pw;
+      cv.height = ph;
+    }
+    cv.style.width = '100%';
+    cv.style.height = h + 'px';
+    var g = cv.getContext && cv.getContext('2d');
+    if (!g) return;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+
+    var left = 34, right = 12, top = 30, bottom = 24;
+    var plotW = Math.max(10, w - left - right);
+    var plotH = Math.max(10, h - top - bottom);
+    var maxV = 1;
+    data.series.forEach(function (s) {
+      s.values.forEach(function (v) { if (v != null && v > maxV) maxV = v; });
+    });
+    var yMax = Math.max(1, Math.ceil(maxV));
+    function xAt(i) { return left + (data.total ? (i / data.total) * plotW : 0); }
+    function yAt(v) { return top + plotH - (v / yMax) * plotH; }
+
+    // 横向网格 + 纵轴刻度
+    g.font = '9px Menlo, Consolas, monospace';
+    g.textBaseline = 'middle';
+    g.textAlign = 'right';
+    for (var t = 0; t <= 4; t++) {
+      var val = Math.round(yMax * t / 4);
+      var y = yAt(val);
+      g.strokeStyle = t === 0 ? 'rgba(86,69,45,.35)' : 'rgba(86,69,45,.12)';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(left, y);
+      g.lineTo(left + plotW, y);
+      g.stroke();
+      g.fillStyle = '#8a8375';
+      g.fillText(String(val), left - 5, y);
+    }
+
+    // 横轴刻度
+    g.textAlign = 'center';
+    g.textBaseline = 'top';
+    var ticks = data.total <= 4 ? data.total : 4;
+    for (var k = 0; k <= ticks; k++) {
+      var step = ticks ? Math.round(data.total * k / ticks) : 0;
+      var x = xAt(step);
+      g.fillStyle = '#8a8375';
+      g.fillText(String(step), x, top + plotH + 5);
+    }
+    g.textAlign = 'right';
+    g.fillStyle = '#8a8375';
+    g.fillText('步数', left + plotW, h - 4);
+    g.save();
+    g.translate(10, top + 2);
+    g.rotate(-Math.PI / 2);
+    g.textAlign = 'right';
+    g.fillText('最短路线长', 0, 0);
+    g.restore();
+
+    // 当前步竖线
+    if (data.total > 0) {
+      var cx = xAt(data.index);
+      g.strokeStyle = 'rgba(193,82,47,.35)';
+      g.setLineDash([3, 3]);
+      g.beginPath();
+      g.moveTo(cx, top);
+      g.lineTo(cx, top + plotH);
+      g.stroke();
+      g.setLineDash([]);
+    }
+
+    // 每个玩家一条线
+    data.series.forEach(function (s) {
+      g.strokeStyle = s.color;
+      g.fillStyle = s.color;
+      g.lineWidth = 1.8;
+      g.lineJoin = 'round';
+      g.beginPath();
+      var started = false;
+      for (var i = 0; i < s.values.length; i++) {
+        var v = s.values[i];
+        if (v == null) { started = false; continue; }
+        var x = xAt(i), y = yAt(v);
+        if (!started) { g.moveTo(x, y); started = true; }
+        else g.lineTo(x, y);
+      }
+      g.stroke();
+      // 当前点
+      if (data.index < s.values.length && s.values[data.index] != null) {
+        g.beginPath();
+        g.arc(xAt(data.index), yAt(s.values[data.index]), 3, 0, Math.PI * 2);
+        g.fill();
+      }
+    });
+
+    // 图例
+    var lx = left;
+    g.textAlign = 'left';
+    g.textBaseline = 'middle';
+    g.font = '10px sans-serif';
+    data.series.forEach(function (s) {
+      g.fillStyle = s.color;
+      g.beginPath();
+      g.arc(lx + 4, 12, 3.2, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#4b463c';
+      g.fillText(s.name, lx + 11, 12);
+      lx += 11 + g.measureText(s.name).width + 12;
+    });
   }
 
   function replayActText(rec, a, i) {
@@ -1091,6 +1277,8 @@
     var rec = {
       localId: newLocalId(),
       source: 'local',
+      owner_no: (B8.auth && B8.auth.no) ? B8.auth.no() : '',
+      owner_name: (B8.auth && B8.auth.nick) ? B8.auth.nick() : '',
       game: r.game,
       team_mode: r.team_mode || 'ffa',
       n: seats.length,
@@ -1921,6 +2109,13 @@
       });
     }
 
+    var pageBack = $('ag-page-back');
+    if (pageBack) {
+      pageBack.addEventListener('click', function (e) {
+        if (sameOriginReferrer()) { e.preventDefault(); history.back(); }
+      });
+    }
+
     var exit = $('ag-exit');
     if (exit) exit.addEventListener('click', function () { leaveRoom(false); });
     var waitLeave = $('ag-wait-leave');
@@ -2008,7 +2203,7 @@
     if (recRefresh) recRefresh.addEventListener('click', function () { loadRecords(true); });
 
     var repBack = $('ag-replay-back');
-    if (repBack) repBack.addEventListener('click', function () { closeReplay(false); });
+    if (repBack) repBack.addEventListener('click', backFromReplay);
     var repFirst = $('ag-replay-first');
     if (repFirst) repFirst.addEventListener('click', function () { replayTo(0); });
     var repPrev = $('ag-replay-prev');
@@ -2037,11 +2232,15 @@
       });
     }
 
+    window.addEventListener('resize', function () {
+      if (S.view === 'replay') drawQuoridorAnalysis();
+    });
+
     document.addEventListener('keydown', function (e) {
       if (S.view !== 'replay' || !S.replay) return;
       if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || '')) return;
-      if (e.key === 'ArrowLeft') { replayTo(S.replay.index - 1); e.preventDefault(); }
-      else if (e.key === 'ArrowRight') { replayTo(S.replay.index + 1); e.preventDefault(); }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { replayTo(S.replay.index - 1); e.preventDefault(); }
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { replayTo(S.replay.index + 1); e.preventDefault(); }
       else if (e.key === 'Escape') { closeReplay(false); e.preventDefault(); }
       else if (e.key === ' ') { toggleReplayAuto(); e.preventDefault(); }
     });

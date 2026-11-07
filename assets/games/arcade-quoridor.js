@@ -658,6 +658,12 @@
     return 'wait';
   }
 
+  // 回看时房间状态永远是 over，不能拿它给每一帧算名次，否则所有人都是最后一名
+  function effectiveStatus(P, st) {
+    if (replayOf(P)) return (st && st.status) || 'play';
+    return statusOf(P);
+  }
+
   /* v2.152：回看模式（外壳传 ctx.replay = {index,total}） */
   function replayOf(P) {
     var rp = P && P.replay;
@@ -1854,7 +1860,7 @@
     if (!S.alive || !S.ctx || !S.root) return;
     var P = S.ctx;
     var st = stateOf(P);
-    var status = statusOf(P);
+    var status = effectiveStatus(P, st);
     var n = gameN(P);
     var turn = turnOf(P);
     var over = status === 'over' || (st && st.status === 'over');
