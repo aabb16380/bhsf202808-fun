@@ -629,8 +629,8 @@
     '  width:100%;max-width:760px;margin:0 auto;color:var(--ink);',
     '  font-family:var(--serif);box-sizing:border-box;',
     '  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;',
+    '  -webkit-touch-callout:none;',
     '}',
-    '.mn-ms{-webkit-touch-callout:none;}',
     '.mn-ms [hidden]{display:none !important;}',
     '.mn-ms.mn-ms-level-beginner .mn-ms-grid{--mn-cell:34px;}',
     '.mn-ms.mn-ms-level-intermediate .mn-ms-grid{--mn-cell:27px;}',
@@ -680,7 +680,7 @@
     '.mn-ms-cell.mn-ms-n6{color:#2d7373;}',
     '.mn-ms-cell.mn-ms-n7{color:#3f3a33;}',
     '.mn-ms-cell.mn-ms-n8{color:#777064;}',
-    '.mn-ms-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:18px;text-align:center;background:color-mix(in srgb, var(--card) 91%, transparent);border-radius:calc(var(--radius) + 3px);color:var(--ink-2);font-size:12.5px;z-index:2;}',
+    '.mn-ms-loading{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:18px;text-align:center;background:color-mix(in srgb, var(--card) 91%, transparent);border-radius:calc(var(--radius) + 3px);color:var(--ink-2);font-size:12.5px;z-index:2;}',
     '.mn-ms-spinner{width:19px;height:19px;border:2px solid var(--line-2);border-top-color:var(--seal);border-radius:50%;animation:mn-spin .8s linear infinite;}',
     '@keyframes mn-spin{to{transform:rotate(360deg);}}',
     '.mn-ms-tip{margin:9px 2px 0;font-family:var(--mono);font-size:9.5px;line-height:1.75;color:var(--ink-3);}',
@@ -771,6 +771,7 @@
     bestTitleEl: null,
     bestListEl: null,
     bestSeq: 0,
+    bestTimer: 0,
     longTimer: 0,
     touchIdx: -1,
     touchX: 0,
@@ -1204,6 +1205,13 @@
   function startNewRound(loadBestNow) {
     cancelGeneration();
     stopTimer();
+    clearLongPress();
+    if (S.bestTimer) {
+      clearTimeout(S.bestTimer);
+      S.bestTimer = 0;
+    }
+    S.touchIdx = -1;
+    S.touchFired = false;
     S.game = null;
     S.state = 'idle';
     S.startAt = 0;
@@ -1388,7 +1396,15 @@
     if (S.ctx && typeof S.ctx.onFinish === 'function') {
       try { S.ctx.onFinish(res); } catch (e) {}
     }
-    if (won) loadBest();
+    if (won && S.mounted && S.state === 'won') {
+      loadBest();
+      /* 页面写分可能是异步的：过一会儿再拉一次，保证新成绩能出现。 */
+      if (S.bestTimer) clearTimeout(S.bestTimer);
+      S.bestTimer = setTimeout(function () {
+        S.bestTimer = 0;
+        if (S.mounted) loadBest();
+      }, 1000);
+    }
   }
 
   function onGridClick(e) {
@@ -1411,7 +1427,7 @@
     var g = S.game;
     if (S.flagMode) {
       if (g.opened[idx]) chordAt(idx);
-      else cycleMark(idx);
+      else toggleFlagOnly(idx);
       return;
     }
     if (g.opened[idx]) return;
@@ -1732,6 +1748,10 @@
     cancelGeneration();
     stopTimer();
     clearLongPress();
+    if (S.bestTimer) {
+      clearTimeout(S.bestTimer);
+      S.bestTimer = 0;
+    }
     for (var i = S.bound.length - 1; i >= 0; i--) {
       var b = S.bound[i];
       try { b.el.removeEventListener(b.type, b.fn, b.opt); } catch (e) {}
@@ -1760,6 +1780,8 @@
     S.flags = 0;
     S.flagMode = false;
     S.pendingFirst = -1;
+    S.touchIdx = -1;
+    S.touchFired = false;
     S.loadingEl = null;
     S.loadingTextEl = null;
     S.resultEl = null;

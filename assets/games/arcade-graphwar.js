@@ -740,7 +740,7 @@
     for (var k = 0; k < obstacles.length; k++) {
       var o = obstacles[k];
       var ox = o.x - x, oy = o.y - y;
-      if (Math.sqrt(ox * ox + oy * oy) < (r + obstacleRadius(o)) * 0.86) return false;
+      if (Math.sqrt(ox * ox + oy * oy) < r + obstacleRadius(o)) return false;
     }
     return true;
   }
@@ -1249,8 +1249,11 @@
   }
 
   function gameState() {
-    var st = view.ctx && view.ctx.state ? view.ctx.state : (room() && room().state ? room().state : null);
-    return st && Array.isArray(st.soldiers) && st.soldiers.length ? st : null;
+    var a = view.ctx ? view.ctx.state : null;
+    if (a && Array.isArray(a.soldiers) && a.soldiers.length) return a;
+    var b = room() ? room().state : null;
+    if (b && Array.isArray(b.soldiers) && b.soldiers.length) return b;
+    return null;
   }
 
   function displayedState() {
@@ -2590,7 +2593,7 @@
     }
     draft.log = capLog((draft.log || []).concat(['座位 ' + mySeat() + ' 超时，跳过']));
     draft = advanceStateTurn(draft, next);
-    var ret = sendAction({ type: 'timeout', seat: mySeat() }, draft, { turn: next });
+    var ret = sendAction({ type: 'timeout' }, draft, { turn: next });
     if (ret) watchSend(ret);
     render();
   }
