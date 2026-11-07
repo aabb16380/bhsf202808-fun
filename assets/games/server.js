@@ -103,6 +103,34 @@
     });
   }
 
+  function evalGoBatch(positions, visits) {
+    if (!enabled()) return Promise.resolve(null);
+    return post('/go/batch', {
+      positions: (positions || []).map(function (p) {
+        return {
+          size: p.size || 19,
+          moves: p.moves || [],
+          komi: p.komi == null ? 7.5 : p.komi,
+          rules: p.rules || 'chinese',
+          visits: p.visits || visits || 30
+        };
+      })
+    }, 120000).then(function (r) { return r.results || []; });
+  }
+
+  function evalGomokuBatch(positions, timeoutMs) {
+    if (!enabled()) return Promise.resolve(null);
+    return post('/gomoku/batch', {
+      positions: (positions || []).map(function (p) {
+        return {
+          size: p.size || 15,
+          stones: p.stones || [],
+          timeout_ms: p.timeout_ms || timeoutMs || 150
+        };
+      })
+    }, 120000).then(function (r) { return r.results || []; });
+  }
+
   function evalBatch(game, fens, movetime) {
     if (!enabled()) return Promise.resolve(null);
     return post('/eval-batch', {
@@ -145,6 +173,8 @@
     evalOne: evalOne,
     evalGo: evalGo,
     evalGomoku: evalGomoku,
+    evalGoBatch: evalGoBatch,
+    evalGomokuBatch: evalGomokuBatch,
     evalBatch: evalBatch,
     createAnalysis: createAnalysis,
     getAnalysis: getAnalysis,

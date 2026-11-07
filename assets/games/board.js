@@ -70,8 +70,18 @@
     practiceKey: '', practiceStates: null,
     baseSig: '', lastSig: '',
     serverData: null, serverKey: '',
-    serverPointKey: ''
+    serverPointKey: '',
+    tags: {}, analysisKey: '', analysisBusy: false,
+    bestMoves: [], bestArrow: null
   };
+  function resetAnalysisMarks() {
+    ANALYSIS.tags = {};
+    ANALYSIS.bestMoves = [];
+    ANALYSIS.bestArrow = null;
+    ANALYSIS.analysisKey = '';
+    ANALYSIS.analysisBusy = false;
+  }
+
   var SPECT = { last: 0, inflight: false };
   var S = null;                 // 当前对局
   var NET = { offset: 0, lastOk: 0, fails: 0, timer: 0, inflight: false, again: false, lastPing: 0, started: 0, paused: false };
@@ -942,6 +952,7 @@
       practice: false, practicePrefix: null, practiceBase: null, practiceState: null, practiceStack: [], practiceLast: null,
       rematchOffered: false, rematchPrompted: false
     };
+    resetAnalysisMarks();
     writeJSON(LOCAL_KEY, null);
     closePromo();
     showGame();
@@ -1285,6 +1296,7 @@
      ============================================================ */
   function enterOnline(code, room, state, seat, opts) {
     opts = opts || {};
+    resetAnalysisMarks();
     SPECT.last = 0;
     SPECT.inflight = false;
     stopChat();
@@ -2697,6 +2709,9 @@
     $('bd-review-prev').disabled = i <= 0;
     $('bd-review-next').disabled = i >= total;
     $('bd-review-end').disabled = i >= total;
+    if (S.state.status === 'over' && !S.practice && !ANALYSIS.analysisKey) {
+      setTimeout(analyzeGame, 500);
+    }
   }
 
   function fmtSpent(ms) {
@@ -3278,6 +3293,161 @@
     show('bd-winbar', true);
   }
 
+  function moveKey(game, mv) {
+    if (!mv) return '';
+    if (game === 'chess' || game === 'xiangqi') {
+      if (mv.f == null || mv.t == null) return '';
+      var c1 = game === 'chess' ? E.chessCoord(mv.f) : E.xiangqiCoord(mv.f);
+      var c2 = game === 'chess' ? E.chessCoord(mv.t) : E.xiangqiCoord(mv.t);
+      return c1 + c2;
+    }
+    if (game === 'go') return mv.pass ? 'pass' : E.goCoord(mv.t, S.size);
+    if (game === 'gomoku') return (mv.t % 15) + ',' + Math.floor(mv.t / 15);
+    return '';
+  }
+
+  function bestMoveKey(game, best) {
+    if (!best) return '';
+    if (game === 'chess' || game === 'xiangqi') return String(best).toLowerCase();
+    if (game === 'go') return String(best).toUpperCase();
+    if (game === 'gomoku') return String(best);
+    return '';
+  }
+
+  function bestMoveArrow(game, best, st) {
+    if (!best && best !== 0) return null;
+    try {
+      if (game === 'chess') {
+        var m = String(best).match(/^([a-h])([1-8])([a-h])([1-8])/i);
+        if (!m) return null;
+        var f = (8 - Number(m[2])) * 8 + (m[1].toLowerCase().charCodeAt(0) - 97);
+        var t = (8 - Number(m[4])) * 8 + (m[3].toLowerCase().charCodeAt(0) - 97);
+        return { from: f, to: t };
+      }
+      if (game === 'xiangqi') {
+        var x = String(best).match(/^([a-i])([0-9])([a-i])([0-9])/i);
+        if (!x) return null;
+        return {
+          from: Number(x[2]) * 9 + (x[1].toLowerCase().charCodeAt(0) - 97),
+          to: Number(x[4]) * 9 + (x[3].toLowerCase().charCodeAt(0) - 97)
+        };
+      }
+      if (game === 'go') {
+        var g = String(best).toUpperCase().match(/^([A-HJ-T])([0-9]{1,2})$/);
+        if (!g) return null;
+        var letters = 'ABCDEFGHJKLMNOPQRSTUVWXYZ';
+        var gx = letters.indexOf(g[1]);
+        var gy = st.size - Number(g[2]);
+        if (gx < 0 || gy < 0 || gx >= st.size || gy >= st.size) return null;
+        return { to: gy * st.size + gx };
+      }
+      if (game === 'gomoku') {
+        var q = String(best).match(/^(\d+)\s*,\s*(\d+)$/);
+        if (!q) return null;
+        return { to: Number(q[2]) * 15 + Number(q[1]) };
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function tagFor(loss, isBest) {
+    if (isBest || loss <= 0.01) return { key: 'best', label: '正手', icon: '★' };
+    if (loss <= 0.03) return { key: 'excellent', label: '优秀', icon: '◎' };
+    if (loss <= 0.06) return { key: 'good', label: '良好', icon: '●' };
+    if (loss <= 0.12) return { key: 'inaccuracy', label: '一般', icon: '△' };
+    if (loss <= 0.20) return { key: 'mistake', label: '失误', icon: '?' };
+    return { key: 'blunder', label: '败着', icon: '??' };
+  }
+
+  function analyzeGame() {
+    if (!S || !S.state || S.state.status !== 'over' || !S.moves.length || ANALYSIS.analysisBusy) return;
+    if (!window.B8Server || !B8Server.enabled()) return;
+    var game = S.game;
+    if (game !== 'chess' && game !== 'xiangqi' && game !== 'go' && game !== 'gomoku') return;
+
+    var states = reviewBuild();
+    if (!states || states.length < 2) return;
+    var key = game + ':' + S.size + ':' + S.moves.map(function (m) { return m.seq; }).join(',');
+    if (key === ANALYSIS.analysisKey) return;
+
+    ANALYSIS.analysisBusy = true;
+    ANALYSIS.analysisKey = key;
+    var note = '正在分析整盘棋谱…';
+    if (game !== 'go' && game !== 'gomoku') note = '服务器正在分析 ' + (states.length - 1) + ' 手棋谱…';
+    engineNote(note);
+
+    var req;
+    if (game === 'chess' || game === 'xiangqi') {
+      var fens = states.map(function (st) {
+        return game === 'chess' ? B8Engine.fenChess(st) : B8Engine.fenXiangqi(st);
+      });
+      req = B8Server.evalBatch(game, fens, 80).then(function (rows) {
+        return (rows || []).map(function (r) {
+          return { p1: r ? r.p1 : 50, best: r ? r.bestmove : '' };
+        });
+      });
+    } else if (game === 'go') {
+      var positions = states.map(function (st, i) {
+        return {
+          size: S.size,
+          moves: S.moves.slice(0, i).map(function (m) {
+            return [m.color === 2 ? 'W' : 'B', m.move && m.move.pass ? 'pass' : E.goCoord(m.move.t, S.size)];
+          }),
+          visits: 30
+        };
+      });
+      req = B8Server.evalGoBatch(positions, 30).then(function (rows) {
+        return (rows || []).map(function (r) {
+          return { p1: r ? r.winrate : 50, best: r ? r.bestmove : '' };
+        });
+      });
+    } else {
+      var gpositions = states.map(function (st) {
+        var stones = [];
+        for (var i = 0; i < st.board.length; i++) {
+          if (st.board[i]) stones.push([i % 15, Math.floor(i / 15), st.board[i]]);
+        }
+        return { size: 15, stones: stones, timeout_ms: 120 };
+      });
+      req = B8Server.evalGomokuBatch(gpositions, 120).then(function (rows) {
+        return (rows || []).map(function (r) {
+          return { p1: r ? r.winrate : 50, best: r ? r.bestmove : '' };
+        });
+      });
+    }
+
+    req.then(function (rows) {
+      if (!rows || rows.length < states.length) throw new Error('分析结果数量不对');
+      var tags = {};
+      for (var i = 0; i < S.moves.length; i++) {
+        var mv = S.moves[i];
+        var before = Number(rows[i].p1) / 100;
+        var after = Number(rows[i + 1].p1) / 100;
+        var mover = mv.color;
+        var eb = mover === 1 ? before : 1 - before;
+        var ea = mover === 1 ? after : 1 - after;
+        var loss = Math.max(0, eb - ea);
+        var isBest = bestMoveKey(game, rows[i].best) === moveKey(game, mv.move);
+        tags[i + 1] = tagFor(loss, isBest);
+        tags[i + 1].loss = loss;
+      }
+      ANALYSIS.tags = tags;
+      ANALYSIS.analysisKey = key;
+      ANALYSIS.bestMoves = rows.map(function (r) { return r.best || ''; });
+      ANALYSIS.bestArrow = null;
+      var cur = Math.min(ANALYSIS.cur, states.length - 1);
+      var best = rows[cur] && rows[cur].best;
+      if (best) ANALYSIS.bestArrow = bestMoveArrow(game, best, states[cur]);
+      renderMoves();
+      draw();
+      engineNote('棋谱分析完成：' + S.moves.length + ' 手已标注。', false);
+    }).catch(function (err) {
+      engineNote('棋谱分析失败：' + (err && err.message ? err.message : '未知错误'), true);
+    }).then(function () {
+      ANALYSIS.analysisBusy = false;
+    });
+  }
+
   function refreshServerPoint() {
     if (!S || !S.state || !window.B8Server || !B8Server.enabled()) return;
     var game = S.state.game;
@@ -3317,8 +3487,10 @@
       var idx = ANALYSIS.cur;
       if (idx < 0 || idx >= ANALYSIS.data.length) return;
       ANALYSIS.data[idx] = r.p1 / 100;
+      if (r.bestmove) ANALYSIS.bestArrow = bestMoveArrow(game, r.bestmove, st);
       drawWinChart();
       renderWinBar(ANALYSIS.data[idx], idx);
+      draw();
     }).catch(function () { /* 服务器不可用就保持 P1 */ });
   }
 
@@ -3348,6 +3520,12 @@
     ANALYSIS.cur = S.practice ? last : (S.reviewing ? Math.min(S.reviewIndex, last) : last);
     var p = (ANALYSIS.data && ANALYSIS.data.length) ? ANALYSIS.data[ANALYSIS.cur] : 0.5;
     var pct = Math.round(p * 100);
+
+    if (ANALYSIS.bestMoves && ANALYSIS.bestMoves.length && states[ANALYSIS.cur]) {
+      var bm = ANALYSIS.bestMoves[ANALYSIS.cur];
+      ANALYSIS.bestArrow = bm ? bestMoveArrow(S.game, bm, states[ANALYSIS.cur]) : null;
+      draw();
+    }
 
     txt('bd-an-name1', shortName(1));
     txt('bd-an-name2', shortName(2));
@@ -3399,6 +3577,8 @@
       engineNote(engineName + '：' + side + ' ' + pct.toFixed(1) + '% · 深度 ' +
         r.depth + ' · ' + (r.ms / 1000).toFixed(1) + 's' + mate + best +
         ' · GPLv3', false);
+      ANALYSIS.bestArrow = bestMoveArrow(game, r.bestmove, S.state);
+      draw();
     }).catch(function (err) {
       engineNote('引擎失败：' + (err && err.message ? err.message : '未知错误'), true);
     }).then(function () {
@@ -3533,6 +3713,14 @@
         tm.textContent = fmtSpent(m.spent);
         tm.title = '这一步用时 ' + fmtSpent(m.spent);
         body.appendChild(tm);
+      }
+      var tag = ANALYSIS.tags[i + 1];
+      if (tag && S.state.status === 'over') {
+        var tg = document.createElement('span');
+        tg.className = 'bd-mv-tag is-' + tag.key;
+        tg.textContent = tag.icon + ' ' + tag.label;
+        tg.title = tag.label + '（胜率损失 ' + (tag.loss * 100).toFixed(1) + '%）';
+        body.appendChild(tg);
       }
       li2.appendChild(no);
       li2.appendChild(body);
@@ -3879,7 +4067,76 @@
     ctx.clearRect(0, 0, this.w, this.h);
     var fn = { xiangqi: drawXiangqi, chess: drawChess, go: drawGo, gomoku: drawGomoku, draughts: drawDraughts }[this.st.game];
     if (fn) fn.call(this, ctx, this.st, this.opts);
+    if (this.opts && this.opts.arrow) drawBestArrow(ctx, this.st, this.opts, this.w, this.h);
   };
+
+  function arrowCenter(game, idx, st, w, h, flip) {
+    if (game === 'chess') {
+      var c = Math.min(w, h) / 8;
+      var ox = (w - c * 8) / 2, oy = (h - c * 8) / 2;
+      var x = idx % 8, y = Math.floor(idx / 8);
+      if (flip) { x = 7 - x; y = 7 - y; }
+      return [ox + (x + 0.5) * c, oy + (y + 0.5) * c];
+    }
+    if (game === 'xiangqi') {
+      var pad = Math.max(12, w * 0.055);
+      var c2 = Math.min((w - pad * 2) / 8, (h - pad * 2) / 9);
+      var bw = c2 * 8, bh = c2 * 9;
+      var ox2 = (w - bw) / 2, oy2 = (h - bh) / 2;
+      var x2 = idx % 9, y2 = Math.floor(idx / 9);
+      if (flip) { x2 = 8 - x2; y2 = 9 - y2; }
+      return [ox2 + x2 * c2, oy2 + y2 * c2];
+    }
+    var n = st.size;
+    var pad3 = Math.max(10, w * 0.055);
+    var c3 = (w - pad3 * 2) / (n - 1);
+    var ox3 = pad3;
+    var oy3 = (h - c3 * (n - 1)) / 2;
+    var x3 = idx % n, y3 = Math.floor(idx / n);
+    if (flip) { x3 = n - 1 - x3; y3 = n - 1 - y3; }
+    return [ox3 + x3 * c3, oy3 + y3 * c3];
+  }
+
+  function drawBestArrow(ctx, st, opts, w, h) {
+    var a = opts.arrow;
+    if (!a || !st) return;
+    var flip = !!opts.flip;
+    var to = arrowCenter(st.game, a.to, st, w, h, flip);
+    var from;
+    if (a.from != null) {
+      from = arrowCenter(st.game, a.from, st, w, h, flip);
+    } else {
+      // 围棋/五子棋只有一个落点：从左上方向落点画箭头
+      var n = st.size || 15;
+      var c = st.game === 'go' || st.game === 'gomoku' ? (w - Math.max(10, w * 0.055) * 2) / (n - 1) : 24;
+      from = [to[0] - c * 1.6, to[1] - c * 1.6];
+    }
+    var dx = to[0] - from[0], dy = to[1] - from[1];
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / len, uy = dy / len;
+    var head = Math.max(10, Math.min(w, h) * 0.035);
+    var tip = [to[0], to[1]];
+    var base = [tip[0] - ux * head * 1.4, tip[1] - uy * head * 1.4];
+
+    ctx.save();
+    ctx.strokeStyle = '#18a558';
+    ctx.fillStyle = '#18a558';
+    ctx.lineWidth = Math.max(3, Math.min(w, h) * 0.008);
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(from[0], from[1]);
+    ctx.lineTo(base[0], base[1]);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(tip[0], tip[1]);
+    ctx.lineTo(tip[0] - ux * head - uy * head * 0.55, tip[1] - uy * head + ux * head * 0.55);
+    ctx.lineTo(tip[0] - ux * head + uy * head * 0.55, tip[1] - uy * head - ux * head * 0.55);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
 
   function pal() {
     var night = isNight();
@@ -4498,13 +4755,15 @@
       ((S.reviewing && S.reviewState) ? S.reviewState : S.state);
     if (!st || !st.board) return;
     var practicing = !!S.practice;
+    var showArrow = !!(ANALYSIS.bestArrow && (practicing || S.reviewing || S.state.status === 'over'));
     renderer.set(st, {
       sel: (S.reviewing && !practicing) ? null : S.sel,
       targets: (S.reviewing && !practicing) ? [] : S.targets,
       flip: S.flip,
       score: practicing ? null : (S.score || null),
       dead: (!practicing && S.score && S.score.dead) ? S.score.dead : [],
-      anim: (S.reviewing || practicing) ? null : S.anim
+      anim: (S.reviewing || practicing) ? null : S.anim,
+      arrow: showArrow ? ANALYSIS.bestArrow : null
     });
     renderer.draw(!!S.anim && !S.reviewing && !practicing);
   }

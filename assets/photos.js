@@ -428,6 +428,7 @@
         id: r.id,
         path: path,
         url: photoUrl(r.url, path),
+        fallback: r.url || (path && B8.publicUrl ? B8.publicUrl('b8-photos', path) : ''),
         caption: B8.trim(r.caption, 60),
         uploader: B8.trim(r.uploader, 16),
         taken_on: r.taken_on || '',
@@ -643,6 +644,11 @@
     img.decoding = 'async';
     img.src = p.url;
     img.onerror = function () {
+      // 新上传的图可能还没同步到服务器图床，回退 Supabase 原地址
+      if (p.fallback && img.src !== p.fallback) {
+        img.src = p.fallback;
+        return;
+      }
       img.alt = '这张图打不开了';
     };
     open.appendChild(img);
@@ -1262,6 +1268,13 @@
     var b = boxItems;
 
     b.img.src = p.url;
+    b.img.onerror = function () {
+      if (p.fallback && b.img.src !== p.fallback) {
+        b.img.src = p.fallback;
+        return;
+      }
+      b.img.alt = '这张图打不开了';
+    };
     b.img.alt = p.caption || '班级合影';
     b.cap.textContent = p.caption || '（没写说明）';
     var who = (canSeeUploader() && p.uploader) ? p.uploader : '同学';
