@@ -6828,7 +6828,28 @@
   /* ============================================================
      十三、启动
      ============================================================ */
+  function bindEmojiBars() {
+    var bars = document.querySelectorAll('[data-emoji-target]');
+    for (var i = 0; i < bars.length; i++) {
+      (function (bar) {
+        var input = $(bar.getAttribute('data-emoji-target'));
+        if (!input) return;
+        var btns = bar.querySelectorAll('button');
+        for (var j = 0; j < btns.length; j++) {
+          (function (btn) {
+            btn.addEventListener('click', function () {
+              var max = Number(input.getAttribute('maxlength')) || 80;
+              input.value = (input.value + btn.textContent).slice(0, max);
+              try { input.focus(); } catch (e) {}
+            });
+          })(btns[j]);
+        }
+      })(bars[i]);
+    }
+  }
+
   function boot() {
+    bindEmojiBars();
     buildGames();
     renderOptions();
     renderRooms();

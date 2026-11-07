@@ -7,19 +7,19 @@
 <meta name="description" content="八班棋类对弈：中国象棋、国际象棋、围棋、五子棋、国际跳棋。本机对局与网络房间都会保存棋谱、进历史，别人可以观战；3 位数字邀请码、可计时可不计时、网络悔棋需对方同意、实时评论（棋手不可见）、围棋点目。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g142" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g142">
-<link rel="stylesheet" href="assets/games/board.css?v=20261101g142">
+<link rel="icon" href="assets/favicon.png?v=20261101g143" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g143">
+<link rel="stylesheet" href="assets/games/board.css?v=20261101g143">
 <script>
-window.B8_BUILD = '20261101g142';
+window.B8_BUILD = '20261101g143';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g142"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g142">
+<script src="assets/theme.js?v=20261101g143"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g143">
 </head>
 
 <body data-site="fun">
@@ -368,6 +368,16 @@ window.B8_TEST = !!window.B8_T;
               对局进行中，棋手看不到评论。<br>下完自动公开，专心下棋。
             </div>
             <div class="bd-chat-list" id="bd-chat-list"></div>
+            <div class="bd-emoji" data-emoji-target="bd-chat-input" role="group" aria-label="快捷表情">
+              <button type="button" aria-label="赞">👍</button>
+              <button type="button" aria-label="笑">😂</button>
+              <button type="button" aria-label="爱心">❤️</button>
+              <button type="button" aria-label="惊讶">😮</button>
+              <button type="button" aria-label="生气">😡</button>
+              <button type="button" aria-label="庆祝">🎉</button>
+              <button type="button" aria-label="鼓掌">👏</button>
+              <button type="button" aria-label="思考">🤔</button>
+            </div>
             <form class="bd-chat-form" id="bd-chat-form">
               <input id="bd-chat-input" maxlength="80" autocomplete="off"
                      placeholder="说两句…（80 字以内）" aria-label="评论">
@@ -449,7 +459,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g142' + T;
+  var V = '?v=20261101g143' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

@@ -662,6 +662,7 @@
         });
         return false;
       }
+      if (String(act.type || '') === 'surrender') return false;
       return true;
     });
     if (!Array.isArray(rec.chat)) rec.chat = chatMsgs;
@@ -2041,6 +2042,7 @@
     var isHost = S.seat === 1;
     var waiting = r.status === 'wait';
     show('ag-close-room', !S.local && (isHost || (B8.auth && B8.auth.isSuper && B8.auth.isSuper())));
+    show('ag-surrender', !S.local && S.seat > 0 && r.status === 'play');
     show('ag-copy-link', !S.local);
     show('ag-again', !S.local && S.seat > 0 && r.status === 'over');
     txt('ag-chat-count', String((S.chat || []).length));
@@ -2432,6 +2434,26 @@
   }
 
   // v2.160：再来一局要对方同意；接受后同一个房间重开，两个人都还在。
+  function surrenderGame() {
+    if (!S.room || S.local || S.seat < 1 || S.room.status !== 'play') return;
+    B8.confirm('确定投降？本局直接判对方获胜。', {
+      title: '投降', okText: '确定投降', danger: true
+    }).then(function (ok) {
+      if (!ok || !S.room) return;
+      rpc('b8_arcade_surrender', { p_token: token(), p_code: S.room.code })
+        .then(function (res) {
+          if (res && res.room) {
+            S.room = res.room;
+            renderRoom();
+            notify();
+          }
+          wsSend({ type: 'changed' });
+          loadRecords(true);
+        })
+        .catch(function (err) { B8.toast(errText(err)); });
+    });
+  }
+
   function rematchClick() {
     if (!S.room) return;
     if (S.local) { startLocal(); return; }
@@ -2517,7 +2539,28 @@
      七、绑定 / 启动
      ============================================================ */
 
+  function bindEmojiBars() {
+    var bars = document.querySelectorAll('[data-emoji-target]');
+    for (var i = 0; i < bars.length; i++) {
+      (function (bar) {
+        var input = $(bar.getAttribute('data-emoji-target'));
+        if (!input) return;
+        var btns = bar.querySelectorAll('button');
+        for (var j = 0; j < btns.length; j++) {
+          (function (btn) {
+            btn.addEventListener('click', function () {
+              var max = Number(input.getAttribute('maxlength')) || 200;
+              input.value = (input.value + btn.textContent).slice(0, max);
+              try { input.focus(); } catch (e) {}
+            });
+          })(btns[j]);
+        }
+      })(bars[i]);
+    }
+  }
+
   function bind() {
+    bindEmojiBars();
     var create = $('ag-create');
     if (create) create.addEventListener('click', function () { createRoom(); });
     var local = $('ag-local');
@@ -2590,6 +2633,8 @@
 
     var closeRoom = $('ag-close-room');
     if (closeRoom) closeRoom.addEventListener('click', closeRoomNow);
+    var surrenderBtn = $('ag-surrender');
+    if (surrenderBtn) surrenderBtn.addEventListener('click', surrenderGame);
     var waitClose = $('ag-wait-close');
     if (waitClose) waitClose.addEventListener('click', closeRoomNow);
     var seatList = $('ag-seat-list');

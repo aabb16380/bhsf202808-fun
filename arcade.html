@@ -7,19 +7,19 @@
 <meta name="description" content="八班多人游戏：GraphWar 函数大战（2-8 人，输入函数打炮）、Quoridor 步步为营（2-4 人放墙堵路）。房间号加入、组队或混战、聊天；每一局自动保存，可逐步回看。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g142" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g142">
-<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g142">
+<link rel="icon" href="assets/favicon.png?v=20261101g143" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g143">
+<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g143">
 <script>
-window.B8_BUILD = '20261101g142';
+window.B8_BUILD = '20261101g143';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g142"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g142">
+<script src="assets/theme.js?v=20261101g143"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g143">
 </head>
 
 <body data-site="fun">
@@ -182,6 +182,7 @@ window.B8_TEST = !!window.B8_T;
           <span id="ag-room-meta"></span>
         </div>
         <button class="ag-mini" id="ag-copy-link" type="button">邀请链接</button>
+        <button class="ag-mini" id="ag-surrender" type="button" hidden>投降</button>
         <button class="ag-mini" id="ag-close-room" type="button" hidden>关房</button>
       </div>
 
@@ -233,6 +234,16 @@ window.B8_TEST = !!window.B8_T;
           <div class="ag-chat">
             <div class="ag-box-head"><b>聊天</b><span id="ag-chat-count">0</span></div>
             <div class="ag-chat-list" id="ag-chat-list"></div>
+            <div class="ag-emoji" data-emoji-target="ag-chat-input" role="group" aria-label="快捷表情">
+              <button type="button" aria-label="赞">👍</button>
+              <button type="button" aria-label="笑">😂</button>
+              <button type="button" aria-label="爱心">❤️</button>
+              <button type="button" aria-label="惊讶">😮</button>
+              <button type="button" aria-label="生气">😡</button>
+              <button type="button" aria-label="庆祝">🎉</button>
+              <button type="button" aria-label="鼓掌">👏</button>
+              <button type="button" aria-label="思考">🤔</button>
+            </div>
             <form class="ag-chat-form" id="ag-chat-form">
               <input id="ag-chat-input" maxlength="200" autocomplete="off" placeholder="说两句…">
               <button type="submit">发送</button>
@@ -273,7 +284,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g142' + T;
+  var V = '?v=20261101g143' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

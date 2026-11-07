@@ -391,6 +391,25 @@ a:hover { text-decoration: underline; }
   cursor: pointer;
 }
 
+.ag-emoji {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 6px;
+}
+.ag-emoji button {
+  width: 28px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card-2);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ag-emoji button:hover { border-color: var(--seal); }
+
 .ag-side-note { font-size: 10px; line-height: 1.7; color: var(--ink-3); }
 
 /* ---------- 对局记录 / 回看（v2.152） ---------- */

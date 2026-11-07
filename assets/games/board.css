@@ -1385,6 +1385,25 @@ html[data-mode="night"] .bd-winbar-p.is-second { color: #8fa6c4; }
 
 .bd-chat-form button:disabled { opacity: .4; cursor: not-allowed; }
 
+.bd-emoji {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 5px 10px 0;
+}
+.bd-emoji button {
+  width: 30px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card-2);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.bd-emoji button:hover { border-color: var(--seal); }
+
 /* 遮罩 */
 .bd-overlay {
   position: absolute;
