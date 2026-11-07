@@ -6,10 +6,13 @@
      · graphwar 函数大战（2-8 人）
      · mines    无猜扫雷（单人，直接挂在大厅）
    游戏规则全在各个 arcade-*.js 模块里；这里负责大厅、房间、座位、
-   同步（Supabase 权威 + 引擎 API 的 /ws/room 广播「变了」）、聊天、排行榜。
+   同步（Supabase 权威 + 引擎 API 的 /ws/room 广播「变了」）、聊天、排行榜，
+   以及 v2.152 的「每一局对局记录 + 回看」（记录存进 b8_arcade_games）。
 
    模块契约见 arcade-*.js 顶部注释；壳这边只保证：
      A.games[key] = { key, title, icon, sub, mode, seats, mount(root, ctx), destroy() }
+   回看时 ctx 多一个 replay = { on, index, total }，seat = 0、只读；
+   模块可以用 _test.applyAction(state, seat, act) 把记录里的动作重演出来。
    ============================================================ */
 (function () {
   'use strict';
@@ -475,7 +478,9 @@
     if (!list.length) {
       var p = document.createElement('p');
       p.className = 'ag-empty';
-      if (S.recTab === 'recent') {
+      if (S.recordsError) {
+        p.textContent = '对局记录还没同步下来；本机游玩的会先存在这台设备上。';
+      } else if (S.recTab === 'recent') {
         p.textContent = '还没有人打完一局。开一局，打完自动留记录。';
       } else if (!logged()) {
         p.textContent = '登录后这里显示你打过的每一局；本机游玩也会留一份。';
