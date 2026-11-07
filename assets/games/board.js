@@ -3501,11 +3501,14 @@
       ANALYSIS.tags = tags;
       ANALYSIS.analysisKey = key;
       ANALYSIS.bestMoves = rows.map(function (r) { return r.best || ''; });
+      ANALYSIS.serverData = rows.map(function (r) { return Number(r.p1) / 100; });
+      ANALYSIS.serverKey = stateSig(states[0]) + '|' + stateSig(states[states.length - 1]);
       ANALYSIS.bestArrow = null;
       var cur = Math.min(ANALYSIS.cur, states.length - 1);
       var best = rows[cur] && rows[cur].best;
       if (best) ANALYSIS.bestArrow = bestMoveArrow(game, best, states[cur]);
       renderMoves();
+      renderAnalysis();
       draw();
       engineNote('棋谱分析完成：' + S.moves.length + ' 手已标注。', false);
     }).catch(function (err) {
