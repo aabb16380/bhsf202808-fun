@@ -9,7 +9,7 @@ window.B8_CONFIG = {
     name: '八班游乐场',
     domain: 'bhsf202808.fun',
     github: 'aabb16380',
-    version: 'v2.121'
+    version: 'v2.122'
   },
 
   supabase: {
@@ -23,8 +23,8 @@ window.B8_CONFIG = {
   photoProxy: '',
 
   // 可选：棋类引擎 API（见 server/README.md）
-  // 留空则只用本地 P1 / 浏览器 WASM；部署好服务器后填 'https://api.bhsf202808.fun'
-  engineApi: '',
+  // 临时走 Cloudflare Quick Tunnel；正式域名 api.bhsf202808.fun 生效后替换
+  engineApi: 'https://explicit-clarity-addressed-dvd.trycloudflare.com',
 
   links: {
     homes: '//bhsf202808.homes/',
