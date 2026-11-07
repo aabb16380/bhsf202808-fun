@@ -35,6 +35,9 @@
     { key: 'reflex', name: '反应速度' },
     { key: 'clickspeed2', name: '手速测试' },
     { key: 'sudoku', name: '数独' },
+    { key: 'mines:easy', name: '扫雷 · 初级' },
+    { key: 'mines:medium', name: '扫雷 · 中级' },
+    { key: 'mines:hard', name: '扫雷 · 高级' },
     { key: '__worship', name: '膜宙金' }
   ];
 
@@ -704,6 +707,7 @@
     var map = { easy: '简单', normal: '普通', hard: '困难', expert: '极难' };
     var key = String(g);
     if (key.indexOf('sudoku:') === 0) return '数独 · ' + (map[key.slice(7)] || '');
+    if (key.indexOf('mines:') === 0) return '扫雷 · ' + (map[key.slice(6)] || '');
     if (key.indexOf('piano:') === 0) return '钢琴辉';
     var names = {
       '2048': '2048', memory: '记忆翻牌', schulte: '舒尔特方格',
