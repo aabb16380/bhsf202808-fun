@@ -9,12 +9,14 @@ window.B8_CONFIG = {
     name: '八班游乐场',
     domain: 'bhsf202808.fun',
     github: 'aabb16380',
-    version: 'v2.170'
+    version: 'v2.171'
   },
 
   supabase: {
     url: 'https://zcfdtfmxtsxacsklqlhe.supabase.co',
-    anonKey: 'sb_publishable_kkJAT4lA9KFJGhua2V9gjw_tr-doaVN'
+    anonKey: 'sb_publishable_kkJAT4lA9KFJGhua2V9gjw_tr-doaVN',
+    // v2.168: 国内直连 supabase.co（Cloudflare）经常超时/被拦，API 改走韩国服务器反代
+    proxy: 'https://api.bhsf202808.fun/sb'
   },
 
   // 图片代理：旧图已搬到韩国服务器；新上传未同步时前端自动回退 Supabase

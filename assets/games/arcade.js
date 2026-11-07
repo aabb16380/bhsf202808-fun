@@ -780,10 +780,32 @@
     }
   }
 
+  // 手机 WebView / 直接打开链接时 history.back() 可能没有上一页，
+  // 只 preventDefault 会变成“点了没反应”。这里带一个 350ms 的兜底跳转。
+  function safeHistoryBack(fallback) {
+    var done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      try { fallback(); } catch (e) {}
+    }
+    try {
+      if (window.history.length <= 1) { finish(); return; }
+      window.addEventListener('pagehide', function () { done = true; }, { once: true });
+      window.history.back();
+      setTimeout(finish, 350);
+    } catch (e) {
+      finish();
+    }
+  }
+
   function backFromReplay() {
     var rp = S.replay;
     if (rp && rp.back && rp.back.room) { closeReplay(false); return; }
-    if (sameOriginReferrer()) { history.back(); return; }
+    if (sameOriginReferrer()) {
+      safeHistoryBack(function () { closeReplay(false); });
+      return;
+    }
     closeReplay(false);
   }
 
@@ -2444,7 +2466,10 @@
     var pageBack = $('ag-page-back');
     if (pageBack) {
       pageBack.addEventListener('click', function (e) {
-        if (sameOriginReferrer()) { e.preventDefault(); history.back(); }
+        if (sameOriginReferrer()) {
+          e.preventDefault();
+          safeHistoryBack(function () { location.href = 'index.html'; });
+        }
       });
     }
 

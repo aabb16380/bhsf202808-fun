@@ -53,7 +53,7 @@ a:hover { text-decoration: underline; }
   margin-bottom: 18px;
 }
 
-.ag-back { font-size: 12px; color: var(--ink-2); }
+.ag-back { font-size: 12px; color: var(--ink-2); display: inline-flex; align-items: center; min-height: 34px; padding: 4px 8px; margin-left: -8px; touch-action: manipulation; }
 .ag-back:hover { color: var(--seal); text-decoration: none; }
 
 .ag-brand { display: flex; flex-direction: column; line-height: 1.25; margin-right: auto; }
@@ -255,6 +255,7 @@ a:hover { text-decoration: underline; }
   border-radius: 999px;
   background: var(--card);
   font-size: 11px;
+  touch-action: manipulation;
   color: var(--ink-2);
   cursor: pointer;
 }

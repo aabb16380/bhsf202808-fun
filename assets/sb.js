@@ -13,13 +13,16 @@
   var sbCfg = cfg.supabase || {};
 
   var URL_ = (sbCfg.url || '').replace(/\/+$/, '');
+  // 国内直连 *.supabase.co（Cloudflare）经常超时/被拦：配了 proxy 就走自己的服务器反代
+  var API_ = (sbCfg.proxy || sbCfg.url || '').replace(/\/+$/, '');
   var KEY = sbCfg.anonKey || '';
   var UA = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
   var IS_SAFARI = /safari/i.test(UA) && !/chrome|chromium|crios|fxios|edg|opr|android/i.test(UA);
 
   var sb = B8.sb = {
-    ready: !!(URL_ && KEY),
+    ready: !!(API_ && KEY),
     url: URL_,
+    api: API_,
     lastError: null
   };
 
@@ -164,38 +167,38 @@
 
   /** 查询：B8.sb.select('b8_photos', 'select=*&order=id.desc&limit=20') */
   sb.select = function (table, query) {
-    return request('GET', URL_ + '/rest/v1/' + table + (query ? '?' + query : ''));
+    return request('GET', API_ + '/rest/v1/' + table + (query ? '?' + query : ''));
   };
 
   /** 插入（受 RLS 约束）。失败返回错误对象。 */
   sb.insert = function (table, row, prefer) {
-    return request('POST', URL_ + '/rest/v1/' + table, row, {
+    return request('POST', API_ + '/rest/v1/' + table, row, {
       Prefer: prefer || 'return=representation'
     });
   };
 
   /** 补丁 */
   sb.patch = function (table, query, patch) {
-    return request('PATCH', URL_ + '/rest/v1/' + table + (query ? '?' + query : ''), patch, {
+    return request('PATCH', API_ + '/rest/v1/' + table + (query ? '?' + query : ''), patch, {
       Prefer: 'return=representation'
     });
   };
 
   /** 删除 */
   sb.remove = function (table, query) {
-    return request('DELETE', URL_ + '/rest/v1/' + table + (query ? '?' + query : ''), null, {
+    return request('DELETE', API_ + '/rest/v1/' + table + (query ? '?' + query : ''), null, {
       Prefer: 'return=representation'
     });
   };
 
   /** RPC：B8.sb.rpc('b8_login', {p_secret:'...'}) */
   sb.rpc = function (fn, args) {
-    return request('POST', URL_ + '/rest/v1/rpc/' + fn, args || {});
+    return request('POST', API_ + '/rest/v1/rpc/' + fn, args || {});
   };
 
   /** Storage 上传，返回 public URL */
   sb.upload = function (bucket, path, file) {
-    var url = URL_ + '/storage/v1/object/' + bucket + '/' + path.split('/').map(encodeURIComponent).join('/');
+    var url = API_ + '/storage/v1/object/' + bucket + '/' + path.split('/').map(encodeURIComponent).join('/');
     return request('POST', url, undefined, {
       'x-upsert': 'false',
       'Content-Type': file.type || 'application/octet-stream'
@@ -206,7 +209,7 @@
 
   /** Storage 删除（需要策略允许） */
   sb.unlink = function (bucket, path) {
-    return request('DELETE', URL_ + '/storage/v1/object/' + bucket + '/' + path.split('/').map(encodeURIComponent).join('/'));
+    return request('DELETE', API_ + '/storage/v1/object/' + bucket + '/' + path.split('/').map(encodeURIComponent).join('/'));
   };
 
   B8.publicUrl = function (bucket, path) {
