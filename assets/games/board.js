@@ -2857,7 +2857,7 @@
   }
 
   function renderActions() {
-    show('bd-analysis', !!S.state);
+    show('bd-analysis', !!S.state && analysisVisible());
     show('bd-practice', !!S.state && !(S.room && S.room.status === 'wait'));
     var practiceBtn = $('bd-practice');
     if (practiceBtn) practiceBtn.textContent = S.practice ? '退出演练' : '演练';
@@ -3546,8 +3546,11 @@
         ANALYSIS.pointAt = {};
       }
     }
-    // 不再用本地启发式补点：没有服务器点就保持 0.5，等单点/整盘服务器结果来填。
-    while (data.length < states.length) data.push(0.5);
+    // 新的一手先沿用上一手的胜率，等服务器点到了再直接跳到新值。
+    // 以前这里补 0.5，所以每下一步都会先闪一下 50% 再跳过去。
+    var hold = data.length ? data[data.length - 1] : 0.5;
+    if (!isFinite(hold)) hold = 0.5;
+    while (data.length < states.length) data.push(hold);
     ANALYSIS.data = data;
     ANALYSIS.baseSig = base;
     ANALYSIS.lastSig = last;
@@ -3778,7 +3781,7 @@
 
   function renderWinBar(p, cur) {
     var bar = $('bd-winbar');
-    if (!bar || !S || !S.state) { show('bd-winbar', false); return; }
+    if (!bar || !S || !S.state || !analysisVisible()) { show('bd-winbar', false); return; }
     var pct = Math.round(p * 100);
     var n1 = shortName(1), n2 = shortName(2);
     txt('bd-winbar-p1', n1 + ' ' + pct + '%');
@@ -4614,7 +4617,7 @@
     var el = $('bd-an-you');
     if (!el) return;
     var seat = S && S.seat;
-    if (!S || isOfflineLocal() || (seat !== 1 && seat !== 2)) {
+    if (!S || !analysisVisible() || isOfflineLocal() || (seat !== 1 && seat !== 2)) {
       el.hidden = true;
       return;
     }
@@ -4623,16 +4626,27 @@
     el.textContent = '你（' + colorName(seat) + '）胜率 ' + Math.round(mine * 100) + '%';
   }
 
+  // 胜率只给观战 / 复盘 / 演练看；对局中的棋手（含本机）和刚下完的胜利页都不显示。
+  function analysisVisible() {
+    if (!S || !S.state) return false;
+    if (S.record) return true;            // 棋谱回看
+    if (S.reviewing) return true;         // 复盘
+    if (S.practice) return true;          // 演练：要看着胜率练
+    if (S.mode === 'online' && S.seat === 0) return true;  // 观战
+    return false;                         // 棋手对局中 / 刚下完：藏起来
+  }
+
   function renderAnalysis() {
     var has = !!(S && S.state);
-    show('bd-analysis', has);
+    var allowed = has && analysisVisible();
+    show('bd-analysis', allowed);
     var over = !!(S && S.state && S.state.status === 'over');
     var serverBtn = $('bd-server-run');
     if (serverBtn) {
-      serverBtn.hidden = !has || over || S.practice || !window.B8Server || !B8Server.enabled();
+      serverBtn.hidden = !allowed || over || S.practice || !window.B8Server || !B8Server.enabled();
     }
     var note = $('bd-analysis-note');
-    if (note) {
+    if (note && allowed) {
       var forbidNote = (S.state && S.state.forbid) ? ' 当前按黑棋禁手（Renju）规则分析。' : '';
       note.textContent = (ANALYSIS.saved
         ? '折线：服务器整盘分析，胜率曲线随这盘棋谱保存（只算一次）。点开棋谱就能看，不会重复分析。'
@@ -4647,12 +4661,25 @@
     if (!has) {
       show('bd-analysis-panel', false);
       show('bd-winbar', false);
+      var you0 = $('bd-an-you');
+      if (you0) you0.hidden = true;
       return;
     }
+    // 先把当前局面/曲线准备好：就算棋手看不到，后台也要按正确的「当前手」取服务器点。
     var states = analysisStates();
     ensureAnalysisData(states);
     var last = Math.max(0, (ANALYSIS.data || []).length - 1);
     ANALYSIS.cur = S.practice ? last : (S.reviewing ? Math.min(S.reviewIndex, last) : last);
+    // 评分只读棋谱里的 tags，跟胜率面板是否可见无关：胜利页/复盘照常显示。
+    renderGameGrades();
+    if (!allowed) {
+      show('bd-analysis-panel', false);
+      show('bd-winbar', false);
+      var you1 = $('bd-an-you');
+      if (you1) you1.hidden = true;
+      if (S.state.status === 'play') refreshServerPoint();
+      return;
+    }
     var p = (ANALYSIS.data && ANALYSIS.data.length) ? ANALYSIS.data[ANALYSIS.cur] : 0.5;
     var pct = Math.round(p * 100);
 
@@ -4670,7 +4697,6 @@
     renderYouWinrate(p);
     txt('bd-analysis-label', '第 ' + ANALYSIS.cur + ' / ' + last + ' 手');
     renderWinBar(p, ANALYSIS.cur);
-    renderGameGrades();
 
     show('bd-analysis-panel', !!ANALYSIS.on);
     if (!ANALYSIS.on) {
@@ -4733,7 +4759,7 @@
   }
 
   function openAnalysis() {
-    if (!S || !S.state) return;
+    if (!S || !S.state || !analysisVisible()) return;
     ANALYSIS.on = true;
     renderAnalysis();
     var panel = $('bd-analysis-panel');
@@ -4743,6 +4769,7 @@
   }
 
   function toggleAnalysis() {
+    if (!analysisVisible()) return;
     ANALYSIS.on = !ANALYSIS.on;
     if (!ANALYSIS.on) ANALYSIS.hover = -1;
     renderAnalysis();
@@ -6897,6 +6924,7 @@
       sync: function () { syncNow(); },
       refresh: function () { loadLists(true); },
       grades: function () { return gameGrades(); },
+      analysisVisible: function () { return analysisVisible(); },
       open: function (code, watch) { openRoom(code, { watch: !!watch }); },
       chat: function (body) {
         var i = $('bd-chat-input');
