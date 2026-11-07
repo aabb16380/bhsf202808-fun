@@ -122,8 +122,8 @@
     return post('/gomoku/eval', {
       size: 15,
       stones: stones || [],
-      timeout_ms: timeoutMs || 200
-    }, 5000).then(function (r) {
+      timeout_ms: timeoutMs || 800
+    }, 8000).then(function (r) {
       return {
         p1: Number(r.winrate || 50),
         bestmove: r.bestmove,
@@ -196,7 +196,7 @@
           return {
             size: p.size || 15,
             stones: p.stones || [],
-            timeout_ms: p.timeout_ms || timeoutMs || 150
+            timeout_ms: p.timeout_ms || timeoutMs || 250
           };
         })
       }, timeout).then(function (r) { return r.results || []; });

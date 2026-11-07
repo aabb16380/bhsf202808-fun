@@ -3689,7 +3689,7 @@
         for (var i = 0; i < st.board.length; i++) {
           if (st.board[i]) stones.push([i % 15, Math.floor(i / 15), st.board[i]]);
         }
-        return { size: 15, stones: stones, timeout_ms: 120 };
+        return { size: 15, stones: stones, timeout_ms: 250 };
       });
       return B8Server.evalGomokuBatch(gpositions, 120, progress).then(function (rows) {
         return (rows || []).map(function (r) {
@@ -4004,7 +4004,8 @@
         var gp = st.board[gi];
         if (gp) stones.push([gi % gsize, Math.floor(gi / gsize), gp]);
       }
-      request = B8Server.evalGomoku(stones, 200);
+      // 五子棋给足思考时间：200ms 经常漏掉必胜/必防点，800ms 明显更准
+      request = B8Server.evalGomoku(stones, 800);
     } else if (game === 'draughts') {
       // scanFen(st) 已经是当前局面，不能再把历史 moves 叠加一次
       request = B8Server.evalDraughts(scanFen(st), '', 0.2);
