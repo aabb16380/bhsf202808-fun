@@ -3281,7 +3281,7 @@
   function refreshServerPoint() {
     if (!S || !S.state || !window.B8Server || !B8Server.enabled()) return;
     var game = S.state.game;
-    if (game !== 'chess' && game !== 'xiangqi' && game !== 'go') return;
+    if (game !== 'chess' && game !== 'xiangqi' && game !== 'go' && game !== 'gomoku') return;
     if (ANALYSIS.serverData) return;
 
     var states = analysisStates();
@@ -3299,6 +3299,14 @@
           m.move && m.move.pass ? 'pass' : E.goCoord(m.move.t, S.size)];
       });
       request = B8Server.evalGo(S.size, moves, 100);
+    } else if (game === 'gomoku') {
+      var gsize = st.size || 15;
+      var stones = [];
+      for (var gi = 0; gi < st.board.length; gi++) {
+        var gp = st.board[gi];
+        if (gp) stones.push([gi % gsize, Math.floor(gi / gsize), gp]);
+      }
+      request = B8Server.evalGomoku(stones, 200);
     } else {
       var fen = game === 'chess' ? B8Engine.fenChess(st) : B8Engine.fenXiangqi(st);
       request = B8Server.evalOne(game, fen, 120);

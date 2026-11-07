@@ -87,6 +87,22 @@
     });
   }
 
+  function evalGomoku(stones, timeoutMs) {
+    if (!enabled()) return Promise.resolve(null);
+    return post('/gomoku/eval', {
+      size: 15,
+      stones: stones || [],
+      timeout_ms: timeoutMs || 200
+    }, 5000).then(function (r) {
+      return {
+        p1: Number(r.winrate || 50),
+        bestmove: r.bestmove,
+        ev: r.ev,
+        ms: r.ms
+      };
+    });
+  }
+
   function evalBatch(game, fens, movetime) {
     if (!enabled()) return Promise.resolve(null);
     return post('/eval-batch', {
@@ -128,6 +144,7 @@
     enabled: enabled,
     evalOne: evalOne,
     evalGo: evalGo,
+    evalGomoku: evalGomoku,
     evalBatch: evalBatch,
     createAnalysis: createAnalysis,
     getAnalysis: getAnalysis,
