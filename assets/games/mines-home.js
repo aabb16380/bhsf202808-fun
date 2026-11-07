@@ -25,9 +25,19 @@
   function rpcReady() { return !!(B8.sb && B8.sb.ready && B8.sb.rpc); }
   function scoreKey(level) { return 'mines:' + (KEY[level] || 'easy'); }
 
+  // 用时（百分之一秒）→ 0:12.34
+  function fmtCs(cs) {
+    var v = Math.max(0, Math.round(Number(cs) || 0));
+    var m = Math.floor(v / 6000), r = v % 6000;
+    var s = Math.floor(r / 100), c = r % 100;
+    return m + ':' + (s < 10 ? '0' + s : s) + '.' + (c < 10 ? '0' + c : c);
+  }
+
   function submit(score, detail) {
     if (!logged() || !rpcReady()) return Promise.resolve(null);
-    var v = Math.max(1, Math.floor(Number(score) || 0));
+    // 榜上存的是用时（百分之一秒），越小越好
+    var raw = (detail && detail.centis != null) ? Number(detail.centis) : Number(score) * 100;
+    var v = Math.max(1, Math.round(raw || 0));
     var key = scoreKey((detail && detail.level) || last);
     return B8.sb.rpc('b8_score_add', { p_token: token(), p_game: key, p_score: v })
       .catch(function (err) {
@@ -39,8 +49,13 @@
   function loadBest(level, cb) {
     if (typeof cb !== 'function') return;
     if (!logged() || !rpcReady()) { cb([]); return; }
-    B8.sb.rpc('b8_score_top', { p_token: token(), p_game: scoreKey(level || last), p_limit: 5 })
-      .then(function (rows) { cb(rows || []); })
+    var lv = KEY[level || last] || 'easy';
+    B8.sb.rpc('b8_mines_top', { p_token: token(), p_level: lv, p_limit: 5 })
+      .then(function (rows) {
+        cb((rows || []).map(function (r) {
+          return { nick: r.nick, level: r.level, time: fmtCs(r.centis), centis: r.centis, created_at: r.at };
+        }));
+      })
       .catch(function () { cb([]); });
   }
 
@@ -48,17 +63,17 @@
     res = res || {};
     if (res.level) last = res.level;
     txt('gmines-level', NAME[last] || '扫雷');
-    txt('gmines-score', res.won ? String(res.score) : '0');
+    txt('gmines-score', res.won ? fmtCs(res.centis) : '踩雷');
     if (!res.won) {
       if (B8.toast) B8.toast('踩到雷了，再来一局');
       return;
     }
     if (!logged()) {
-      if (B8.toast) B8.toast('这局 ' + res.score + ' 分；登录后能上榜');
+      if (B8.toast) B8.toast('这局 ' + fmtCs(res.centis) + '；登录后能上榜');
       return;
     }
     submit(res.score, res).then(function (r) {
-      if (r && B8.toast) B8.toast('上榜：' + (NAME[last] || '扫雷') + ' ' + res.score + ' 分');
+      if (r && B8.toast) B8.toast('上榜：' + (NAME[last] || '扫雷') + ' ' + fmtCs(res.centis));
     });
   }
 

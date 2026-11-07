@@ -1369,8 +1369,19 @@
     return n;
   }
 
+  // 用时（百分之一秒）→ 0:12.34；扫雷榜用
+  function msTime(cs) {
+    var v = Math.max(0, Math.round(Number(cs) || 0));
+    var m = Math.floor(v / 6000), r = v % 6000;
+    var s = Math.floor(r / 100), c = r % 100;
+    return m + ':' + (s < 10 ? '0' + s : s) + '.' + (c < 10 ? '0' + c : c);
+  }
+
   function rankValue(game, score) {
     var n = Number(score) || 0;
+    if (game.indexOf('mines:') === 0) {
+      return { text: msTime(n), unit: '用时' };
+    }
     if (game === 'memory') {
       var steps = 1000 - n;
       return steps >= 0 ? { text: String(steps), unit: '步' } : { text: String(n), unit: '分' };
@@ -1559,17 +1570,27 @@
     }
 
     rankSkeleton();
-    var rpcName = game === 'piano' ? 'b8_piano_top'
+    var isMines = game.indexOf('mines:') === 0;
+    var rpcName = isMines ? 'b8_mines_top'
+      : (game === 'piano' ? 'b8_piano_top'
       : (game === 'sudoku' ? 'b8_sudoku_top'
-      : (game === 'worship' ? 'b8_worship_top' : 'b8_score_top'));
+      : (game === 'worship' ? 'b8_worship_top' : 'b8_score_top')));
     var rpcGame = game === 'clickspeed' ? 'clickspeed2' : game;
-    var rpcArgs = (game === 'piano' || game === 'sudoku' || game === 'worship')
-      ? { p_token: B8.auth.token(), p_limit: 10 }
-      : { p_token: B8.auth.token(), p_game: rpcGame, p_limit: 10 };
+    var rpcArgs = isMines
+      ? { p_token: B8.auth.token(), p_level: game.split(':')[1], p_limit: 10 }
+      : ((game === 'piano' || game === 'sudoku' || game === 'worship')
+        ? { p_token: B8.auth.token(), p_limit: 10 }
+        : { p_token: B8.auth.token(), p_game: rpcGame, p_limit: 10 });
     B8.sb.rpc(rpcName, rpcArgs)
       .then(function (rows) {
         if (seq !== rankSeq) return;   // 切了 tab，别把旧结果画上去
-        rankCache[game] = Array.isArray(rows) ? rows : [];
+        var list = Array.isArray(rows) ? rows : [];
+        if (isMines) {
+          list = list.map(function (r) {
+            return { nick: r.nick, score: r.centis, created_at: r.at };
+          });
+        }
+        rankCache[game] = list;
         renderRank(game, rankCache[game], false);
       })
       .catch(function (err) {

@@ -812,8 +812,12 @@
 
   function readElapsed() {
     if (!S.startAt) return S.timeSec || 0;
-    var n = Math.floor((Date.now() - S.startAt) / 1000);
-    return n > 0 ? n : 0;
+    var v = Math.round((Date.now() - S.startAt) / 10) / 100;   // 秒，保留两位小数
+    return v > 0 ? v : 0;
+  }
+
+  function readCentis() {
+    return Math.round(readElapsed() * 100);
   }
 
   function startTimer() {
@@ -830,7 +834,7 @@
         S.timeSec = sec;
         updateHUD();
       }
-    }, 250);
+    }, 100);
   }
 
   function stopTimer() {
@@ -848,11 +852,14 @@
   }
 
   function formatTime(seconds) {
-    var sec = Number(seconds) || 0;
-    if (sec < 0) sec = 0;
-    var m = Math.floor(sec / 60);
-    var s = sec % 60;
-    return (m < 10 ? '0' + m : '' + m) + ':' + (s < 10 ? '0' + s : '' + s);
+    var cs = Math.round((Number(seconds) || 0) * 100);
+    if (cs < 0) cs = 0;
+    var m = Math.floor(cs / 6000);
+    var r = cs % 6000;
+    var s = Math.floor(r / 100);
+    var c = r % 100;
+    return (m < 10 ? '0' + m : '' + m) + ':' +
+      (s < 10 ? '0' + s : '' + s) + '.' + (c < 10 ? '0' + c : '' + c);
   }
 
   function mk(tag, cls, text) {
@@ -1027,8 +1034,8 @@
     S.resultEl.classList.add(won ? 'mn-ms-result-win' : 'mn-ms-result-lost');
     S.resultTitleEl.textContent = won ? '扫雷成功' : '踩到雷了';
     S.resultMetaEl.textContent = won
-      ? ('用时 ' + seconds + ' 秒 · 本局得分 ' + score)
-      : ('用时 ' + seconds + ' 秒 · 本局 0 分');
+      ? ('用时 ' + formatTime(seconds) + ' · 已上榜（按用时排名）')
+      : ('用时 ' + formatTime(seconds) + ' · 踩雷不算成绩');
   }
 
   function showLoading(text) {
@@ -1358,6 +1365,7 @@
     if (S.state !== 'playing' || !S.game) return;
     var L = LEVELS[S.levelKey];
     var seconds = readElapsed();
+    var centis = Math.round(seconds * 100);
     S.timeSec = seconds;
     S.startAt = 0;
     stopTimer();
@@ -1375,12 +1383,13 @@
     var score = won ? scoreFor(L, seconds) : 0;
     showResult(won, score, seconds);
     callStatus(won
-      ? ('清场成功 · 用时 ' + seconds + ' 秒 · 得分 ' + score)
-      : ('踩到雷了 · 用时 ' + seconds + ' 秒 · 本局 0 分'));
+      ? ('清场成功 · 用时 ' + formatTime(seconds) + ' · 按用时排名')
+      : ('踩到雷了 · 用时 ' + formatTime(seconds)));
     var res = {
       won: won,
       score: score,
       seconds: seconds,
+      centis: centis,
       level: L.key,
       detail: {
         level: L.key,

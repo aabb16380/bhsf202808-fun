@@ -703,6 +703,17 @@
     return '本人';
   }
 
+  function msText(cs) {
+    var v = Math.max(0, Math.round(Number(cs) || 0));
+    var m = Math.floor(v / 6000), r = v % 6000;
+    var s = Math.floor(r / 100), c = r % 100;
+    return m + ':' + (s < 10 ? '0' + s : s) + '.' + (c < 10 ? '0' + c : c);
+  }
+
+  function scoreText(g, v) {
+    return String(g || '').indexOf('mines:') === 0 ? msText(v) + ' 用时' : esc(v) + ' 分';
+  }
+
   function gameLabel(g) {
     var map = { easy: '简单', normal: '普通', hard: '困难', expert: '极难' };
     var key = String(g);
@@ -763,6 +774,18 @@
 
   /* ---------- 排行 ---------- */
   function loadScores() {
+    if (scoreGame.indexOf('mines:') === 0) {
+      B8.sb.rpc('b8_mines_top', {
+        p_token: tok(), p_level: scoreGame.split(':')[1], p_limit: 100
+      }).then(function (rows) {
+        scoreError = '';
+        scores = (rows || []).map(function (r) {
+          return { id: 0, nick: r.nick, score: r.centis, created_at: r.at, member_no: '' };
+        });
+        paintScores();
+      }).catch(function (err) { scoreError = errText(err); scores = []; paintScores(); });
+      return;
+    }
     if (scoreGame === '__worship') {
       B8.sb.rpc('b8_super_worship', { p_token: tok(), p_limit: 500 }).then(function (rows) {
         scoreError = '';
@@ -899,7 +922,7 @@
       html += '<div class="console-row">' +
         '<div class="console-main">' +
           '<div class="console-title">' + (i + 1) + '. ' + esc(s.nick || '匿名') +
-            ' <span class="console-dim">' + esc(s.score) + ' 分 · ' + esc(gameLabel(s.game)) + '</span></div>' +
+            ' <span class="console-dim">' + scoreText(scoreGame, s.score) + ' · ' + esc(gameLabel(s.game)) + '</span></div>' +
           '<div class="console-meta">' + esc(B8.dateTime(s.created_at)) +
             (s.member_no ? ' · ' + esc(s.member_no) : '') + '</div>' +
         '</div>' +
