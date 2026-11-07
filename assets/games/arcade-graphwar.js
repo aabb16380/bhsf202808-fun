@@ -1388,7 +1388,7 @@
       '  <div class="gw-toolrow">',
       '    <button type="button" class="gw-chip gw-modebtn" data-ref="mode" title="切换普通 / 二阶模式">y = f(x) ⇄</button>',
       '    <button type="button" class="gw-chip gw-flip" data-ref="flip" title="掉头，改变曲线前进方向">掉头 <b data-ref="dir">→</b></button>',
-      '    <span class="gw-angle" data-ref="angleWrap" hidden>角度 <button type="button" data-ref="angleDown" aria-label="角度减小 3 度">↓</button><b data-ref="angleVal">20°</b><button type="button" data-ref="angleUp" aria-label="角度增加 3 度">↑</button></span>',
+      '    <span class="gw-angle" data-ref="angleWrap" hidden>发射角度 <button type="button" data-ref="angleDown" aria-label="发射角度减小 3 度">↓</button><b data-ref="angleVal">20°</b><button type="button" data-ref="angleUp" aria-label="发射角度增加 3 度">↑</button></span>',
       '    <span class="gw-clock" data-ref="clock">等房主开局</span>',
       '  </div>',
       '  <div class="gw-exprline" data-ref="exprLine">',
@@ -1557,15 +1557,19 @@
           var depth = stack.length % 3;
           toks[open].pair = depth;
           toks[i].pair = depth;
+        } else {
+          toks[i].bad = true;
         }
       }
     }
+    while (stack.length) toks[stack.pop()].bad = true;
     var frag = document.createDocumentFragment();
     for (i = 0; i < toks.length; i++) {
       var t = toks[i];
       var sp = gwEl('span');
       var cls = 'gw-tok-' + t.kind;
       if (t.kind === 'paren' && t.pair != null) cls += ' gw-pair-' + t.pair;
+      if (t.bad) cls += ' gw-tok-bad';
       sp.className = cls;
       sp.textContent = t.text;
       frag.appendChild(sp);
@@ -2034,7 +2038,8 @@
 
   function palette() {
     var night = nightMode();
-    return {
+    if (view.paletteCache && view.paletteCache.night === night) return view.paletteCache;
+    var p = {
       night: night,
       bg: night ? '#101218' : '#fbf7ec',
       grid: night ? 'rgba(236,233,242,.055)' : 'rgba(25,23,19,.055)',
@@ -2056,6 +2061,8 @@
       mono: cssVar('--mono', 'Menlo, Consolas, monospace'),
       serif: cssVar('--serif', 'serif')
     };
+    view.paletteCache = p;
+    return p;
   }
 
   function baseScale() {
@@ -2748,9 +2755,11 @@
     var hitEvents = [];
     for (var i = 0; i < shot.hits.length; i++) {
       var h = shot.hits[i];
+      var target = soldierOf(st, h.seat);
+      var at = h.at || (target ? [target.x, target.y] : shot.points[shot.points.length - 1]);
       hitEvents.push({
-        p: nearestProgress(shot.points, info.cum, total, h.at),
-        at: h.at || shot.points[shot.points.length - 1],
+        p: nearestProgress(shot.points, info.cum, total, at),
+        at: at,
         seat: h.seat,
         done: false
       });
@@ -2890,9 +2899,44 @@
     drawStatic();
   }
 
+  function makeReplayShot(rec) {
+    if (!rec || !rec.points || rec.points.length < 2) return null;
+    var pts = rec.points;
+    return {
+      seat: Number(rec.seat),
+      fnText: String(rec.fnText == null ? '' : rec.fnText),
+      mode: rec.mode === 'y2' ? 'y2' : 'y',
+      angle: Number(rec.angle) || 0,
+      dir: Number(rec.dir) < 0 ? -1 : 1,
+      points: pts,
+      hits: (rec.hits || []).map(function (h) {
+        return { seat: Number(h.seat), dmg: DAMAGE };
+      }),
+      hitObstacle: !!(rec.hitObstacle || (rec.destroyed && rec.destroyed.length)),
+      obstacleIndex: rec.obstacleIndex != null ? Number(rec.obstacleIndex) : -1,
+      blockedAt: rec.blockedAt || null
+    };
+  }
+
   function onChange() {
     if (!view.mounted) return;
     if (isWaiting()) view.initSent = false;
+    var st = gameState();
+    if (st) {
+      var prev = view.lastState;
+      var oldCount = prev && prev.shots ? prev.shots.length : 0;
+      var newCount = st.shots ? st.shots.length : 0;
+      if (!view.anim && !isWaiting() && prev && newCount > oldCount) {
+        var rec = st.shots[newCount - 1];
+        if (rec && Number(rec.seat) !== mySeat()) {
+          var replay = makeReplayShot(rec);
+          if (replay) startShotAnim(prev, replay);
+        }
+      }
+      view.lastState = copyState(st);
+    } else {
+      view.lastState = null;
+    }
     render();
     maybeStart();
   }
@@ -2902,7 +2946,7 @@
     var r = room();
     if (!r || isWaiting() || roomStatus() === 'over') return;
     if (gameState()) return;
-    if (!view.ctx.isHost || mySeat() < 1) return;
+    if (!view.ctx.isHost) return;
     var seats = (r.seats || []).filter(function (s) { return s && Number(s.seat) > 0; });
     var n = seats.length;
     if (n < 2) n = ((view.ctx.players || []).length || n);
@@ -2986,6 +3030,8 @@
     view.drag = null;
     view.resizeObs = null;
     view.themeObs = null;
+    view.paletteCache = null;
+    view.lastState = gameState() ? copyState(gameState()) : null;
 
     injectStyle();
     buildDom(root);
@@ -3010,6 +3056,7 @@
     if (window.MutationObserver) {
       try {
         view.themeObs = new window.MutationObserver(function () {
+          view.paletteCache = null;
           if (view.mounted) drawStatic();
         });
         view.themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-mode'] });
@@ -3075,6 +3122,7 @@
     view.anim = null;
     view.submitted = false;
     view.drag = null;
+    view.lastState = null;
     var root = view.root;
     if (root) {
       try { root.innerHTML = ''; } catch (e) {}

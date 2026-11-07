@@ -570,8 +570,6 @@
 
   var S = {};
 
-  function $(id) { return document.getElementById(id); }
-
   function el(tag, cls, text) {
     var n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -587,7 +585,6 @@
       (document.head || document.documentElement).appendChild(style);
     }
     style.textContent = STYLE;
-    S.styleEl = style;
   }
 
   function b8Toast(msg) {
@@ -1237,13 +1234,13 @@
     if (S.canAct && S.wallMode) {
       g.save();
       g.fillStyle = pal.edge;
-      g.globalAlpha = 0.42;
+      g.globalAlpha = 0.62;
       for (var wy = 0; wy < 8; wy++) {
         for (var wx = 0; wx < 8; wx++) {
           var ix = pad + (wx + 1) * cell;
           var iy = pad + (wy + 1) * cell;
           g.beginPath();
-          g.arc(ix, iy, Math.max(1.1, cell * 0.028), 0, Math.PI * 2);
+          g.arc(ix, iy, Math.max(1.5, cell * 0.038), 0, Math.PI * 2);
           g.fill();
         }
       }
@@ -1879,8 +1876,7 @@
       resizeTimer: 0,
       initialTimer: 0,
       lastPageStatus: '',
-      unsub: null,
-      styleEl: null
+      unsub: null
     };
 
     buildUi();
