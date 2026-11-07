@@ -3376,10 +3376,17 @@
     var parts = String(best).split(/[-x]/);
     if (parts.length < 2) return null;
     var mm = scanMap();
-    var from = mm.by[Number(parts[0])];
-    var to = mm.by[Number(parts[parts.length - 1])];
-    if (from == null || to == null) return null;
-    return { from: from, to: to };
+    var path = [];
+    for (var i = 0; i < parts.length; i++) {
+      var idx = mm.by[Number(parts[i])];
+      if (idx == null) return null;
+      path.push(idx);
+    }
+    return { from: path[0], to: path[path.length - 1], path: path };
+  }
+
+  function xqIccs(idx) {
+    return 'abcdefghi'.charAt(idx % 9) + (9 - Math.floor(idx / 9));
   }
 
   function moveKey(game, mv) {
@@ -3391,8 +3398,8 @@
     }
     if (game === 'chess' || game === 'xiangqi') {
       if (mv.f == null || mv.t == null) return '';
-      var c1 = game === 'chess' ? E.chessCoord(mv.f) : E.xiangqiCoord(mv.f);
-      var c2 = game === 'chess' ? E.chessCoord(mv.t) : E.xiangqiCoord(mv.t);
+      var c1 = game === 'chess' ? E.chessCoord(mv.f) : xqIccs(mv.f);
+      var c2 = game === 'chess' ? E.chessCoord(mv.t) : xqIccs(mv.t);
       return c1 + c2;
     }
     if (game === 'go') return mv.pass ? 'pass' : E.goCoord(mv.t, S.size);
@@ -3423,8 +3430,8 @@
         var x = String(best).match(/^([a-i])([0-9])([a-i])([0-9])/i);
         if (!x) return null;
         return {
-          from: Number(x[2]) * 9 + (x[1].toLowerCase().charCodeAt(0) - 97),
-          to: Number(x[4]) * 9 + (x[3].toLowerCase().charCodeAt(0) - 97)
+          from: (9 - Number(x[2])) * 9 + (x[1].toLowerCase().charCodeAt(0) - 97),
+          to: (9 - Number(x[4])) * 9 + (x[3].toLowerCase().charCodeAt(0) - 97)
         };
       }
       if (game === 'go') {
@@ -4183,6 +4190,13 @@
   };
 
   function arrowCenter(game, idx, st, w, h, flip) {
+    if (game === 'draughts') {
+      var dc = Math.min(w, h) / 10;
+      var dox = (w - dc * 10) / 2, doy = (h - dc * 10) / 2;
+      var dx = idx % 10, dy = Math.floor(idx / 10);
+      if (flip) { dx = 9 - dx; dy = 9 - dy; }
+      return [dox + (dx + 0.5) * dc, doy + (dy + 0.5) * dc];
+    }
     if (game === 'chess') {
       var c = Math.min(w, h) / 8;
       var ox = (w - c * 8) / 2, oy = (h - c * 8) / 2;
@@ -4214,21 +4228,37 @@
     if (!a || !st) return;
     var flip = !!opts.flip;
     var to = arrowCenter(st.game, a.to, st, w, h, flip);
-    var from;
-    if (a.from != null) {
-      from = arrowCenter(st.game, a.from, st, w, h, flip);
-    } else {
-      // 围棋/五子棋只有一个落点：从左上方向落点画箭头
-      var n = st.size || 15;
-      var c = st.game === 'go' || st.game === 'gomoku' ? (w - Math.max(10, w * 0.055) * 2) / (n - 1) : 24;
-      from = [to[0] - c * 1.6, to[1] - c * 1.6];
+
+    // 围棋/五子棋：最佳点用绿色圆圈，不画箭头
+    if (st.game === 'go' || st.game === 'gomoku') {
+      var n0 = st.size || 15;
+      var pad0 = Math.max(10, w * 0.055);
+      var cell0 = (w - pad0 * 2) / (n0 - 1);
+      var r0 = Math.max(7, cell0 * 0.46);
+      ctx.save();
+      ctx.strokeStyle = '#18a558';
+      ctx.lineWidth = Math.max(2.5, cell0 * 0.07);
+      ctx.globalAlpha = 0.95;
+      ctx.beginPath();
+      ctx.arc(to[0], to[1], r0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = '#18a558';
+      ctx.beginPath();
+      ctx.arc(to[0], to[1], r0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
     }
-    var dx = to[0] - from[0], dy = to[1] - from[1];
-    var len = Math.sqrt(dx * dx + dy * dy) || 1;
-    var ux = dx / len, uy = dy / len;
-    var head = Math.max(10, Math.min(w, h) * 0.035);
-    var tip = [to[0], to[1]];
-    var base = [tip[0] - ux * head * 1.4, tip[1] - uy * head * 1.4];
+
+    var segs = [];
+    if (a.path && a.path.length > 1) {
+      for (var pi = 0; pi < a.path.length - 1; pi++) {
+        segs.push({ from: a.path[pi], to: a.path[pi + 1] });
+      }
+    } else {
+      segs.push({ from: a.from, to: a.to });
+    }
 
     ctx.save();
     ctx.strokeStyle = '#18a558';
@@ -4236,17 +4266,38 @@
     ctx.lineWidth = Math.max(3, Math.min(w, h) * 0.008);
     ctx.lineCap = 'round';
     ctx.globalAlpha = 0.9;
-    ctx.beginPath();
-    ctx.moveTo(from[0], from[1]);
-    ctx.lineTo(base[0], base[1]);
-    ctx.stroke();
 
-    ctx.beginPath();
-    ctx.moveTo(tip[0], tip[1]);
-    ctx.lineTo(tip[0] - ux * head - uy * head * 0.55, tip[1] - uy * head + ux * head * 0.55);
-    ctx.lineTo(tip[0] - ux * head + uy * head * 0.55, tip[1] - uy * head - ux * head * 0.55);
-    ctx.closePath();
-    ctx.fill();
+    segs.forEach(function (seg) {
+      var tip = arrowCenter(st.game, seg.to, st, w, h, flip);
+      var from;
+      if (seg.from != null) {
+        from = arrowCenter(st.game, seg.from, st, w, h, flip);
+      } else {
+        var n = st.size || 15;
+        var c = (st.game === 'go' || st.game === 'gomoku')
+          ? (w - Math.max(10, w * 0.055) * 2) / (n - 1) : 24;
+        from = [tip[0] - c * 1.6, tip[1] - c * 1.6];
+      }
+
+      var dx = tip[0] - from[0], dy = tip[1] - from[1];
+      var len = Math.sqrt(dx * dx + dy * dy) || 1;
+      var ux = dx / len, uy = dy / len;
+      var head = Math.max(10, Math.min(w, h) * 0.035);
+      var base = [tip[0] - ux * head * 1.4, tip[1] - uy * head * 1.4];
+
+      ctx.beginPath();
+      ctx.moveTo(from[0], from[1]);
+      ctx.lineTo(base[0], base[1]);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(tip[0], tip[1]);
+      ctx.lineTo(tip[0] - ux * head - uy * head * 0.55, tip[1] - uy * head + ux * head * 0.55);
+      ctx.lineTo(tip[0] - ux * head + uy * head * 0.55, tip[1] - uy * head - ux * head * 0.55);
+      ctx.closePath();
+      ctx.fill();
+    });
+
     ctx.restore();
   }
 
