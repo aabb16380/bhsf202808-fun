@@ -80,6 +80,132 @@
   };
   // 棋盘上的每手标签（观战/回看/分析可见；棋手对局中不显示）
   var LIVE_TAG_CACHE = { key: '', tags: null };
+  // 在线房间 WebSocket：只做“局面变了 / 新服务器点”通知；棋局仍以 Supabase 为准
+  var WS = { on: false, sock: null, code: '', timer: 0, retry: 0, queue: [] };
+
+  function wsClose() {
+    WS.on = false;
+    WS.code = '';
+    WS.retry = 0;
+    WS.queue = [];
+    clearTimeout(WS.timer);
+    WS.timer = 0;
+    if (WS.sock) {
+      var s = WS.sock;
+      WS.sock = null;
+      s.onopen = null;
+      s.onmessage = null;
+      s.onclose = null;
+      s.onerror = null;
+      try { s.close(); } catch (e) {}
+    }
+  }
+
+  function wsSend(obj) {
+    if (WS.on && WS.sock && WS.sock.readyState === 1) {
+      try {
+        WS.sock.send(JSON.stringify(obj));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+    // 页面刚打开时 WS 还在握手：先把当前点/变更排一下，连上后补发
+    if (S && S.mode === 'online' && S.room && S.room.status !== 'over' && S.code) {
+      WS.queue.push(obj);
+      if (WS.queue.length > 20) WS.queue.shift();
+    }
+    return false;
+  }
+
+  function applyRemotePoint(msg) {
+    if (!S || !msg || msg.game !== S.game || !isFinite(Number(msg.p1))) return;
+    var arr = analysisStates();
+    if (!arr || !arr.length) return;
+    var idx = -1;
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].seq === msg.seq) { idx = i; break; }
+    }
+    if (idx < 0) return;
+    ensureAnalysisData(arr);
+    if (!ANALYSIS.data || idx >= ANALYSIS.data.length) return;
+    ANALYSIS.data[idx] = Math.max(0, Math.min(1, Number(msg.p1) / 100));
+    ANALYSIS.pointAt[idx] = true;
+    if (!ANALYSIS.bestMoves) ANALYSIS.bestMoves = [];
+    while (ANALYSIS.bestMoves.length <= idx) ANALYSIS.bestMoves.push('');
+    ANALYSIS.bestMoves[idx] = msg.best || '';
+    if (ANALYSIS.cur === idx) {
+      var p = ANALYSIS.data[idx];
+      var pct = Math.round(p * 100);
+      txt('bd-an-p1', pct + '%');
+      txt('bd-an-p2', (100 - pct) + '%');
+      renderYouWinrate(p);
+      renderWinBar(p, idx);
+      drawWinChart();
+      draw();
+    } else if (S.state && S.state.status === 'play') {
+      draw();
+    }
+  }
+
+  function wsMessage(ev) {
+    var msg;
+    try { msg = JSON.parse(ev.data); } catch (e) { return; }
+    if (!msg || !msg.type) return;
+    if (msg.type === 'changed') {
+      syncNow();
+      return;
+    }
+    if (msg.type === 'point') {
+      applyRemotePoint(msg);
+      return;
+    }
+  }
+
+  function wsConnect() {
+    if (!S || S.mode !== 'online' || !S.room || S.room.status === 'over' || !S.code) {
+      wsClose();
+      return;
+    }
+    var code = String(S.code);
+    if (WS.on && WS.code === code) return;
+    if (WS.sock) wsClose();
+    var base = (window.B8_CONFIG && B8_CONFIG.engineApi) || '';
+    if (!/^https?:/i.test(base)) return;
+    var url = base.replace(/^http/i, 'ws').replace(/\/+$/, '') +
+      '/ws/room/' + encodeURIComponent(code);
+    WS.code = code;
+    var sock;
+    try { sock = new WebSocket(url); } catch (e) { return; }
+    WS.sock = sock;
+    sock.onopen = function () {
+      if (WS.sock !== sock) return;
+      WS.on = true;
+      WS.retry = 0;
+      while (WS.queue.length) {
+        var q = WS.queue.shift();
+        try { sock.send(JSON.stringify(q)); } catch (e) { break; }
+      }
+      syncNow();
+    };
+    sock.onmessage = function (ev) {
+      if (WS.sock !== sock) return;
+      wsMessage(ev);
+    };
+    sock.onclose = function () {
+      if (WS.sock !== sock) return;
+      WS.on = false;
+      WS.sock = null;
+      clearTimeout(WS.timer);
+      WS.timer = 0;
+      if (S && S.mode === 'online' && S.room && S.room.status !== 'over' && S.code) {
+        WS.retry = Math.min(6, WS.retry + 1);
+        WS.timer = setTimeout(wsConnect, 2000 * WS.retry);
+      }
+      schedulePoll(3000);
+    };
+    sock.onerror = function () {};
+  }
 
   var CHESS_FEN_MAP = {
     1: 'P', 2: 'N', 3: 'B', 4: 'R', 5: 'Q', 6: 'K',
@@ -1831,6 +1957,11 @@
       NET.timer = setTimeout(syncNow, delay);
       return;
     }
+    if (WS.on) {
+      // WebSocket 在线：只留慢心跳兜底；走子/分析会即时推送
+      NET.timer = setTimeout(syncNow, (S.room && S.room.status === 'wait') ? 4000 : 12000);
+      return;
+    }
     if (document.hidden) {
       NET.timer = setTimeout(syncNow, 20000);
       return;
@@ -2048,6 +2179,7 @@
       NET.lastOk = Date.now();
       setNet('', '已同步');
       renderAll();
+      wsSend({ type: 'changed' });
       syncNow();
     }).catch(function (err) {
       if (!S || S.mode !== 'online' || S.code !== myCode) return;
@@ -2419,6 +2551,12 @@
     else { var sp = $('bd-scorepanel'); if (sp) sp.hidden = true; }
     draw();
     if (S.anim) ensureAnimLoop();
+    if (S.mode === 'online' && !S.record && S.room &&
+        S.room.status !== 'over' && S.code) {
+      wsConnect();
+    } else {
+      wsClose();
+    }
   }
 
   function isAdminUser() {
@@ -4090,6 +4228,27 @@
     });
   }
 
+  function liveAnalysisRows(states) {
+    if (!states || states.length < 2 || !ANALYSIS.data ||
+        ANALYSIS.data.length < states.length) return null;
+    var rows = [];
+    for (var i = 0; i < states.length; i++) {
+      if (i === states.length - 1) {
+        // 最后一手按 winner 补，不再问引擎
+        var tr = terminalRow(S.state);
+        rows.push({ p1: tr.p1, best: '' });
+        continue;
+      }
+      // 初始局面可以按 0.5；其余每个中间局面都必须有服务器点
+      if (i > 0 && !ANALYSIS.pointAt[i]) return null;
+      var p = Number(ANALYSIS.data[i]);
+      if (!isFinite(p)) p = 0.5;
+      var best = (ANALYSIS.bestMoves && ANALYSIS.bestMoves[i]) || '';
+      rows.push({ p1: Math.round(p * 10000) / 100, best: best });
+    }
+    return rows;
+  }
+
   function analyzeGame() {
     if (!S || !S.state || S.practice || S.state.status !== 'over' || !S.moves.length) return;
     if (!window.B8Server || !B8Server.enabled()) return;
@@ -4100,6 +4259,23 @@
     if (!states || states.length < 2) return;
     var gk = analysisGameKey();
     if (ANALYSIS.analysisKey === 'done:' + gk) return;
+
+    // 实战已经逐手攒齐服务器点：直接合成整盘并保存，不再跑一遍完整 batch
+    var liveRows = liveAnalysisRows(states);
+    if (liveRows) {
+      var liveRid = recordId();
+      if (!liveRid || S.mode !== 'online' || !logged() ||
+          S.seat > 0 || isAdminUser()) {
+        applyAnalysisRows(liveRows, states, S.game);
+        ANALYSIS.analysisKey = 'done:' + gk;
+        ANALYSIS.saved = false;
+        if (liveRid && S.mode === 'online' && logged()) {
+          saveAnalysisToRecord(states);
+        }
+        engineNote('已用实战逐手服务器点合成整盘，未重新分析。', false);
+        return;
+      }
+    }
 
     var rid = recordId();
     if (rid && S.mode === 'online' && logged()) {
@@ -4170,6 +4346,9 @@
       if (ti >= 0 && ti < ANALYSIS.data.length) {
         ANALYSIS.data[ti] = tr.p1 / 100;
         ANALYSIS.pointAt[ti] = true;
+        if (!ANALYSIS.bestMoves) ANALYSIS.bestMoves = [];
+        while (ANALYSIS.bestMoves.length <= ti) ANALYSIS.bestMoves.push('');
+        ANALYSIS.bestMoves[ti] = '';
         ANALYSIS.bestArrow = null;
         drawWinChart();
         renderWinBar(ANALYSIS.data[ti], ti);
@@ -4178,6 +4357,9 @@
         txt('bd-an-p2', (100 - tp) + '%');
         renderYouWinrate(ANALYSIS.data[ti]);
         txt('bd-analysis-label', '第 ' + ti + ' / ' + Math.max(0, ANALYSIS.data.length - 1) + ' 手');
+        if (!S.practice && S.mode === 'online') {
+          wsSend({ type: 'point', game: S.game, seq: st.seq, p1: tr.p1, best: '' });
+        }
         draw();
       }
       return;
@@ -4227,6 +4409,9 @@
       if (idx < 0 || idx >= ANALYSIS.data.length) return;
       ANALYSIS.data[idx] = r.p1 / 100;
       ANALYSIS.pointAt[idx] = true;
+      if (!ANALYSIS.bestMoves) ANALYSIS.bestMoves = [];
+      while (ANALYSIS.bestMoves.length <= idx) ANALYSIS.bestMoves.push('');
+      ANALYSIS.bestMoves[idx] = r.bestmove || '';
       if (r.bestmove) {
         var ba = bestMoveArrow(game, r.bestmove, st);
         ANALYSIS.bestArrow = bestArrowValid(game, ba, st) ? ba : null;
@@ -4238,6 +4423,9 @@
       txt('bd-an-p2', (100 - pct) + '%');
       renderYouWinrate(ANALYSIS.data[idx]);
       txt('bd-analysis-label', '第 ' + idx + ' / ' + Math.max(0, ANALYSIS.data.length - 1) + ' 手');
+      if (!S.practice && S.mode === 'online') {
+        wsSend({ type: 'point', game: S.game, seq: st.seq, p1: r.p1, best: r.bestmove || '' });
+      }
       draw();
     }).catch(function () { /* 服务器不可用就保持 P1 */ });
   }
@@ -4305,8 +4493,8 @@
 
     show('bd-analysis-panel', !!ANALYSIS.on);
     if (!ANALYSIS.on) {
-      // 观战者即使收起面板，也要拿当前点的服务器评估来贴“当前手”标签
-      if (S.state.status === 'play' && S.seat === 0) refreshServerPoint();
+      // 实战即使没有观战者/面板收起，也让棋手端逐手取服务器点；观战者共享同一结果
+      if (S.state.status === 'play') refreshServerPoint();
       return;
     }
     drawWinChart();
