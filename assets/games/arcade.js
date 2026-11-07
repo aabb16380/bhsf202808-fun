@@ -981,6 +981,21 @@
     return who + ' · ' + (t || '动作');
   }
 
+  function replayShotMark(idx, a) {
+    var rp = S.replay;
+    if (!rp || rp.rec.game !== 'graphwar') return '';
+    var act = (a && a.act) || {};
+    if (String(act.type || '') !== 'shot') return '';
+    var st;
+    try { st = replayFrameAt(idx + 1); } catch (e) { return ''; }
+    var shots = (st && st.shots) || [];
+    var rec = shots[shots.length - 1];
+    if (!rec) return '';
+    if (rec.hits && rec.hits.length) return '命中';
+    if (rec.hitObstacle) return '炸洞';
+    return '';
+  }
+
   function renderReplayHead() {
     var rp = S.replay;
     if (!rp) return;
@@ -1038,6 +1053,15 @@
           tx.textContent = replayActText(rec, a, idx);
           row.appendChild(no);
           row.appendChild(tx);
+          var mark = replayShotMark(idx, a);
+          if (mark) {
+            row.className += ' is-hit';
+            row.setAttribute('data-hit', '1');
+            var tag = document.createElement('b');
+            tag.className = 'ag-replay-hit';
+            tag.textContent = mark;
+            row.appendChild(tag);
+          }
           row.addEventListener('click', function () { replayTo(idx + 1); });
           log.appendChild(row);
         });
@@ -1071,7 +1095,9 @@
       var rows = log.querySelectorAll('.ag-replay-row');
       for (var i = 0; i < rows.length; i++) {
         var step = Number(rows[i].getAttribute('data-step'));
-        rows[i].className = 'ag-replay-row' + (step === rp.index ? ' is-on' : '');
+        rows[i].className = 'ag-replay-row' +
+          (step === rp.index ? ' is-on' : '') +
+          (rows[i].getAttribute('data-hit') === '1' ? ' is-hit' : '');
       }
     }
   }
@@ -1193,14 +1219,74 @@
     return null;
   }
 
-  function startLocal() {
+  function defaultSeatName(i) {
+    var cn = i === 1 ? '一' : i === 2 ? '二' : i === 3 ? '三' : i === 4 ? '四' :
+      i === 5 ? '五' : i === 6 ? '六' : i === 7 ? '七' : '八';
+    return '玩家' + cn;
+  }
+
+  function openLocalSetup() {
     var m = meta(S.game);
     if (m.mode !== 'multi') { B8.toast('先选一个多人游戏'); return; }
+    var rows = $('ag-local-rows');
+    if (!rows) return;
+    rows.innerHTML = '';
+    for (var i = 1; i <= S.seats; i++) {
+      var row = document.createElement('div');
+      row.className = 'ag-local-row';
+      var lab = document.createElement('label');
+      lab.textContent = defaultSeatName(i) + (i === 1 ? ' · 先手' : '');
+      lab.setAttribute('for', 'ag-local-name-' + i);
+      var inp = document.createElement('input');
+      inp.id = 'ag-local-name-' + i;
+      inp.type = 'text';
+      inp.maxLength = 20;
+      inp.value = (S.localNames && S.localNames[i - 1]) || '';
+      inp.placeholder = defaultSeatName(i);
+      inp.setAttribute('data-seat', String(i));
+      inp.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); submitLocalSetup(); }
+      });
+      row.appendChild(lab);
+      row.appendChild(inp);
+      rows.appendChild(row);
+    }
+    show('ag-local-setup', true);
+    var first = rows.querySelector('input');
+    if (first) setTimeout(function () { try { first.focus(); } catch (e) {} }, 40);
+  }
+
+  function closeLocalSetup() {
+    show('ag-local-setup', false);
+  }
+
+  function submitLocalSetup() {
+    var rows = $('ag-local-rows');
+    if (!rows) return;
+    var inputs = rows.querySelectorAll('input');
+    var names = [];
+    for (var i = 0; i < inputs.length; i++) {
+      var v = String(inputs[i].value || '').trim().slice(0, 20);
+      if (!v) { B8.toast('每位玩家填一个名字，或点「随便玩玩」'); try { inputs[i].focus(); } catch (e) {} return; }
+      names.push(v);
+    }
+    startLocal(names);
+  }
+
+  function startLocal(names) {
+    var m = meta(S.game);
+    if (m.mode !== 'multi') { B8.toast('先选一个多人游戏'); return; }
+    var chosen = Array.isArray(names) ? names.slice() : (S.localNames || []).slice();
+    if (Array.isArray(names)) S.localNames = chosen.slice();
     var seats = [];
     for (var i = 1; i <= S.seats; i++) {
-      seats.push({ seat: i, no: '', name: '玩家' + (i === 1 ? '一' : i === 2 ? '二' : i === 3 ? '三' :
-        i === 4 ? '四' : i === 5 ? '五' : i === 6 ? '六' : i === 7 ? '七' : '八') });
+      seats.push({
+        seat: i,
+        no: '',
+        name: String(chosen[i - 1] || '').trim().slice(0, 20) || defaultSeatName(i)
+      });
     }
+    closeLocalSetup();
     var init = buildState(seats, S.teamMode);
     if (!init) { B8.toast('这个游戏还没加载好'); return; }
     S.local = true;
@@ -2089,7 +2175,17 @@
     var create = $('ag-create');
     if (create) create.addEventListener('click', function () { createRoom(); });
     var local = $('ag-local');
-    if (local) local.addEventListener('click', startLocal);
+    if (local) local.addEventListener('click', openLocalSetup);
+    var localStart = $('ag-local-start');
+    if (localStart) localStart.addEventListener('click', submitLocalSetup);
+    var localCasual = $('ag-local-casual');
+    if (localCasual) localCasual.addEventListener('click', function () {
+      var names = [];
+      for (var i = 1; i <= S.seats; i++) names.push(defaultSeatName(i));
+      startLocal(names);
+    });
+    var localCancel = $('ag-local-cancel');
+    if (localCancel) localCancel.addEventListener('click', closeLocalSetup);
 
     var ffa = $('ag-mode-ffa');
     if (ffa) ffa.addEventListener('click', function () { S.teamMode = 'ffa'; renderOptions(); });

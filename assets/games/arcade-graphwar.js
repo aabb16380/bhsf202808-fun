@@ -904,6 +904,7 @@
       soldiers: soldiers,
       obstacles: obstacles,
       shots: [],
+      usedFuncs: [],
       log: ['座位 1 先手 · 共 ' + n + ' 人'],
       finished: false,
       winner: 0
@@ -990,11 +991,33 @@
     return out;
   }
 
+  function normFunction(text) {
+    return String(text == null ? '' : text).replace(/\s+/g, '').toLowerCase();
+  }
+
+  function usedFunctions(st) {
+    var out = [], seen = {};
+    function add(v) {
+      var n = normFunction(v);
+      if (!n || seen[n]) return;
+      seen[n] = true;
+      out.push(n);
+    }
+    if (st && Array.isArray(st.usedFuncs)) {
+      for (var i = 0; i < st.usedFuncs.length; i++) add(st.usedFuncs[i]);
+    }
+    if (st && Array.isArray(st.shots)) {
+      for (var j = 0; j < st.shots.length; j++) add(st.shots[j] && st.shots[j].fnText);
+    }
+    return out;
+  }
+
   function applyShot(state, seat, shot) {
     if (!state) return state;
     var st = copyState(state);
     if (!Array.isArray(st.log)) st.log = [];
     shot = shot || {};
+    var usedFns = usedFunctions(st);
     var shooter = soldierOf(st, seat);
     if (!shooter) return st;
     if (isNum(Number(shot.dir))) shooter.dir = Number(shot.dir) < 0 ? -1 : 1;
@@ -1097,6 +1120,9 @@
       st.log.push(win.winner ? seatLabel(win.winner) + ' 获胜' : '本局结束');
       st.log = capLog(st.log);
     }
+    var shotFn = normFunction(shot.fnText);
+    if (shotFn && usedFns.indexOf(shotFn) < 0) usedFns.push(shotFn);
+    st.usedFuncs = usedFns;
     return st;
   }
 
@@ -1269,6 +1295,7 @@
     '.gw-tok-paren.gw-pair-2{color:var(--gold,#a9873f);background:rgba(169,135,63,.11)}',
     '.gw-tok-bad{color:var(--seal,#a33228);text-decoration:underline wavy var(--seal,#a33228);text-underline-offset:2px}',
     '.gw-err{min-height:17px;margin:4px 1px 0;font-family:var(--sans,"PingFang SC",sans-serif);font-size:11.5px;line-height:1.45;color:var(--seal,#a33228)}',
+    '.gw-const{margin:2px 1px 0;font-family:var(--mono,monospace);font-size:10.5px;line-height:1.45;color:var(--ink-3,#8a8375);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.gw-tip{margin:0 1px 7px;font-size:11px;line-height:1.55;color:var(--ink-3,#8a8375)}',
     '.gw-tip b{font-family:var(--mono,monospace);color:var(--jade,#2c6a5b);font-weight:700}',
     '.gw-keys{display:flex;flex-direction:column;gap:5px}',
@@ -1590,6 +1617,7 @@
       '    <span class="gw-prefix" data-ref="prefix">y =</span>',
       '    <div class="gw-expr" data-ref="expr" role="textbox" aria-readonly="true" aria-label="函数表达式，只读；请使用屏幕键盘输入"></div>',
       '  </div>',
+      '  <div class="gw-const" data-ref="constHint" hidden></div>',
       '  <div class="gw-err" data-ref="err"></div>',
       '  <div class="gw-tip" data-ref="tip"></div>',
       '  <div class="gw-keys" data-ref="keys"></div>',
@@ -1834,6 +1862,38 @@
     view.dom.err.textContent = bad ? (view.parseRes.error || '函数有语法错误') : '';
   }
 
+  function fmtConst(v) {
+    if (!isNum(v)) return '—';
+    var a = Math.abs(v);
+    if (a >= 10000 || (a > 0 && a < 0.001)) return Number(v).toExponential(2);
+    return String(Math.round(v * 100) / 100);
+  }
+
+  // 每次改函数都提示：常数项 f(0)，以及为了穿过自己会自动上下平移多少
+  function updateConstHint() {
+    var el = view.dom && view.dom.constHint;
+    if (!el) return;
+    var st = gameState();
+    var sd = st ? currentSoldier(st) : null;
+    var res = view.parseRes;
+    if (isReplay() || !sd || !res || !res.ok || !view.expr) {
+      el.hidden = true;
+      el.textContent = '';
+      return;
+    }
+    var c0 = null, shift = null;
+    try { c0 = res.fn(0); } catch (e) { c0 = null; }
+    if (view.mode === 'y2') {
+      el.textContent = '常数 f(0) = ' + fmtConst(c0);
+    } else {
+      var f0 = null;
+      try { f0 = res.fn(sd.x); } catch (e) { f0 = null; }
+      if (isNum(f0)) shift = sd.y - f0;
+      el.textContent = '常数 f(0) = ' + fmtConst(c0) + ' · 自动平移 ' + fmtConst(shift);
+    }
+    el.hidden = false;
+  }
+
   /* ---------- 玩家栏、战绩、状态 ---------- */
   function renderPlayers(st) {
     var box = view.dom.players;
@@ -1998,14 +2058,15 @@
     else if (view.submitted) view.dom.fire.textContent = '同步中';
     else view.dom.fire.textContent = '发 射';
     if (view.mode === 'y2') {
-      view.dom.tip.textContent = "二阶模式：输入 y'' = f(x)。从士兵位置按 0.05 步长积分，角度用 ↑ ↓ 调（-80° ~ 80°）。";
+      view.dom.tip.textContent = "二阶模式：输入 y'' = f(x)。从士兵位置按 0.05 步长积分，角度用 ↑ ↓ 调（-80° ~ 80°）。已经发射过的函数不能重复使用。";
     } else {
-      view.dom.tip.textContent = '普通模式：输入 y = f(x)。曲线会自动上下平移经过你的士兵，沿面朝方向飞。';
+      view.dom.tip.textContent = '普通模式：输入 y = f(x)。曲线会自动上下平移经过你的士兵，沿面朝方向飞。已经发射过的函数不能重复使用。';
     }
     var keys = view.dom.keys ? view.dom.keys.querySelectorAll('.gw-key') : [];
     for (var i = 0; i < keys.length; i++) keys[i].disabled = !editable;
     updateExprView();
     updateError();
+    updateConstHint();
   }
 
   function updateStatus(st) {
@@ -2920,9 +2981,18 @@
     render();
   }
 
+  function clearExpr() {
+    if (!view.mounted) return;
+    view.expr = '';
+    view.parseRes = { ok: false, error: '', empty: true };
+    view.preview = null;
+    updateControls();
+    drawStatic();
+  }
+
   function watchSend(p) {
     if (p && typeof p.then === 'function') {
-      p.then(function () {}, function (err) { failSend(err); });
+      p.then(function () { clearExpr(); }, function (err) { failSend(err); });
     }
   }
 
@@ -3004,6 +3074,11 @@
       return;
     }
     var st = gameState();
+    var fnNorm = normFunction(view.expr);
+    if (!fnNorm || usedFunctions(st).indexOf(fnNorm) >= 0) {
+      ctxToast('这个函数已经发射过了，换一个');
+      return;
+    }
     var shot = makeShot(st);
     if (!shot || shot.error) {
       ctxToast((shot && shot.error) || '这条曲线走不出有效弹道');
@@ -3527,6 +3602,8 @@
       applyAction: applyAction,
       nextTurn: nextTurn,
       teams: teams,
+      normFunction: normFunction,
+      usedFunctions: usedFunctions,
       ctxTurn: function () {
         return view.ctx && view.ctx.state ? Number(view.ctx.state.turn) || 0 : 0;
       },

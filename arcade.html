@@ -7,19 +7,19 @@
 <meta name="description" content="八班多人游戏：GraphWar 函数大战（2-8 人，输入函数打炮）、Quoridor 步步为营（2-4 人放墙堵路）。房间号加入、组队或混战、聊天；每一局自动保存，可逐步回看。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g130" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g130">
-<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g130">
+<link rel="icon" href="assets/favicon.png?v=20261101g131" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g131">
+<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g131">
 <script>
-window.B8_BUILD = '20261101g130';
+window.B8_BUILD = '20261101g131';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g130"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g130">
+<script src="assets/theme.js?v=20261101g131"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g131">
 </head>
 
 <body data-site="fun">
@@ -244,13 +244,27 @@ window.B8_TEST = !!window.B8_T;
       <a href="index.html">游乐场</a>
       <a href="changelog.html">更新日志</a>
     </footer>
+    <div class="ag-overlay" id="ag-local-setup" hidden>
+      <div class="ag-local-card" role="dialog" aria-modal="true" aria-labelledby="ag-local-title">
+        <p class="ag-over-kicker">本机对局</p>
+        <h2 id="ag-local-title">填写棋手姓名</h2>
+        <p class="ag-over-sub">填昵称即可；不想填就点「随便玩玩」，直接玩家一、玩家二开局。</p>
+        <div class="ag-local-rows" id="ag-local-rows"></div>
+        <div class="ag-over-actions">
+          <button class="ag-btn primary" id="ag-local-start" type="button">开始对局</button>
+          <button class="ag-btn" id="ag-local-casual" type="button">随便玩玩</button>
+          <button class="ag-btn" id="ag-local-cancel" type="button">取消</button>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g130' + T;
+  var V = '?v=20261101g131' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],
