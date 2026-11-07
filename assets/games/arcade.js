@@ -2072,7 +2072,7 @@
       box.appendChild(empty);
       return;
     }
-    var mine = myNo();
+    var mine = (B8.auth && B8.auth.no) ? B8.auth.no() : '';
     for (var i = 0; i < list.length; i++) {
       var w = list[i] || {};
       var name = document.createElement('span');
