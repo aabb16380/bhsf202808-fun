@@ -7,19 +7,19 @@
 <meta name="description" content="八班多人游戏：GraphWar 函数大战（2-8 人，输入函数打炮）、Quoridor 步步为营（2-4 人放墙堵路）。房间号加入、组队或混战、聊天；每一局自动保存，可逐步回看。">
 <meta name="theme-color" content="#f8f4e9">
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="assets/favicon.png?v=20261101g131" type="image/png">
-<link rel="stylesheet" href="assets/styles.css?v=20261101g131">
-<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g131">
+<link rel="icon" href="assets/favicon.png?v=20261101g132" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=20261101g132">
+<link rel="stylesheet" href="assets/games/arcade.css?v=20261101g132">
 <script>
-window.B8_BUILD = '20261101g131';
+window.B8_BUILD = '20261101g132';
 window.B8_T = (function () {
   var m = (location.search || '').match(/[?&]t=([^&]+)/);
   return m ? '&t=' + encodeURIComponent(m[1]) : '';
 })();
 window.B8_TEST = !!window.B8_T;
 </script>
-<script src="assets/theme.js?v=20261101g131"></script>
-<link rel="stylesheet" href="assets/theme.css?v=20261101g131">
+<script src="assets/theme.js?v=20261101g132"></script>
+<link rel="stylesheet" href="assets/theme.css?v=20261101g132">
 </head>
 
 <body data-site="fun">
@@ -247,8 +247,8 @@ window.B8_TEST = !!window.B8_T;
     <div class="ag-overlay" id="ag-local-setup" hidden>
       <div class="ag-local-card" role="dialog" aria-modal="true" aria-labelledby="ag-local-title">
         <p class="ag-over-kicker">本机对局</p>
-        <h2 id="ag-local-title">填写棋手姓名</h2>
-        <p class="ag-over-sub">填昵称即可；不想填就点「随便玩玩」，直接玩家一、玩家二开局。</p>
+        <h2 id="ag-local-title">棋手学号 / 昵称</h2>
+        <p class="ag-over-sub" id="ag-local-sub">填 8 位学号、班学号（1 号 = 20282307）或后四位（2307）会自动查姓名，也可以直接用昵称。</p>
         <div class="ag-local-rows" id="ag-local-rows"></div>
         <div class="ag-over-actions">
           <button class="ag-btn primary" id="ag-local-start" type="button">开始对局</button>
@@ -264,7 +264,7 @@ window.B8_TEST = !!window.B8_T;
 <script>
 (function () {
   var T = window.B8_T || '';
-  var V = '?v=20261101g131' + T;
+  var V = '?v=20261101g132' + T;
   var list = [
     ['assets/site-config.js', 0],
     ['assets/main.js', 1],

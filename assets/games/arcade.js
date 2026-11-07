@@ -1219,10 +1219,103 @@
     return null;
   }
 
+  var LS = { mode: {}, resolved: {}, timers: {}, busy: false };
+
   function defaultSeatName(i) {
     var cn = i === 1 ? '一' : i === 2 ? '二' : i === 3 ? '三' : i === 4 ? '四' :
       i === 5 ? '五' : i === 6 ? '六' : i === 7 ? '七' : '八';
     return '玩家' + cn;
+  }
+
+  function digitsOnly(v) {
+    var s = String(v == null ? '' : v);
+    s = s.replace(/[０-９]/g, function (ch) {
+      return String.fromCharCode(ch.charCodeAt(0) - 65248);
+    });
+    return s.replace(/[^0-9]/g, '').slice(0, 8);
+  }
+
+  function classStudentNo(v) {
+    var raw = digitsOnly(v);
+    if (/^[0-9]{8}$/.test(raw)) return raw;
+    if (/^[0-9]{1,2}$/.test(raw)) {
+      var n = parseInt(raw, 10);
+      if (n >= 1 && n <= 99) return String(20282306 + n);
+    }
+    if (/^[0-9]{4}$/.test(raw) && raw.slice(0, 2) === '23') return '2028' + raw;
+    return '';
+  }
+
+  function setLocalHint(i, text, bad) {
+    var hint = $('ag-local-hint-' + i);
+    if (!hint) return;
+    hint.textContent = text || '';
+    hint.className = 'ag-local-hint' + (bad ? ' is-bad' : (text ? ' is-good' : ''));
+  }
+
+  function applyLocalMode(i) {
+    var input = $('ag-local-p' + i);
+    if (!input) return;
+    if (LS.mode[i] === 'no') {
+      input.setAttribute('inputmode', 'numeric');
+      input.setAttribute('maxlength', '8');
+      input.setAttribute('placeholder', '班学号 1-2 位 / 2307 / 8 位学号');
+    } else {
+      input.removeAttribute('inputmode');
+      input.setAttribute('maxlength', '12');
+      input.setAttribute('placeholder', '昵称（12 字以内）');
+    }
+  }
+
+  function setLocalMode(i, mode) {
+    LS.mode[i] = mode;
+    LS.resolved[i] = '';
+    var chips = document.querySelectorAll('.ag-local-modes .chip[data-seat="' + i + '"]');
+    for (var k = 0; k < chips.length; k++) {
+      var on = chips[k].getAttribute('data-mode') === mode;
+      chips[k].setAttribute('aria-pressed', on ? 'true' : 'false');
+      chips[k].className = 'chip' + (on ? ' is-on' : '');
+    }
+    var input = $('ag-local-p' + i);
+    if (input) {
+      input.value = '';
+      applyLocalMode(i);
+    }
+    if (mode === 'no' && !logged()) setLocalHint(i, '查学号要登录；也可以切到「昵称」', true);
+    else setLocalHint(i, '', false);
+    if (input) setTimeout(function () { try { input.focus(); } catch (e) {} }, 20);
+  }
+
+  function lookupLocalSeat(i) {
+    var input = $('ag-local-p' + i);
+    if (!input || LS.mode[i] !== 'no') return;
+    var raw = digitsOnly(input.value);
+    if (input.value !== raw) input.value = raw;
+    LS.resolved[i] = '';
+    var no = classStudentNo(raw);
+    if (!no) {
+      setLocalHint(i, raw ? '填班学号（1-2 位）、后四位（2307）或 8 位学号' : '', !!raw);
+      return;
+    }
+    if (!logged()) {
+      setLocalHint(i, '查学号要登录；也可以切到「昵称」', true);
+      return;
+    }
+    setLocalHint(i, '查花名册中…', false);
+    rpc('b8_member_lookup', { p_token: token(), p_no: no }).then(function (res) {
+      if (LS.mode[i] !== 'no' || classStudentNo(input.value) !== no) return;
+      if (res && res.ok && res.name) {
+        LS.resolved[i] = res.name;
+        setLocalHint(i, '✓ ' + res.name + (raw.length < 8 ? '（' + raw + ' 号 → ' + no + '）' : ''), false);
+      } else {
+        setLocalHint(i, '花名册里没有这个学号，可以切到「昵称」', true);
+      }
+    }).catch(function (err) {
+      var msg = (err && err.message) || '';
+      setLocalHint(i, /登录|token|jwt|授权/i.test(msg)
+        ? '查学号要登录；也可以切到「昵称」'
+        : '查学号失败（数据库没连上？），可以切到「昵称」', true);
+    });
   }
 
   function openLocalSetup() {
@@ -1230,59 +1323,188 @@
     if (m.mode !== 'multi') { B8.toast('先选一个多人游戏'); return; }
     var rows = $('ag-local-rows');
     if (!rows) return;
+    LS.busy = false;
+    var myNo = digitsOnly(B8.auth && B8.auth.no ? B8.auth.no() : '');
+    var myNick = (B8.auth && B8.auth.nick && B8.auth.nick()) || '';
+    var hasNo = logged() && myNo.length === 8;
     rows.innerHTML = '';
     for (var i = 1; i <= S.seats; i++) {
+      (function (seat) {
+      LS.mode[seat] = hasNo ? 'no' : 'nick';
+      LS.resolved[seat] = '';
       var row = document.createElement('div');
       row.className = 'ag-local-row';
-      var lab = document.createElement('label');
-      lab.textContent = defaultSeatName(i) + (i === 1 ? ' · 先手' : '');
-      lab.setAttribute('for', 'ag-local-name-' + i);
-      var inp = document.createElement('input');
-      inp.id = 'ag-local-name-' + i;
-      inp.type = 'text';
-      inp.maxLength = 20;
-      inp.value = (S.localNames && S.localNames[i - 1]) || '';
-      inp.placeholder = defaultSeatName(i);
-      inp.setAttribute('data-seat', String(i));
-      inp.addEventListener('keydown', function (e) {
+      var head = document.createElement('div');
+      head.className = 'ag-local-head';
+      var b = document.createElement('b');
+      b.textContent = defaultSeatName(seat) + (seat === 1 ? ' · 先手' : '');
+      var modes = document.createElement('div');
+      modes.className = 'ag-local-modes';
+      ['no', 'nick'].forEach(function (mode) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip' + (LS.mode[seat] === mode ? ' is-on' : '');
+        chip.setAttribute('data-seat', String(seat));
+        chip.setAttribute('data-mode', mode);
+        chip.setAttribute('aria-pressed', LS.mode[seat] === mode ? 'true' : 'false');
+        chip.textContent = mode === 'no' ? '学号' : '昵称';
+        chip.addEventListener('click', function () { setLocalMode(seat, mode); });
+        modes.appendChild(chip);
+      });
+      head.appendChild(b);
+      head.appendChild(modes);
+      var input = document.createElement('input');
+      input.id = 'ag-local-p' + seat;
+      input.type = 'text';
+      input.autocomplete = 'off';
+      input.value = seat === 1 ? (hasNo ? myNo : myNick) : '';
+      input.addEventListener('input', function () {
+        if (LS.mode[seat] === 'no') {
+          var raw = digitsOnly(input.value);
+          if (input.value !== raw) input.value = raw;
+        }
+        setLocalHint(seat, '', false);
+        clearTimeout(LS.timers[seat]);
+        LS.timers[seat] = setTimeout(function () { lookupLocalSeat(seat); }, 260);
+      });
+      input.addEventListener('focus', function () {
+        if (LS.mode[seat] === 'no' && input.value.length >= 8) input.select();
+      });
+      input.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); submitLocalSetup(); }
       });
-      row.appendChild(lab);
-      row.appendChild(inp);
+      var hint = document.createElement('p');
+      hint.className = 'ag-local-hint';
+      hint.id = 'ag-local-hint-' + seat;
+      row.appendChild(head);
+      row.appendChild(input);
+      row.appendChild(hint);
       rows.appendChild(row);
+      applyLocalMode(seat);
+      })(i);
     }
+    txt('ag-local-sub', hasNo
+      ? '填 8 位学号、班学号（1 号 = 20282307）或后四位（2307）会自动查姓名，也可以直接用昵称。'
+      : '没登录（或账号学号不是 8 位）：学号查姓名要先登录；现在可以直接用昵称。');
     show('ag-local-setup', true);
-    var first = rows.querySelector('input');
-    if (first) setTimeout(function () { try { first.focus(); } catch (e) {} }, 40);
+    if (hasNo) lookupLocalSeat(1);
+    setTimeout(function () {
+      var target = $('ag-local-p' + (hasNo ? 2 : 1));
+      if (target) { try { target.focus(); } catch (e) {} }
+    }, 60);
   }
 
   function closeLocalSetup() {
     show('ag-local-setup', false);
   }
 
-  function submitLocalSetup() {
-    var rows = $('ag-local-rows');
-    if (!rows) return;
-    var inputs = rows.querySelectorAll('input');
-    var names = [];
-    for (var i = 0; i < inputs.length; i++) {
-      var v = String(inputs[i].value || '').trim().slice(0, 20);
-      if (!v) { B8.toast('每位玩家填一个名字，或点「随便玩玩」'); try { inputs[i].focus(); } catch (e) {} return; }
-      names.push(v);
-    }
-    startLocal(names);
+  function finishLocalSetup(names, nos) {
+    closeLocalSetup();
+    startLocal(names, nos);
   }
 
-  function startLocal(names) {
+  function submitLocalSetup() {
+    if (LS.busy) return;
+    for (var t = 1; t <= S.seats; t++) clearTimeout(LS.timers[t]);
+    var pending = [];
+    for (var i = 1; i <= S.seats; i++) {
+      var input = $('ag-local-p' + i);
+      var raw = (input && input.value || '').trim();
+      if (LS.mode[i] === 'no') {
+        raw = digitsOnly(raw);
+        if (input) input.value = raw;
+        if (!classStudentNo(raw)) {
+          setLocalHint(i, '填班学号（1-2 位）、后四位（2307）或 8 位学号', true);
+          if (input) input.focus();
+          return;
+        }
+        if (!LS.resolved[i]) pending.push(i);
+      } else if (!raw || raw.length > 12) {
+        setLocalHint(i, raw ? '昵称最多 12 个字' : '请填一个昵称', true);
+        if (input) input.focus();
+        return;
+      }
+    }
+    if (!pending.length) {
+      var names = [], nos = [];
+      for (var j = 1; j <= S.seats; j++) {
+        var inp = $('ag-local-p' + j);
+        if (LS.mode[j] === 'no') {
+          names.push(LS.resolved[j]);
+          nos.push(classStudentNo(inp.value));
+        } else {
+          names.push((inp.value || '').trim());
+          nos.push('');
+        }
+      }
+      finishLocalSetup(names, nos);
+      return;
+    }
+    if (!logged()) {
+      setLocalHint(pending[0], '查学号要登录；也可以切到「昵称」', true);
+      var pInput = $('ag-local-p' + pending[0]);
+      if (pInput) pInput.focus();
+      return;
+    }
+    LS.busy = true;
+    var start = $('ag-local-start');
+    if (start) { start.disabled = true; start.textContent = '查花名册…'; }
+    var left = pending.length, bad = false;
+    pending.forEach(function (p) {
+      var inp = $('ag-local-p' + p);
+      var no = classStudentNo(inp.value);
+      setLocalHint(p, '查花名册中…', false);
+      rpc('b8_member_lookup', { p_token: token(), p_no: no }).then(function (res) {
+        if (res && res.ok && res.name) {
+          LS.resolved[p] = res.name;
+          setLocalHint(p, '✓ ' + res.name, false);
+        } else {
+          bad = true;
+          setLocalHint(p, '花名册里没有这个学号，可以切到「昵称」', true);
+        }
+      }).catch(function (err) {
+        bad = true;
+        var msg = (err && err.message) || '';
+        setLocalHint(p, /登录|token|jwt|授权/i.test(msg)
+          ? '查学号要登录；也可以切到「昵称」'
+          : '查学号失败（数据库没连上？），可以切到「昵称」', true);
+      }).then(function () {
+        if (--left !== 0) return;
+        LS.busy = false;
+        if (start) { start.disabled = false; start.textContent = '开始对局'; }
+        if (!bad) {
+          var ns = [], cs = [];
+          for (var k = 1; k <= S.seats; k++) {
+            var box = $('ag-local-p' + k);
+            if (LS.mode[k] === 'no') {
+              ns.push(LS.resolved[k]);
+              cs.push(classStudentNo(box.value));
+            } else {
+              ns.push((box.value || '').trim());
+              cs.push('');
+            }
+          }
+          finishLocalSetup(ns, cs);
+        }
+      });
+    });
+  }
+
+  function startLocal(names, nos) {
     var m = meta(S.game);
     if (m.mode !== 'multi') { B8.toast('先选一个多人游戏'); return; }
     var chosen = Array.isArray(names) ? names.slice() : (S.localNames || []).slice();
-    if (Array.isArray(names)) S.localNames = chosen.slice();
+    var chosenNos = Array.isArray(nos) ? nos.slice() :
+      (Array.isArray(names) ? [] : (S.localNos || []).slice());
+    if (Array.isArray(names)) {
+      S.localNames = chosen.slice();
+      S.localNos = chosenNos.slice();
+    }
     var seats = [];
     for (var i = 1; i <= S.seats; i++) {
       seats.push({
         seat: i,
-        no: '',
+        no: String(chosenNos[i - 1] || '').slice(0, 8),
         name: String(chosen[i - 1] || '').trim().slice(0, 20) || defaultSeatName(i)
       });
     }
@@ -1354,7 +1576,7 @@
     if (!r || !S.local || S.localSaved || !r.state || !S.localInit) return;
     S.localSaved = true;
     var seats = r.seats || [];
-    var players = seats.map(function (x) { return { seat: Number(x.seat), name: x.name }; });
+    var players = seats.map(function (x) { return { seat: Number(x.seat), name: x.name, no: x.no || '' }; });
     var acts = [{
       seat: 1,
       act: { type: 'start', n: seats.length, state: S.localInit },
@@ -2440,6 +2662,8 @@
     openRecord: openRecord,
     closeReplay: closeReplay,
     startLocal: startLocal,
+    classStudentNo: classStudentNo,
+    digitsOnly: digitsOnly,
     localSend: localSend,
     saveLocalMatch: saveLocalMatch,
     enterRoom: enterRoom,
